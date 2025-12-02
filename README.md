@@ -1,8 +1,8 @@
-# Build a SaaS ChatGPT App from Scratch with Vibe Coding and No‑Code Tools
+# Build a SaaS ChatGPT App from Scratch with Vibe Engineering using Cursor Code Agent and No‑Code Tools
 
 This repository is the starter project for the video series:
 
-> **“Build a SaaS ChatGPT App from Scratch with Vibe Coding and No‑Code Tools”**
+> **“Build a SaaS ChatGPT App from Scratch with Vibe Engineering, OpenAI Apps SDK, and No‑Code Tools”**
 
 Use it to follow along with the tutorials or as a jumpstart template for your own SaaS ChatGPT app.
 
