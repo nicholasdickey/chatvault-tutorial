@@ -88,6 +88,7 @@ Requirements (non‑negotiable):
   - Uses the `@modelcontextprotocol/sdk` `Server` instance internally for all MCP behavior
   - Speaks JSON-RPC over HTTP using streaming responses (chunked JSON lines), NOT SSE
   - Manually dispatches JSON-RPC requests to `server.request()` and formats responses
+  - For `initialize` requests: manually construct response with `capabilities: { resources: {}, tools: {} }` (both keys must be present), use `Content-Type: application/json`, and set `mcp-session-id` header
 - Keep session management pattern similar to the SDK example
 - Keep everything else from the SDK example structure (file organization, build process, etc.)
 
