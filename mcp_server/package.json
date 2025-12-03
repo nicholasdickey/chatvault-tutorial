@@ -1,9 +1,9 @@
 {
-  "name": "pizzaz-mcp-node",
+  "name": "chat-vault-part1-mcp-server",
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "Example MCP server that exposes the Pizzaz demo tools using the official TypeScript SDK.",
+  "description": "ChatVault MCP server using the official TypeScript SDK.",
   "scripts": {
     "start": "tsx src/server.ts"
   },
