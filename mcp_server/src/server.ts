@@ -178,7 +178,7 @@ function getWidgetHtml(componentName: string): string {
 
 const widgets: ChatVaultWidget[] = [
   {
-    id: "chat-vault",
+    id: "browseSavedChats",
     title: "ChatVault",
     templateUri: "ui://widget/chat-vault.html",
     invoking: "Browsing saved chats",
@@ -201,35 +201,179 @@ widgets.forEach((widget) => {
   widgetsByUri.set(widget.templateUri, widget);
 });
 
-const toolInputSchema = {
-  type: "object",
-  properties: {
-    pizzaTopping: {
-      type: "string",
-      description: "Topping to mention when rendering the widget.",
-    },
+// Chat data structure
+interface Chat {
+  title: string;
+  timestamp: number;
+  turns: Array<{
+    prompt: string;
+    response: string;
+  }>;
+}
+
+// Hardcoded example chat data
+const exampleChats: Chat[] = [
+  {
+    title: "React Hooks Best Practices",
+    timestamp: Date.now() - 86400000, // 1 day ago
+    turns: [
+      {
+        prompt: "What are the best practices for using React hooks?",
+        response: "Here are some key best practices for React hooks:\n\n1. **Only call hooks at the top level** - Don't call hooks inside loops, conditions, or nested functions.\n\n2. **Use the dependency array correctly** - Include all values from component scope that change between renders.\n\n3. **Custom hooks for reusable logic** - Extract component logic into custom hooks.\n\n4. **Use useMemo and useCallback wisely** - Only use them when you have performance issues.\n\n5. **Cleanup effects** - Always return cleanup functions from useEffect when needed.",
+      },
+      {
+        prompt: "Can you give me an example of a custom hook?",
+        response: "Sure! Here's an example of a custom hook for fetching data:\n\n```javascript\nfunction useFetch(url) {\n  const [data, setData] = useState(null);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    fetch(url)\n      .then(res => res.json())\n      .then(data => {\n        setData(data);\n        setLoading(false);\n      })\n      .catch(err => {\n        setError(err);\n        setLoading(false);\n      });\n  }, [url]);\n\n  return { data, loading, error };\n}\n```",
+      },
+    ],
   },
-  required: ["pizzaTopping"],
+  {
+    title: "TypeScript Type Guards",
+    timestamp: Date.now() - 172800000, // 2 days ago
+    turns: [
+      {
+        prompt: "What are TypeScript type guards?",
+        response: "Type guards are TypeScript expressions that perform runtime checks to narrow down the type of a variable. They help TypeScript understand the type of a value at a specific point in your code.\n\nCommon type guards include:\n- `typeof` checks\n- `instanceof` checks\n- Custom type predicate functions\n\nExample:\n```typescript\nfunction isString(value: unknown): value is string {\n  return typeof value === 'string';\n}\n```",
+      },
+    ],
+  },
+  {
+    title: "MCP Protocol Overview",
+    timestamp: Date.now() - 259200000, // 3 days ago
+    turns: [
+      {
+        prompt: "Explain the Model Context Protocol",
+        response: "The Model Context Protocol (MCP) is an open specification for connecting LLM clients to external tools, data, and UIs. It uses JSON-RPC 2.0 for communication and supports:\n\n- **Tools**: Functions the LLM can call\n- **Resources**: Data the LLM can read\n- **Prompts**: Reusable prompt templates\n\nMCP servers can be implemented over various transports including HTTP, SSE, and stdio.",
+      },
+      {
+        prompt: "How does MCP differ from function calling?",
+        response: "MCP is more comprehensive than simple function calling:\n\n1. **Resources**: MCP provides a way to expose data sources, not just functions\n2. **Prompts**: MCP includes prompt templates for common tasks\n3. **Transport agnostic**: MCP can work over HTTP, SSE, stdio, etc.\n4. **Standardized**: MCP provides a standard protocol, not just an API\n5. **Widgets**: MCP supports UI widgets that can be rendered inline",
+      },
+    ],
+  },
+];
+
+// Tool input schemas
+const browseSavedChatsSchema = {
+  type: "object",
+  properties: {},
+  required: [],
   additionalProperties: false,
 } as const;
 
-const toolInputParser = z.object({
-  pizzaTopping: z.string(),
-});
-
-const tools: Tool[] = widgets.map((widget) => ({
-  name: widget.id,
-  description: widget.title,
-  inputSchema: toolInputSchema,
-  title: widget.title,
-  _meta: widgetDescriptorMeta(widget),
-  // To disable the approval prompt for the widgets
-  annotations: {
-    destructiveHint: false,
-    openWorldHint: false,
-    readOnlyHint: true,
+const loadChatsSchema = {
+  type: "object",
+  properties: {
+    userId: {
+      type: "string",
+      description: "User ID to load chats for",
+    },
+    page: {
+      type: "number",
+      description: "Page number (0-indexed)",
+    },
+    pageSize: {
+      type: "number",
+      description: "Number of chats per page",
+    },
   },
-}));
+  required: [],
+  additionalProperties: false,
+} as const;
+
+const saveChatSchema = {
+  type: "object",
+  properties: {
+    title: {
+      type: "string",
+      description: "Chat title",
+    },
+    timestamp: {
+      type: "number",
+      description: "Chat timestamp",
+    },
+    turns: {
+      type: "array",
+      description: "Chat turns",
+      items: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          response: { type: "string" },
+        },
+      },
+    },
+  },
+  required: ["title", "timestamp", "turns"],
+  additionalProperties: false,
+} as const;
+
+const searchChatSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: "string",
+      description: "Search query",
+    },
+    userId: {
+      type: "string",
+      description: "User ID to search chats for",
+    },
+  },
+  required: ["query"],
+  additionalProperties: false,
+} as const;
+
+// Define all ChatVault tools
+const chatVaultTools: Tool[] = [
+  {
+    name: "browseSavedChats",
+    description: "Browse and display saved chats in the ChatVault widget",
+    inputSchema: browseSavedChatsSchema,
+    title: "Browse Saved Chats",
+    _meta: widgetDescriptorMeta(widgets[0]),
+    annotations: {
+      destructiveHint: false,
+      openWorldHint: false,
+      readOnlyHint: true,
+    },
+  },
+  {
+    name: "loadChats",
+    description: "Load saved chats with pagination support",
+    inputSchema: loadChatsSchema,
+    title: "Load Chats",
+    annotations: {
+      destructiveHint: false,
+      openWorldHint: false,
+      readOnlyHint: true,
+    },
+  },
+  {
+    name: "saveChat",
+    description: "Save a chat conversation (dummy function for this project)",
+    inputSchema: saveChatSchema,
+    title: "Save Chat",
+    annotations: {
+      destructiveHint: false,
+      openWorldHint: false,
+      readOnlyHint: false,
+    },
+  },
+  {
+    name: "searchChat",
+    description: "Search saved chats (dummy function for this project)",
+    inputSchema: searchChatSchema,
+    title: "Search Chats",
+    annotations: {
+      destructiveHint: false,
+      openWorldHint: false,
+      readOnlyHint: true,
+    },
+  },
+];
+
+const tools: Tool[] = [...chatVaultTools];
 
 const resources: Resource[] = widgets.map((widget) => ({
   uri: widget.templateUri,
@@ -257,30 +401,99 @@ async function handleListTools(_request: ListToolsRequest) {
 
 async function handleCallTool(request: CallToolRequest) {
   console.log("[MCP Handler] handleCallTool - request id:", request.id, "tool name:", request.params.name, "arguments:", JSON.stringify(request.params.arguments));
-  const widget = widgetsById.get(request.params.name);
 
-  if (!widget) {
-    console.error("[MCP Handler] handleCallTool - Unknown tool:", request.params.name);
-    throw new Error(`Unknown tool: ${request.params.name}`);
+  const toolName = request.params.name;
+  const args = request.params.arguments ?? {};
+
+  switch (toolName) {
+    case "browseSavedChats": {
+      const widget = widgetsById.get("browseSavedChats");
+      if (!widget) {
+        throw new Error("Widget not found");
+      }
+
+      // Return widget invocation result
+      const result = {
+        content: [
+          {
+            type: "text",
+            text: widget.responseText,
+          },
+        ],
+        structuredContent: {},
+        _meta: widgetInvocationMeta(widget),
+      };
+      console.log("[MCP Handler] handleCallTool - returning browseSavedChats widget");
+      return result;
+    }
+
+    case "loadChats": {
+      const page = (args.page as number) ?? 0;
+      const pageSize = (args.pageSize as number) ?? 10;
+      const start = page * pageSize;
+      const end = start + pageSize;
+      const paginatedChats = exampleChats.slice(start, end);
+
+      const result = {
+        content: [
+          {
+            type: "text",
+            text: `Loaded ${paginatedChats.length} chats`,
+          },
+        ],
+        structuredContent: {
+          chats: paginatedChats,
+          page,
+          pageSize,
+          total: exampleChats.length,
+          hasMore: end < exampleChats.length,
+        },
+      };
+      console.log("[MCP Handler] handleCallTool - loadChats returning", paginatedChats.length, "chats");
+      return result;
+    }
+
+    case "saveChat": {
+      // Dummy function - just acknowledge
+      const result = {
+        content: [
+          {
+            type: "text",
+            text: "Chat saved (dummy function)",
+          },
+        ],
+        structuredContent: {
+          saved: true,
+        },
+      };
+      console.log("[MCP Handler] handleCallTool - saveChat (dummy)");
+      return result;
+    }
+
+    case "searchChat": {
+      // Dummy function - return all chats
+      const query = (args.query as string) ?? "";
+      const result = {
+        content: [
+          {
+            type: "text",
+            text: `Found ${exampleChats.length} chats matching "${query}" (dummy search)`,
+          },
+        ],
+        structuredContent: {
+          chats: exampleChats,
+          query,
+        },
+      };
+      console.log("[MCP Handler] handleCallTool - searchChat (dummy)");
+      return result;
+    }
+
+    default: {
+      console.error("[MCP Handler] handleCallTool - Unknown tool:", toolName);
+      throw new Error(`Unknown tool: ${toolName}`);
+    }
   }
-
-  const args = toolInputParser.parse(request.params.arguments ?? {});
-  console.log("[MCP Handler] handleCallTool - parsed arguments:", JSON.stringify(args));
-
-  const result = {
-    content: [
-      {
-        type: "text",
-        text: widget.responseText,
-      },
-    ],
-    structuredContent: {
-      pizzaTopping: args.pizzaTopping,
-    },
-    _meta: widgetInvocationMeta(widget),
-  };
-  console.log("[MCP Handler] handleCallTool - returning result for widget:", widget.id);
-  return result;
 }
 
 async function handleListResources(_request: ListResourcesRequest) {
@@ -299,13 +512,26 @@ async function handleReadResource(request: ReadResourceRequest) {
     throw new Error(`Unknown resource: ${request.params.uri}`);
   }
 
-  console.log("[MCP Handler] handleReadResource - Found widget:", widget.id, "HTML length:", widget.html.length);
+  // Embed chat data in widget HTML for initial load
+  let widgetHtml = widget.html;
+
+  // Inject chat data as JSON in a script tag
+  const chatDataScript = `<script type="application/json" id="chatvault-initial-data">${JSON.stringify(exampleChats)}</script>`;
+
+  // Insert before the closing body tag or before the root div
+  if (widgetHtml.includes("</body>")) {
+    widgetHtml = widgetHtml.replace("</body>", `${chatDataScript}</body>`);
+  } else if (widgetHtml.includes("<div id=\"chat-vault-root\">")) {
+    widgetHtml = widgetHtml.replace("<div id=\"chat-vault-root\">", `${chatDataScript}<div id="chat-vault-root">`);
+  }
+
+  console.log("[MCP Handler] handleReadResource - Found widget:", widget.id, "HTML length:", widgetHtml.length);
   const result = {
     contents: [
       {
         uri: widget.templateUri,
         mimeType: "text/html+skybridge",
-        text: widget.html,
+        text: widgetHtml,
         _meta: widgetDescriptorMeta(widget),
       },
     ],

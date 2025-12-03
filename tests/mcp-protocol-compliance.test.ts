@@ -132,9 +132,7 @@ describe("MCP Protocol Compliance", () => {
 
     test("should return tools/call in correct format", async () => {
         await client.initialize();
-        const response = await client.callTool("chat-vault", {
-            pizzaTopping: "test",
-        });
+        const response = await client.callTool("browseSavedChats", {});
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -241,9 +239,7 @@ describe("MCP Protocol Compliance", () => {
         const newClient = new McpTestClient(`http://localhost:${TEST_PORT}`);
 
         // Try to call a tool without initializing
-        const response = await newClient.callTool("chat-vault", {
-            pizzaTopping: "test",
-        });
+        const response = await newClient.callTool("browseSavedChats", {});
 
         // Should return an error about missing session
         expect(response.error).toBeDefined();

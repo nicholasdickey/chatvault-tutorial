@@ -4,7 +4,7 @@
  * This test exercises the MCP action end-to-end via the real MCP server,
  * calling /mcp exactly as the Apps SDK would.
  * 
- * Note: Currently tests the "chat-vault" tool which will become "browseSavedChats" in Prompt4
+ * Tests the browseSavedChats tool and widget (Prompt4 implementation)
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
@@ -38,7 +38,7 @@ describe("browseSavedChats e2e test", () => {
         expect(typeof sessionId).toBe("string");
     });
 
-    test("should list tools and include chat-vault (browseSavedChats)", async () => {
+    test("should list tools and include browseSavedChats", async () => {
         const response = await client.listTools();
 
         expect(response.error).toBeUndefined();
@@ -49,12 +49,12 @@ describe("browseSavedChats e2e test", () => {
         expect(Array.isArray(result.tools)).toBe(true);
         expect(result.tools!.length).toBeGreaterThan(0);
 
-        // Find the chat-vault tool (will be browseSavedChats in Prompt4)
+        // Find the browseSavedChats tool
         const chatVaultTool = result.tools!.find(
-            (tool: any) => tool.name === "chat-vault"
+            (tool: any) => tool.name === "browseSavedChats"
         ) as any;
         expect(chatVaultTool).toBeDefined();
-        expect(chatVaultTool?.name).toBe("chat-vault");
+        expect(chatVaultTool?.name).toBe("browseSavedChats");
         expect(chatVaultTool?.description).toBeDefined();
         expect(chatVaultTool?.inputSchema).toBeDefined();
 
@@ -64,10 +64,8 @@ describe("browseSavedChats e2e test", () => {
         expect(chatVaultTool?._meta?.["openai/widgetAccessible"]).toBe(true);
     });
 
-    test("should call chat-vault tool (browseSavedChats) and return widget metadata", async () => {
-        const response = await client.callTool("chat-vault", {
-            pizzaTopping: "test", // Current tool expects this, will change in Prompt4
-        });
+    test("should call browseSavedChats tool and return widget metadata", async () => {
+        const response = await client.callTool("browseSavedChats", {});
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -153,9 +151,7 @@ describe("browseSavedChats e2e test", () => {
         expect(toolsResponse.error).toBeUndefined();
 
         // 2. Call the browse tool
-        const callResponse = await client.callTool("chat-vault", {
-            pizzaTopping: "test",
-        });
+        const callResponse = await client.callTool("browseSavedChats", {});
         expect(callResponse.error).toBeUndefined();
         const callResult = callResponse.result as any;
         expect(callResult?._meta).toBeDefined();
