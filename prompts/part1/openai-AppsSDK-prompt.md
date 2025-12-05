@@ -51,6 +51,7 @@ Prepare the Apps SDK examples (spec reference)
 - Update any references in build scripts or configuration files
 - rename project directory
 - remove python directories
+- remove pre-commit configuration (if present)
 
 Prompt1: Refactor SDK Example
 
@@ -85,7 +86,7 @@ Requirements (non‑negotiable):
 
 - Keep the `widgets` array structure in `mcp_server/src/server.ts` (for easy expansion later)
 - Replace the widgets array with a single entry for your project's widget (name, templateUri, and metadata as specified in Prompt4)
-- Keep all handler patterns identical to the SDK example (`tools/list`, `tools/call`, `resources/list`, `resources/get`)
+- Keep all handler patterns identical to the SDK example (`tools/list`, `tools/call`, `resources/list`, `resources/read`)
 - When in doubt, follow the SDK example structure exactly
 
 3. Transport: Replace SSE with HTTP streaming

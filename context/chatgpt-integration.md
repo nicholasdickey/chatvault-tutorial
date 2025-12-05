@@ -221,3 +221,7 @@ You should see in the widget's debug panel:
 - Check both server logs and widget debug panel
 - Widget should work even if skybridge is unavailable (isolation mode)
 - All widget interactions should be responsive and smooth
+
+
+
+
