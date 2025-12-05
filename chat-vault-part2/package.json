@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
+    "db:cleanup": "tsx scripts/cleanup-prod-db.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [
@@ -31,8 +32,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^24.3.0",
     "drizzle-kit": "^0.30.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
   }

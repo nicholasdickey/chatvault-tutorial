@@ -1,0 +1,14 @@
+{
+  "id": "0000_enable_pgvector",
+  "prevId": null,
+  "version": "5",
+  "dialect": "postgresql",
+  "tables": {},
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
