@@ -393,14 +393,16 @@ const resourceTemplates: ResourceTemplate[] = widgets.map((widget) => ({
 
 // Handler functions (extracted from server handlers for manual dispatch)
 async function handleListTools(_request: ListToolsRequest) {
-  console.log("[MCP Handler] handleListTools - request id:", _request.id);
+  const requestId = (_request as { id?: string | number }).id;
+  console.log("[MCP Handler] handleListTools - request id:", requestId);
   const result = { tools };
   console.log("[MCP Handler] handleListTools - returning", tools.length, "tools");
   return result;
 }
 
 async function handleCallTool(request: CallToolRequest) {
-  console.log("[MCP Handler] handleCallTool - request id:", request.id, "tool name:", request.params.name, "arguments:", JSON.stringify(request.params.arguments));
+  const requestId = (request as { id?: string | number }).id;
+  console.log("[MCP Handler] handleCallTool - request id:", requestId, "tool name:", request.params.name, "arguments:", JSON.stringify(request.params.arguments));
 
   const toolName = request.params.name;
   const args = request.params.arguments ?? {};
@@ -497,14 +499,16 @@ async function handleCallTool(request: CallToolRequest) {
 }
 
 async function handleListResources(_request: ListResourcesRequest) {
-  console.log("[MCP Handler] handleListResources - request id:", _request.id);
+  const requestId = (_request as { id?: string | number }).id;
+  console.log("[MCP Handler] handleListResources - request id:", requestId);
   const result = { resources };
   console.log("[MCP Handler] handleListResources - returning", resources.length, "resources");
   return result;
 }
 
 async function handleReadResource(request: ReadResourceRequest) {
-  console.log("[MCP Handler] handleReadResource - request id:", request.id, "uri:", request.params.uri);
+  const requestId = (request as { id?: string | number }).id;
+  console.log("[MCP Handler] handleReadResource - request id:", requestId, "uri:", request.params.uri);
   const widget = widgetsByUri.get(request.params.uri);
 
   if (!widget) {
@@ -542,7 +546,8 @@ async function handleReadResource(request: ReadResourceRequest) {
 async function handleListResourceTemplates(
   _request: ListResourceTemplatesRequest
 ) {
-  console.log("[MCP Handler] handleListResourceTemplates - request id:", _request.id);
+  const requestId = (_request as { id?: string | number }).id;
+  console.log("[MCP Handler] handleListResourceTemplates - request id:", requestId);
   const result = { resourceTemplates };
   console.log("[MCP Handler] handleListResourceTemplates - returning", resourceTemplates.length, "templates");
   return result;
@@ -707,7 +712,9 @@ async function handleMcpRequest(
       };
 
       console.log("[MCP] initialize response:", JSON.stringify(response));
-      res.setHeader("mcp-session-id", sessionId);
+      if (sessionId) {
+        res.setHeader("mcp-session-id", sessionId);
+      }
       writeJsonRpcResponse(res, id, response);
       res.end();
       return;
@@ -730,9 +737,7 @@ async function handleMcpRequest(
 
       if (method === "tools/list") {
         const request: ListToolsRequest = {
-          jsonrpc: "2.0",
-          id: id as string | number,
-          method: "tools/list",
+          method: "tools/list" as const,
           params: params || {},
         };
         console.log("[MCP] tools/list - id:", id, "params:", JSON.stringify(params));
@@ -740,9 +745,7 @@ async function handleMcpRequest(
         console.log("[MCP] tools/list response:", JSON.stringify(result));
       } else if (method === "tools/call") {
         const request: CallToolRequest = {
-          jsonrpc: "2.0",
-          id: id as string | number,
-          method: "tools/call",
+          method: "tools/call" as const,
           params: params || {},
         };
         console.log("[MCP] tools/call - id:", id, "params:", JSON.stringify(params));
@@ -750,9 +753,7 @@ async function handleMcpRequest(
         console.log("[MCP] tools/call response:", JSON.stringify(result));
       } else if (method === "resources/list") {
         const request: ListResourcesRequest = {
-          jsonrpc: "2.0",
-          id: id as string | number,
-          method: "resources/list",
+          method: "resources/list" as const,
           params: params || {},
         };
         console.log("[MCP] resources/list - id:", id, "params:", JSON.stringify(params));
@@ -760,24 +761,12 @@ async function handleMcpRequest(
         console.log("[MCP] resources/list response:", JSON.stringify(result));
       } else if (method === "resources/read") {
         const request: ReadResourceRequest = {
-          jsonrpc: "2.0",
-          id: id as string | number,
-          method: "resources/read",
+          method: "resources/read" as const,
           params: params || {},
         };
         console.log("[MCP] resources/read - id:", id, "params:", JSON.stringify(params));
         result = await handleReadResource(request);
         console.log("[MCP] resources/read response (truncated, contains HTML)");
-      } else if (method === "resources/listTemplates") {
-        const request: ListResourceTemplatesRequest = {
-          jsonrpc: "2.0",
-          id: id as string | number,
-          method: "resources/listTemplates",
-          params: params || {},
-        };
-        console.log("[MCP] resources/listTemplates - id:", id, "params:", JSON.stringify(params));
-        result = await handleListResourceTemplates(request);
-        console.log("[MCP] resources/listTemplates response:", JSON.stringify(result));
       } else {
         console.error("[MCP] Method not found:", method);
         writeJsonRpcResponse(res, id, undefined, {
@@ -788,7 +777,9 @@ async function handleMcpRequest(
         return;
       }
 
-      res.setHeader("mcp-session-id", sessionId);
+      if (sessionId) {
+        res.setHeader("mcp-session-id", sessionId);
+      }
       writeJsonRpcResponse(res, id, result);
       res.end();
     } catch (error) {
