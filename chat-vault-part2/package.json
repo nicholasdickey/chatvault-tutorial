@@ -12,7 +12,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:cleanup": "tsx scripts/cleanup-prod-db.ts",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=1 --runInBand"
   },
   "keywords": [
     "mcp",
