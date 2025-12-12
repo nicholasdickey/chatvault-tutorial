@@ -51,6 +51,7 @@ jobs:
   test-part2:
     name: Test Part 2
     runs-on: ubuntu-latest
+    needs: test-part1 # Run part2 after part1 completes to avoid resource competition
     # To use environment secrets, uncomment below after creating the environment in GitHub:
     environment: test
     services:
