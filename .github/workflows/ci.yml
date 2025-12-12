@@ -44,7 +44,7 @@ jobs:
       - name: Run tests (Part 1)
         working-directory: chat-vault-part1
         env:
-          NODE_OPTIONS: --max-old-space-size=768 --gc-interval=100 --expose-gc
+          NODE_OPTIONS: --max-old-space-size=4096 --gc-interval=100 --expose-gc
           CI: true
         run: pnpm test --coverage=false --forceExit
 
@@ -126,6 +126,6 @@ jobs:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5433/testdb
           PORT_BACKEND: 8001
           NODE_ENV: test
-          NODE_OPTIONS: --max-old-space-size=768 --gc-interval=100 --expose-gc
+          NODE_OPTIONS: --max-old-space-size=4096 --gc-interval=100 --expose-gc
           CI: true
         run: pnpm test --coverage=false --forceExit
