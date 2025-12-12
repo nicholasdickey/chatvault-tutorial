@@ -9,7 +9,7 @@ This guide explains how to connect the ChatVault Part 2 MCP server to ChatGPT fo
    ```
    DATABASE_URL=postgresql://user:password@host/database
    OPENAI_API_KEY=sk-...
-   PORT=8000
+   PORT_BACKEND=8001
    ```
 3. **ngrok**: Install ngrok for tunneling (if not already installed)
    ```bash
@@ -45,7 +45,7 @@ The server will:
 
 - Test database connection
 - Verify pgvector extension is available
-- Start listening on `http://localhost:8000`
+- Start listening on `http://localhost:8001`
 - Log all database operations
 
 Expected output:
@@ -54,9 +54,9 @@ Expected output:
 [DB] Testing database connection...
 [DB] Database connection successful
 [DB] pgvector extension is available
-ChatVault Part 2 MCP server listening on http://localhost:8000
-  MCP endpoint: POST http://localhost:8000/mcp
-  CORS preflight: OPTIONS http://localhost:8000/mcp
+ChatVault Part 2 MCP server listening on http://localhost:8001
+  MCP endpoint: POST http://localhost:8001/mcp
+  CORS preflight: OPTIONS http://localhost:8001/mcp
 ```
 
 ## Step 3: Set Up ngrok Tunnel
@@ -64,7 +64,7 @@ ChatVault Part 2 MCP server listening on http://localhost:8000
 In a new terminal, start ngrok to expose your local server:
 
 ```bash
-ngrok http 8000
+ngrok http 8001
 ```
 
 This will output something like:
@@ -145,14 +145,14 @@ All errors should return clear, actionable messages.
 
 ### Server Not Starting
 
-- Check that port 8000 is not already in use
+- Check that port 8001 is not already in use
 - Verify all environment variables are set
 - Check server logs for specific error messages
 
 ### ngrok Issues
 
 - Ensure ngrok is authenticated: `ngrok config add-authtoken YOUR_TOKEN`
-- Check that the tunnel is active: `ngrok http 8000`
+- Check that the tunnel is active: `ngrok http 8001`
 - Verify the ngrok URL is accessible from the internet
 
 ### ChatGPT Connection Issues

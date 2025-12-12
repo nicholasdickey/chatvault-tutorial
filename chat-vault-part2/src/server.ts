@@ -462,7 +462,7 @@ async function handleMcpRequest(
 }
 
 // HTTP server setup
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8000;
+const PORT = process.env.PORT_BACKEND ? parseInt(process.env.PORT_BACKEND, 10) : 8001;
 
 const server = createServer((req, res) => {
     // Handle CORS preflight

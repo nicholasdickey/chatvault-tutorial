@@ -151,7 +151,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
             cwd: process.cwd(),
             env: {
                 ...process.env,
-                PORT: String(actualPort),
+                PORT_BACKEND: String(actualPort),
                 // Use test database for server in tests
                 DATABASE_URL: process.env.TEST_DATABASE_URL || "postgresql://testuser:testpass@localhost:5433/testdb",
                 // OpenAI API key is needed for embeddings

@@ -1,11 +1,8 @@
 version: "2"
-# authtoken is read from NGROK_AUTH_TOKEN environment variable
-# Set it with: export NGROK_AUTH_TOKEN=your_token_here
-
 tunnels:
-  chat-vault-part1:
-    proto: http
+  part1:
     addr: 8000
-  chat-vault-part2:
     proto: http
+  part2:
     addr: 8001
+    proto: http

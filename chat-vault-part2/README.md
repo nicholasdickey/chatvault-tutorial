@@ -32,7 +32,7 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
    ```env
    DATABASE_URL=postgresql://username:password@host/database?sslmode=require
    OPENAI_API_KEY=sk-proj-...
-   PORT=8000
+   PORT_BACKEND=8001
    NODE_ENV=development
    ```
 
@@ -43,6 +43,7 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
    ```
 
    This will:
+
    - Enable the `pgvector` extension
    - Create the `chats` table with vector embeddings support
 
@@ -74,6 +75,7 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
   ```
 
 - **Open Drizzle Studio (database GUI):**
+
   ```bash
   pnpm run db:studio
   ```
@@ -118,9 +120,11 @@ chat-vault-part2/
 ## MCP Tools
 
 ### `saveChat`
+
 Save a chat conversation with automatic embedding generation.
 
 **Parameters:**
+
 - `userId` (required): User ID
 - `title` (required): Chat title
 - `turns` (required): Array of {prompt, response} pairs
@@ -128,9 +132,11 @@ Save a chat conversation with automatic embedding generation.
 **Returns:** Chat ID and saved status
 
 ### `loadChats`
+
 Load paginated chats for a user, ordered by timestamp (newest first).
 
 **Parameters:**
+
 - `userId` (required): User ID
 - `page` (optional, default 1): Page number (1-indexed)
 - `limit` (optional, default 10): Results per page
@@ -138,9 +144,11 @@ Load paginated chats for a user, ordered by timestamp (newest first).
 **Returns:** Array of chats with pagination metadata
 
 ### `searchChats`
+
 Perform semantic search on chat embeddings using vector similarity.
 
 **Parameters:**
+
 - `userId` (required): User ID
 - `query` (required): Search query text
 - `limit` (optional, default 10): Maximum results
@@ -150,6 +158,7 @@ Perform semantic search on chat embeddings using vector similarity.
 ## Testing
 
 The test suite includes:
+
 - **Protocol Compliance Tests**: MCP protocol validation
 - **Tool Tests**: Individual tool testing (8-9 tests per tool)
 - **Integration Tests**: Full workflow testing (save → load → search)
@@ -173,14 +182,16 @@ pnpm test integration
 See `CHATGPT_INTEGRATION.md` for detailed setup instructions.
 
 Quick setup:
+
 1. Start the server: `pnpm start`
-2. Start ngrok: `ngrok http 8000`
+2. Start ngrok: `ngrok http 8001`
 3. Configure ChatGPT Desktop App with the ngrok URL + `/mcp`
 4. Test the tools in ChatGPT
 
 ## Database Schema
 
 The `chats` table includes:
+
 - `id`: UUID primary key
 - `user_id`: Text (required)
 - `title`: Text (required)
@@ -198,4 +209,3 @@ The `chats` table includes:
 ## License
 
 ISC
-

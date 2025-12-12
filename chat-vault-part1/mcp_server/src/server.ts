@@ -516,27 +516,22 @@ async function handleReadResource(request: ReadResourceRequest) {
     throw new Error(`Unknown resource: ${request.params.uri}`);
   }
 
-  // Embed chat data in widget HTML for initial load
-  let widgetHtml = widget.html;
-
-  // Inject chat data as JSON in a script tag
-  const chatDataScript = `<script type="application/json" id="chatvault-initial-data">${JSON.stringify(exampleChats)}</script>`;
-
-  // Insert before the closing body tag or before the root div
-  if (widgetHtml.includes("</body>")) {
-    widgetHtml = widgetHtml.replace("</body>", `${chatDataScript}</body>`);
-  } else if (widgetHtml.includes("<div id=\"chat-vault-root\">")) {
-    widgetHtml = widgetHtml.replace("<div id=\"chat-vault-root\">", `${chatDataScript}<div id="chat-vault-root">`);
-  }
-
-  console.log("[MCP Handler] handleReadResource - Found widget:", widget.id, "HTML length:", widgetHtml.length);
+  console.log("[MCP Handler] handleReadResource - Found widget:", widget.id, "HTML length:", widget.html.length);
   const result = {
     contents: [
       {
         uri: widget.templateUri,
         mimeType: "text/html+skybridge",
-        text: widgetHtml,
-        _meta: widgetDescriptorMeta(widget),
+        text: widget.html,
+        _meta: {
+          ...widgetDescriptorMeta(widget),
+          "openai/widgetPrefersBorder": true,
+          "openai/widgetDomain": "https://findexar.com",
+          "openai/widgetCSP": {
+            connect_domains: ["https://findexar.com"],
+            resource_domains: ["https://*.findexar.com"],
+          },
+        },
       },
     ],
   };
