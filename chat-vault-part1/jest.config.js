@@ -17,11 +17,12 @@ module.exports = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  collectCoverage: false, // Disable coverage collection to save memory
   collectCoverageFrom: [
     'mcp_server/src/**/*.ts',
     '!**/*.d.ts',
   ],
   testTimeout: 30000, // 30 seconds for e2e tests
-  maxWorkers: 1, // Run tests serially to avoid port conflicts
+  // maxWorkers removed - using --runInBand in package.json instead
 };
 

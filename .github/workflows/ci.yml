@@ -44,8 +44,9 @@ jobs:
       - name: Run tests (Part 1)
         working-directory: chat-vault-part1
         env:
-          NODE_OPTIONS: --max-old-space-size=2048
-        run: pnpm test
+          NODE_OPTIONS: --max-old-space-size=1024
+          CI: true
+        run: pnpm test --coverage=false
 
   test-part2:
     name: Test Part 2
@@ -124,5 +125,6 @@ jobs:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5433/testdb
           PORT_BACKEND: 8001
           NODE_ENV: test
-          NODE_OPTIONS: --max-old-space-size=2048
-        run: pnpm test
+          NODE_OPTIONS: --max-old-space-size=1024
+          CI: true
+        run: pnpm test --coverage=false
