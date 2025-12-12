@@ -11,7 +11,7 @@
     "tsc:app": "tsc -p tsconfig.app.json",
     "tsc:node": "tsc -p tsconfig.node.json",
     "dev:host": "vite --config vite.host.config.mts",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=1 --runInBand",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "serve:widget": "./serve-widget.sh"
   },

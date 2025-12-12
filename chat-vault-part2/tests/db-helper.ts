@@ -50,12 +50,32 @@ export async function isDockerContainerRunning(): Promise<boolean> {
  * Start Docker container for test database
  */
 export async function startTestDatabase(): Promise<void> {
+    // First, check if database is already available (e.g., from GitHub Actions services)
+    console.log("[DB Helper] Checking if database is already available...");
+    let retries = 5;
+    while (retries > 0) {
+        try {
+            const testClient = postgres(TEST_DB_URL, { max: 1, connect_timeout: 2 });
+            await testClient`SELECT 1`;
+            await testClient.end();
+            console.log("[DB Helper] Database is already available (likely from CI service)");
+            return;
+        } catch (e) {
+            retries--;
+            if (retries > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+        }
+    }
+
+    // Database not available, check if docker container is running
     const isRunning = await isDockerContainerRunning();
     if (isRunning) {
         console.log("[DB Helper] Test database container is already running");
         return;
     }
 
+    // Try to start docker compose
     console.log("[DB Helper] Starting test database container...");
     try {
         execSync(
@@ -65,7 +85,7 @@ export async function startTestDatabase(): Promise<void> {
 
         // Wait for database to be ready
         console.log("[DB Helper] Waiting for database to be ready...");
-        let retries = 30;
+        retries = 30;
         let lastError: Error | null = null;
         while (retries > 0) {
             try {
