@@ -43,7 +43,14 @@ jobs:
 
       - name: Build assets (Part 1)
         working-directory: chat-vault-part1
-        run: pnpm run build
+        run: |
+          pnpm run build
+          # Verify assets were created
+          if [ ! -d "assets" ] || [ -z "$(ls -A assets/*.html 2>/dev/null)" ]; then
+            echo "Error: Build failed - assets directory or HTML files not found"
+            exit 1
+          fi
+          echo "✅ Assets built successfully"
 
       - name: Run tests (Part 1)
         working-directory: chat-vault-part1
