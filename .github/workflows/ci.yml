@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -44,9 +44,8 @@ jobs:
       - name: Run tests (Part 1)
         working-directory: chat-vault-part1
         env:
-          NODE_OPTIONS: --max-old-space-size=2048 --expose-gc
           CI: true
-        run: pnpm test --coverage=false --forceExit
+        run: pnpm test --runInBand --verbose --useStderr --testLocationInResults --detectOpenHandles
 
   test-part2:
     name: Test Part 2
@@ -77,7 +76,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -126,6 +125,5 @@ jobs:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5433/testdb
           PORT_BACKEND: 8001
           NODE_ENV: test
-          NODE_OPTIONS: --max-old-space-size=2048 --expose-gc
           CI: true
-        run: pnpm test --coverage=false --forceExit
+        run: pnpm test --runInBand --verbose --useStderr --testLocationInResults --detectOpenHandles
