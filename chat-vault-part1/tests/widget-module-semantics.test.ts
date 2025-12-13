@@ -39,7 +39,8 @@ describe("Widget module semantics test", () => {
 
     afterAll(async () => {
         await stopMcpServer();
-        cleanupTestPorts();
+        // cleanupTestPorts() removed - server is already stopped by stopMcpServer()
+        // cleanupTestPorts() is still called in beforeAll to ensure clean ports before starting
     });
 
     test("should return widget HTML with inlined assets", () => {
