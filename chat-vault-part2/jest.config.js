@@ -24,5 +24,7 @@ export default {
   ],
   testTimeout: 30000, // 30 seconds for e2e tests
   // maxWorkers removed - using --runInBand in package.json instead
+  silent: false, // Ensure Jest output is not suppressed
+  verbose: true, // Enable verbose output (also set via CLI flag)
 };
 
