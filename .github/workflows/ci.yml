@@ -52,6 +52,19 @@ jobs:
           fi
           echo "✅ Assets built successfully"
 
+      - name: Check system limits
+        run: |
+          echo "=== System Memory Info ==="
+          free -h
+          echo "=== Process Limits ==="
+          ulimit -a
+          echo "=== Memory cgroup info ==="
+          if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+            echo "Memory limit: $(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)"
+          fi
+          if [ -f /sys/fs/cgroup/memory.max ]; then
+            echo "Memory max: $(cat /sys/fs/cgroup/memory.max)"
+          fi
       - name: Run tests (Part 1)
         working-directory: chat-vault-part1
         env:

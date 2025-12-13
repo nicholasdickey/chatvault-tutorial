@@ -24,11 +24,13 @@ describe("MCP Protocol Compliance", () => {
     }, 30000);
 
     afterAll(async () => {
+        console.log(`[DEBUG] mcp-protocol-compliance afterAll starting, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
         await stopMcpServer();
         cleanupTestPorts();
     });
 
     test("should respond with valid JSON-RPC 2.0 format", async () => {
+        console.log(`[DEBUG] First test starting, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
         const response = await client.initialize();
 
         // Verify JSON-RPC 2.0 structure
