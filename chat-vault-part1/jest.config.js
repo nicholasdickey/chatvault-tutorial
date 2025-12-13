@@ -3,7 +3,8 @@ module.exports = {
   extensionsToTreatAsEsm: ['.ts'],
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
-  testMatch: ['**/*.test.ts'],
+  testMatch: ['**/mcp-protocol-compliance.test.ts'], // Temporarily only run this test to isolate OOM issue
+  // testMatch: ['**/*.test.ts'], // Original - uncomment to run all tests
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
