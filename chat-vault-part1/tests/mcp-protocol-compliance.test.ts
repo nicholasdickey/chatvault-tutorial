@@ -49,7 +49,6 @@ describe("MCP Protocol Compliance", () => {
         expect(hasResult && hasError).toBe(false);
     });
 
-    /* Temporarily commented out to isolate OOM issue
     test("should handle initialize request correctly", async () => {
         const response = await client.initialize();
 
@@ -278,6 +277,5 @@ describe("MCP Protocol Compliance", () => {
         expect(response.jsonrpc).toBe("2.0");
         expect(response.result || response.error).toBeDefined();
     });
-    */
 });
 
