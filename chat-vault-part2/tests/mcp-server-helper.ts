@@ -39,12 +39,10 @@ function killProcessOnPort(port: number): void {
 }
 
 /**
- * Clean up all test ports (8000-8020)
+ * Clean up test port 8017 only (since tests run sequentially with --runInBand, there are no port conflicts)
  */
 export function cleanupTestPorts(): void {
-    for (let port = 8000; port <= 8020; port++) {
-        killProcessOnPort(port);
-    }
+    killProcessOnPort(8017);
     // Also kill any tsx server processes
     try {
         execSync(`pkill -f "tsx src/server.ts" 2>/dev/null || true`);
@@ -89,7 +87,7 @@ function isPortAvailable(port: number): Promise<boolean> {
 /**
  * Start the MCP server on a given port
  */
-export async function startMcpServer(port: number = 8000): Promise<void> {
+export async function startMcpServer(port: number = 8017): Promise<void> {
     serverPort = port;
 
     // Stop any existing server first
@@ -107,25 +105,13 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
     let portAvailable = await isPortAvailable(actualPort);
 
     if (!portAvailable) {
-        console.log(
-            `[MCP Server] Port ${actualPort} is in use, trying to find available port...`
-        );
-        // Try ports 8000-8020
-        for (let p = 8000; p <= 8020; p++) {
-            // Clean up port before checking
-            killProcessOnPort(p);
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            if (await isPortAvailable(p)) {
-                actualPort = p;
-                portAvailable = true;
-                serverPort = p;
-                console.log(`[MCP Server] Using port ${actualPort} instead`);
-                break;
-            }
-        }
+        // Since tests run sequentially with --runInBand, port should always be available
+        // If not, clean it up and try once more
+        killProcessOnPort(actualPort);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        portAvailable = await isPortAvailable(actualPort);
         if (!portAvailable) {
-            throw new Error(`Could not find an available port in range 8000-8020`);
+            throw new Error(`Port ${actualPort} is not available and could not be cleaned up`);
         }
     }
 

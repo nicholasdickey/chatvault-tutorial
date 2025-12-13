@@ -37,7 +37,7 @@ describe("searchChats Tool", () => {
         await truncateAllTables();
 
         // Start MCP server
-        await startMcpServer(8000);
+        await startMcpServer(8017);
         const port = getServerPort();
         serverUrl = `http://localhost:${port}`;
         client = new McpTestClient(serverUrl);
@@ -51,7 +51,8 @@ describe("searchChats Tool", () => {
         await stopMcpServer();
         await cleanupTestDatabase();
         await stopTestDatabase();
-        cleanupTestPorts();
+        // cleanupTestPorts() removed - server is already stopped by stopMcpServer()
+        // cleanupTestPorts() is still called in beforeAll to ensure clean ports before starting
     }, 30000);
 
     beforeEach(async () => {
