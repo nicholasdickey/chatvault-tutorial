@@ -257,24 +257,30 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
  * Stop the MCP server
  */
 export async function stopMcpServer(): Promise<void> {
+    console.log(`[DEBUG] stopMcpServer() called, PID: ${process.pid}, serverProcess: ${serverProcess ? serverProcess.pid : 'null'}, Memory: ${JSON.stringify(process.memoryUsage())}`);
     if (serverProcess) {
         return new Promise((resolve) => {
             const proc = serverProcess;
             serverProcess = null;
 
             if (proc) {
+                console.log(`[DEBUG] stopMcpServer: Removing listeners, Memory: ${JSON.stringify(process.memoryUsage())}`);
                 // Remove all listeners immediately to prevent logging after test completion
                 proc.stdout?.removeAllListeners();
                 proc.stderr?.removeAllListeners();
                 proc.removeAllListeners();
+                console.log(`[DEBUG] stopMcpServer: Listeners removed, Memory: ${JSON.stringify(process.memoryUsage())}`);
 
+                console.log(`[DEBUG] stopMcpServer: Destroying streams, Memory: ${JSON.stringify(process.memoryUsage())}`);
                 // Destroy streams to prevent further I/O
                 proc.stdout?.destroy();
                 proc.stderr?.destroy();
+                console.log(`[DEBUG] stopMcpServer: Streams destroyed, Memory: ${JSON.stringify(process.memoryUsage())}`);
 
                 // Kill the process
                 let resolved = false;
                 const cleanup = () => {
+                    console.log(`[DEBUG] stopMcpServer: cleanup() called, Memory: ${JSON.stringify(process.memoryUsage())}`);
                     if (!resolved) {
                         resolved = true;
                         resolve();
@@ -282,15 +288,20 @@ export async function stopMcpServer(): Promise<void> {
                 };
 
                 try {
+                    console.log(`[DEBUG] stopMcpServer: About to kill process with SIGTERM, Memory: ${JSON.stringify(process.memoryUsage())}`);
                     proc.kill("SIGTERM");
+                    console.log(`[DEBUG] stopMcpServer: SIGTERM sent, Memory: ${JSON.stringify(process.memoryUsage())}`);
                 } catch (e) {
+                    console.log(`[DEBUG] stopMcpServer: Error killing process: ${e}, Memory: ${JSON.stringify(process.memoryUsage())}`);
                     // Process may already be dead
                     cleanup();
                     return;
                 }
 
+                console.log(`[DEBUG] stopMcpServer: Setting up exit listener, Memory: ${JSON.stringify(process.memoryUsage())}`);
                 // Wait for exit
                 proc.once("exit", cleanup);
+                console.log(`[DEBUG] stopMcpServer: Exit listener set, Memory: ${JSON.stringify(process.memoryUsage())}`);
 
                 // Force kill after 500ms if still running
                 setTimeout(() => {

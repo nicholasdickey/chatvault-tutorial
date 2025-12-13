@@ -25,8 +25,12 @@ describe("MCP Protocol Compliance", () => {
 
     afterAll(async () => {
         console.log(`[DEBUG] mcp-protocol-compliance afterAll starting, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
+        console.log(`[DEBUG] About to call stopMcpServer(), Memory: ${JSON.stringify(process.memoryUsage())}`);
         await stopMcpServer();
+        console.log(`[DEBUG] stopMcpServer() completed, Memory: ${JSON.stringify(process.memoryUsage())}`);
+        console.log(`[DEBUG] About to call cleanupTestPorts(), Memory: ${JSON.stringify(process.memoryUsage())}`);
         cleanupTestPorts();
+        console.log(`[DEBUG] afterAll completed, Memory: ${JSON.stringify(process.memoryUsage())}`);
     });
 
     test("should respond with valid JSON-RPC 2.0 format", async () => {
@@ -45,6 +49,7 @@ describe("MCP Protocol Compliance", () => {
         expect(hasResult && hasError).toBe(false);
     });
 
+    /* Temporarily commented out to isolate OOM issue
     test("should handle initialize request correctly", async () => {
         const response = await client.initialize();
 
@@ -273,5 +278,6 @@ describe("MCP Protocol Compliance", () => {
         expect(response.jsonrpc).toBe("2.0");
         expect(response.result || response.error).toBeDefined();
     });
+    */
 });
 
