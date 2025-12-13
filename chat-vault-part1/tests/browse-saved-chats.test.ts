@@ -7,6 +7,7 @@
  * Tests the browseSavedChats tool and widget (Prompt4 implementation)
  */
 
+console.log(`[DEBUG] browse-saved-chats.test.ts module loading, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { McpTestClient } from "./mcp-client.js";
 import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "./mcp-server-helper.js";

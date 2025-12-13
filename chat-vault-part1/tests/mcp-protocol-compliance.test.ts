@@ -7,6 +7,7 @@
  * Any drift from the examples should be treated as a failing test to fix.
  */
 
+console.log(`[DEBUG] mcp-protocol-compliance.test.ts module loading, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { McpTestClient } from "./mcp-client.js";
 import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "./mcp-server-helper.js";

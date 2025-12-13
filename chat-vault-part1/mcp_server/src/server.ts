@@ -1,3 +1,4 @@
+console.log(`[DEBUG] server.ts module loading, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
 import {
   createServer,
   type IncomingMessage,

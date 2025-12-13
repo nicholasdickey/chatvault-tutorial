@@ -2,6 +2,7 @@
  * Helper utilities for starting/stopping the MCP server in tests
  */
 
+console.log(`[DEBUG] mcp-server-helper.ts module loading, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
 import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { request as httpRequest } from "node:http";

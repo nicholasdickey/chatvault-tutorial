@@ -5,6 +5,7 @@
  * so it can safely use modern tooling (Vite + React) inside the ChatGPT widget iframe.
  */
 
+console.log(`[DEBUG] widget-module-semantics.test.ts module loading, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { McpTestClient } from "./mcp-client.js";
 import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "./mcp-server-helper.js";
