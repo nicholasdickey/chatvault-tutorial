@@ -41,11 +41,15 @@ jobs:
         working-directory: chat-vault-part1
         run: pnpm install --frozen-lockfile
 
+      - name: Build assets (Part 1)
+        working-directory: chat-vault-part1
+        run: pnpm run build
+
       - name: Run tests (Part 1)
         working-directory: chat-vault-part1
         env:
           CI: true
-        run: pnpm test --runInBand --verbose --useStderr --testLocationInResults --detectOpenHandles
+        run: pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles
 
   test-part2:
     name: Test Part 2
@@ -126,4 +130,4 @@ jobs:
           PORT_BACKEND: 8001
           NODE_ENV: test
           CI: true
-        run: pnpm test --runInBand --verbose --useStderr --testLocationInResults --detectOpenHandles
+        run: pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles
