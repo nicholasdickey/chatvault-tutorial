@@ -23,3 +23,4 @@ Using part1 and part2 tests, create a CI config for GitHub Actions with the foll
 9. Both test suites are in separate directories: `chat-vault-part1` and `chat-vault-part2`
 10. Use Node.js 22 and pnpm 10.13.1
 11. Set up proper pnpm caching
+12. Ensure Jest config files have `silent: false` and `verbose: true` to prevent output suppression and ensure logs are visible in CI
