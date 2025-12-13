@@ -18,7 +18,7 @@ let serverPort: number = 8000;
 /**
  * Kill any process using a specific port
  */
-function killProcessOnPort(port: number): void {
+export function killProcessOnPort(port: number): void {
     try {
         // Find process using the port (works on Linux/Mac)
         const result = execSync(

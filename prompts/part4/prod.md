@@ -1,5 +1,8 @@
 Prompt0:
-Refactor tests for part1 and part2. Make each a single single-level file (all.test.ts), with a IMPORTANT _single_ cleanup (port or truncate DB) in the IMPORTANT _beginning_ of each, and a single MCP server start. Use a single port with no fallback. Saturate tests with console.log
+
+1. Refactor tests for part1 and part2. Make each a single single-level of describes file (all.test.ts), with a IMPORTANT _single_ cleanup (port or truncate DB) in the IMPORTANT _beginning_ of each, and a single MCP server start.
+2. Use a single port (like, 8007, for example) with no fallback. No port cleanup or db truncate outside of beforeAll. Saturate tests with console.log
+3. Only server and DB teardown after the tests, not a port cleanup or db truncate
 
 Prompt1:
 Using part1 and part2 tests, create a CI config for GitHub Actions with the following requirements:
