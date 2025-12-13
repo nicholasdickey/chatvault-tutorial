@@ -11,6 +11,7 @@ import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "
 
 describe("Widget module semantics test", () => {
     let client: McpTestClient;
+    let widgetHtml: string;
     const TEST_PORT = 8002;
 
     beforeAll(async () => {
@@ -18,6 +19,18 @@ describe("Widget module semantics test", () => {
         await startMcpServer(TEST_PORT);
         client = new McpTestClient(`http://localhost:${TEST_PORT}`);
         await client.initialize();
+        
+        // Fetch widget HTML once for all tests to reuse
+        const response = await client.readResource("ui://widget/chat-vault.html");
+        expect(response.error).toBeUndefined();
+        expect(response.result).toBeDefined();
+        
+        const result = response.result as {
+            contents?: Array<{ text: string }>;
+        };
+        widgetHtml = result.contents?.[0]?.text as string;
+        expect(widgetHtml).toBeDefined();
+        expect(typeof widgetHtml).toBe("string");
     }, 30000);
 
     afterAll(async () => {
@@ -25,26 +38,15 @@ describe("Widget module semantics test", () => {
         cleanupTestPorts();
     });
 
-    test("should return widget HTML with inlined assets", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
-
-        expect(response.error).toBeUndefined();
-        expect(response.result).toBeDefined();
-
-        const result = response.result as {
-            contents?: Array<{ text: string }>;
-        };
-        const widgetHtml = result.contents?.[0]?.text;
+    test("should return widget HTML with inlined assets", () => {
+        // HTML was already fetched in beforeAll - just verify it's valid
         expect(widgetHtml).toBeDefined();
         expect(typeof widgetHtml).toBe("string");
+        expect(widgetHtml.length).toBeGreaterThan(0);
     });
 
-    test("should contain script tag with type='module' for ESM bundle", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
-        const result = response.result as {
-            contents?: Array<{ text: string }>;
-        };
-        const widgetHtml = result.contents?.[0]?.text as string;
+    test("should contain script tag with type='module' for ESM bundle", () => {
+        // Use cached widgetHtml from beforeAll
 
         // Check for script tag with type="module"
         // This ensures the inlined JS bundle preserves ES module semantics
@@ -70,12 +72,8 @@ describe("Widget module semantics test", () => {
         });
     });
 
-    test("should contain inlined CSS in style tags", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
-        const result = response.result as {
-            contents?: Array<{ text: string }>;
-        };
-        const widgetHtml = result.contents?.[0]?.text as string;
+    test("should contain inlined CSS in style tags", () => {
+        // Use cached widgetHtml from beforeAll
 
         // Check for style tags (CSS should be inlined)
         const styleTagRegex = /<style[^>]*>/i;
@@ -96,12 +94,8 @@ describe("Widget module semantics test", () => {
         }
     });
 
-    test("should be self-contained (no external asset requests)", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
-        const result = response.result as {
-            contents?: Array<{ text: string }>;
-        };
-        const widgetHtml = result.contents?.[0]?.text as string;
+    test("should be self-contained (no external asset requests)", () => {
+        // Use cached widgetHtml from beforeAll
 
         // Extract all URLs from the HTML
         const urlRegex = /(?:src|href)=["']([^"']+)["']/gi;
@@ -129,12 +123,8 @@ describe("Widget module semantics test", () => {
         expect(widgetHtml).toContain('id="chat-vault-root"');
     });
 
-    test("should escape script tags in inlined JavaScript", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
-        const result = response.result as {
-            contents?: Array<{ text: string }>;
-        };
-        const widgetHtml = result.contents?.[0]?.text as string;
+    test("should escape script tags in inlined JavaScript", () => {
+        // Use cached widgetHtml from beforeAll
 
         // Find script tags with inline content
         const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;

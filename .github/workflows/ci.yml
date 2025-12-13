@@ -56,7 +56,9 @@ jobs:
         working-directory: chat-vault-part1
         env:
           CI: true
-        run: pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles
+        run: |
+          set -o pipefail
+          pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles 2>&1 | tee "$RUNNER_TEMP/jest-part1.log"
 
   test-part2:
     name: Test Part 2
@@ -137,4 +139,6 @@ jobs:
           PORT_BACKEND: 8001
           NODE_ENV: test
           CI: true
-        run: pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles
+        run: |
+          set -o pipefail
+          pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles 2>&1 | tee "$RUNNER_TEMP/jest-part2.log"
