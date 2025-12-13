@@ -14,7 +14,7 @@ import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "
 
 describe("browseSavedChats e2e test", () => {
     let client: McpTestClient;
-    const TEST_PORT = 8001; // Use different port to avoid conflicts
+    const TEST_PORT = 8017;
 
     beforeAll(async () => {
         console.log(`[DEBUG] browse-saved-chats beforeAll started, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);

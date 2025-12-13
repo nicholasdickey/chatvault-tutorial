@@ -13,7 +13,7 @@ import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "
 describe("Widget module semantics test", () => {
     let client: McpTestClient;
     let widgetHtml: string;
-    const TEST_PORT = 8002;
+    const TEST_PORT = 8017;
 
     beforeAll(async () => {
         console.log(`[DEBUG] widget-module-semantics beforeAll started, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);

@@ -24,3 +24,6 @@ Using part1 and part2 tests, create a CI config for GitHub Actions with the foll
 10. Use Node.js 22 and pnpm 10.13.1
 11. Set up proper pnpm caching
 12. Ensure Jest config files have `silent: false` and `verbose: true` to prevent output suppression and ensure logs are visible in CI
+13. All test suites must use port 8017 only (since tests run sequentially with `--runInBand`, there are no port conflicts)
+14. Test cleanup should only clean port 8017 (not a range of ports) to avoid unnecessary `execSync` calls that can cause memory issues
+15. Do not call `cleanupTestPorts()` in `afterAll` hooks - servers are already stopped by `stopMcpServer()`, making additional cleanup redundant and potentially causing OOM issues

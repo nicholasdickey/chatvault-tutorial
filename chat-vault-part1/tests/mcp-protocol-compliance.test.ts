@@ -14,7 +14,7 @@ import { startMcpServer, stopMcpServer, getServerPort, cleanupTestPorts } from "
 
 describe("MCP Protocol Compliance", () => {
     let client: McpTestClient;
-    const TEST_PORT = 8003;
+    const TEST_PORT = 8017;
 
     beforeAll(async () => {
         console.log(`[DEBUG] mcp-protocol-compliance beforeAll started, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);

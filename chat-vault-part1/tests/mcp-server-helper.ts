@@ -8,7 +8,7 @@ import { createServer, type Server } from "node:http";
 import { request as httpRequest } from "node:http";
 
 let serverProcess: ChildProcess | null = null;
-let serverPort: number = 8000;
+let serverPort: number = 8017;
 
 /**
  * Kill any process using a specific port
@@ -31,13 +31,11 @@ function killProcessOnPort(port: number): void {
 }
 
 /**
- * Clean up all test ports (8000-8020)
+ * Clean up test port (8017)
  */
 export function cleanupTestPorts(): void {
-    for (let port = 8000; port <= 8020; port++) {
-        killProcessOnPort(port);
-    }
-    // Also kill any tsx server processes
+    killProcessOnPort(8017);
+    // Also kill any tsx server processes as a safety net
     try {
         execSync(`pkill -f "tsx src/server.ts" 2>/dev/null || true`);
     } catch (e) {
@@ -81,7 +79,7 @@ function isPortAvailable(port: number): Promise<boolean> {
 /**
  * Start the MCP server on a given port
  */
-export async function startMcpServer(port: number = 8000): Promise<void> {
+export async function startMcpServer(port: number = 8017): Promise<void> {
     serverPort = port;
 
     // Stop any existing server first
