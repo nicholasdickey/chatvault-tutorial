@@ -60,6 +60,15 @@ jobs:
           set -o pipefail
           pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles 2>&1 | tee "$RUNNER_TEMP/jest-part1.log"
 
+      - name: Upload Jest log (Part 1)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-part1-log
+          path: ${{ runner.temp }}/jest-part1.log
+          if-no-files-found: warn
+          retention-days: 7
+
   test-part2:
     name: Test Part 2
     runs-on: ubuntu-latest
@@ -142,3 +151,12 @@ jobs:
         run: |
           set -o pipefail
           pnpm test --verbose --useStderr --testLocationInResults --detectOpenHandles 2>&1 | tee "$RUNNER_TEMP/jest-part2.log"
+
+      - name: Upload Jest log (Part 2)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-part2-log
+          path: ${{ runner.temp }}/jest-part2.log
+          if-no-files-found: warn
+          retention-days: 7

@@ -11,6 +11,9 @@ Using part1 and part2 tests, create a CI config for GitHub Actions with the foll
    - DO NOT include `--runInBand` in the workflow command - it's already in package.json test scripts
    - DO NOT use `--forceExit` or `--coverage=false`
    - DO NOT set `NODE_OPTIONS` memory limits - let Node.js use available memory
+   - Use `2>&1 | tee "$RUNNER_TEMP/jest-<part>.log"` pattern to capture both stdout and stderr, display logs in real-time, and save to file
+   - Include `set -o pipefail` before the test command to ensure step fails if Jest fails
+   - Upload Jest logs as artifacts using `actions/upload-artifact@v4` with `if: always()` so logs are available even if tests fail
 6. For part1, build assets before running tests (`pnpm run build` in chat-vault-part1 directory)
 7. Database configuration:
    - PostgreSQL service should use port 5433 (map to 5432 internally)
