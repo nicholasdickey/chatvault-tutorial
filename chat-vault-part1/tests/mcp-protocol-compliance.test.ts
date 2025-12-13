@@ -28,8 +28,8 @@ describe("MCP Protocol Compliance", () => {
         console.log(`[DEBUG] About to call stopMcpServer(), Memory: ${JSON.stringify(process.memoryUsage())}`);
         await stopMcpServer();
         console.log(`[DEBUG] stopMcpServer() completed, Memory: ${JSON.stringify(process.memoryUsage())}`);
-        console.log(`[DEBUG] About to call cleanupTestPorts(), Memory: ${JSON.stringify(process.memoryUsage())}`);
-        cleanupTestPorts();
+        // cleanupTestPorts() removed from afterAll - server is already stopped by stopMcpServer()
+        // cleanupTestPorts() is still called in beforeAll to ensure clean ports before starting
         console.log(`[DEBUG] afterAll completed, Memory: ${JSON.stringify(process.memoryUsage())}`);
     });
 
