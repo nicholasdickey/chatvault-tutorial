@@ -16,6 +16,7 @@ describe("MCP Protocol Compliance", () => {
     const TEST_PORT = 8003;
 
     beforeAll(async () => {
+        console.log(`[DEBUG] mcp-protocol-compliance beforeAll started, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
         cleanupTestPorts();
         await startMcpServer(TEST_PORT);
         client = new McpTestClient(`http://localhost:${TEST_PORT}`);

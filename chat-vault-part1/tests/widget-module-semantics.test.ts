@@ -15,12 +15,14 @@ describe("Widget module semantics test", () => {
     const TEST_PORT = 8002;
 
     beforeAll(async () => {
+        console.log(`[DEBUG] widget-module-semantics beforeAll started, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
         cleanupTestPorts();
         await startMcpServer(TEST_PORT);
         client = new McpTestClient(`http://localhost:${TEST_PORT}`);
         await client.initialize();
         
         // Fetch widget HTML once for all tests to reuse
+        console.log(`[DEBUG] About to readResource widget HTML, Memory: ${JSON.stringify(process.memoryUsage())}`);
         const response = await client.readResource("ui://widget/chat-vault.html");
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -31,6 +33,7 @@ describe("Widget module semantics test", () => {
         widgetHtml = result.contents?.[0]?.text as string;
         expect(widgetHtml).toBeDefined();
         expect(typeof widgetHtml).toBe("string");
+        console.log(`[DEBUG] Widget HTML fetched in beforeAll, htmlLength: ${widgetHtml?.length}, Memory: ${JSON.stringify(process.memoryUsage())}`);
     }, 30000);
 
     afterAll(async () => {

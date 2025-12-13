@@ -40,6 +40,7 @@ const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 
 function readWidgetHtml(componentName: string): string {
+  console.log(`[DEBUG] readWidgetHtml called for ${componentName}, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
   if (!fs.existsSync(ASSETS_DIR)) {
     throw new Error(
       `Widget assets not found. Expected directory ${ASSETS_DIR}. Run "pnpm run build" before starting the server.`
@@ -70,7 +71,12 @@ function readWidgetHtml(componentName: string): string {
     );
   }
 
-  return localizeWidgetAssets(htmlContents, ASSETS_DIR);
+  const originalSize = htmlContents.length;
+  console.log(`[DEBUG] Before localizeWidgetAssets: originalSize=${originalSize}, Memory: ${JSON.stringify(process.memoryUsage())}`);
+  const processed = localizeWidgetAssets(htmlContents, ASSETS_DIR);
+  const processedSize = processed.length;
+  console.log(`[DEBUG] After localizeWidgetAssets: processedSize=${processedSize}, sizeIncrease=${processedSize - originalSize}, Memory: ${JSON.stringify(process.memoryUsage())}`);
+  return processed;
 }
 
 function localizeWidgetAssets(html: string, assetsDir: string): string {
@@ -189,9 +195,11 @@ const widgets: ChatVaultWidget[] = [
 ];
 
 // Initialize widget HTML (lazy)
+console.log(`[DEBUG] Initializing widget HTML, PID: ${process.pid}, Memory before: ${JSON.stringify(process.memoryUsage())}`);
 widgets.forEach((widget) => {
   widget.html = getWidgetHtml("chat-vault");
 });
+console.log(`[DEBUG] Widget HTML initialized, widgetCount: ${widgets.length}, Memory after: ${JSON.stringify(process.memoryUsage())}`);
 
 const widgetsById = new Map<string, ChatVaultWidget>();
 const widgetsByUri = new Map<string, ChatVaultWidget>();

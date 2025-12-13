@@ -122,6 +122,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
         // Start the server
         const serverPath = process.cwd() + "/mcp_server";
         console.log(`[MCP Server] Starting server on port ${actualPort}...`);
+        console.log(`[DEBUG] Spawning server process, port: ${actualPort}, PID: ${process.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
         serverProcess = spawn("pnpm", ["start"], {
             cwd: serverPath,
             env: {
@@ -155,6 +156,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
                         serverReady = true;
                         if (pollInterval) clearInterval(pollInterval);
                         console.log(`[MCP Server] Server is ready on port ${actualPort}`);
+                        console.log(`[DEBUG] Server ready, port: ${actualPort}, PID: ${process.pid}, serverPid: ${serverProcess?.pid}, Memory: ${JSON.stringify(process.memoryUsage())}`);
                         setTimeout(() => resolve(), 200);
                     }
                 }
