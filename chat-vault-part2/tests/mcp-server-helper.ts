@@ -42,7 +42,11 @@ function killProcessOnPort(port: number): void {
  * Clean up test port 8017 only (since tests run sequentially with --runInBand, there are no port conflicts)
  */
 export function cleanupTestPorts(): void {
+    const memBefore = process.memoryUsage();
+    console.log(`[DEBUG cleanupTestPorts] Called, PID: ${process.pid}, Memory: ${JSON.stringify({ rss: Math.round(memBefore.rss / 1024 / 1024) + 'MB' })}`);
     killProcessOnPort(8017);
+    const memAfter = process.memoryUsage();
+    console.log(`[DEBUG cleanupTestPorts] Completed, PID: ${process.pid}, Memory: ${JSON.stringify({ rss: Math.round(memAfter.rss / 1024 / 1024) + 'MB' })}`);
     // Also kill any tsx server processes
     try {
         execSync(`pkill -f "tsx src/server.ts" 2>/dev/null || true`);
