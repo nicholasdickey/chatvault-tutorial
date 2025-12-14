@@ -1,7 +1,9 @@
 Prompt0:
 
-1. Refactor tests for part1 and part2. Make each a single single-level of describes file (all.test.ts), with a IMPORTANT _single_ cleanup (port or truncate DB) in the IMPORTANT _beginning_ of each, and a single MCP server start.
-2. Use a single port (like, 8007, for example) with no fallback. No port cleanup or db truncate outside of beforeAll. Saturate tests with console.log
+1. Refactor tests for part1 and part2. Combine all existing tests for the part in a single file. Structure each test file (all.test.ts) for both parts as a single flow, with a single level of describes. All cleanup will happen at the top (file) level in beforeAll - port cleanup, DB truncate (part2 only). Also start MCP server only once at the top of the file in beforeAll.
+
+2. Use a single port (like, 8007, for example) with no fallback. No port cleanup or db truncate outside of file's beforeAll. Saturate tests with console.log.
+
 3. Only server and DB teardown after the tests, not a port cleanup or db truncate
 
 Prompt1:
