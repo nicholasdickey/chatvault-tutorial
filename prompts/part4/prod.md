@@ -1,10 +1,12 @@
 Prompt0:
 
-1. Refactor tests for part1 and part2. Combine all existing tests for the part in a single file. Structure each test file (all.test.ts) for both parts as a single flow, with a single level of describes. All cleanup will happen at the top (file) level in beforeAll - port cleanup, DB truncate (part2 only). Also start MCP server only once at the top of the file in beforeAll.
+1. Refactor tests for part1 and part2. Combine all existing tests for the part in a single file. Structure each test file (all.test.ts) for both parts as a single flow, single test suite, with a single level of describe blocks. All cleanup will happen at the top (file) level in beforeAll - port cleanup, DB truncate (part2 only). Also start MCP server only once at the top of the file in beforeAll. Remove old test files after refactoring.
 
 2. Use a single port (like, 8007, for example) with no fallback. No port cleanup or db truncate outside of file's beforeAll. Saturate tests with console.log.
 
-3. Only server and DB teardown after the tests, not a port cleanup or db truncate
+3. Only server and DB teardown after the tests, not a port cleanup or db truncate.
+
+4. Make sure node is the latest LTS
 
 Prompt1:
 Using part1 and part2 tests, create a CI config for GitHub Actions with the following requirements:
