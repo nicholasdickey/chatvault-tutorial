@@ -26,7 +26,7 @@ Prompt2
 3. Part 1 assets are bundled with the widget (serverless MCP functions)
 4. We will use the same prod DB as in dev - Neon serverless. Same .env variables will be setup in Vercel as in dev: DATABASE_URL, OPENAI_API_KEY, PORT (8000), PORT_BACKEND(8001), NODE_ENV
 5. Make sure CORS headers are set - these MCP servers are called externally (Findexar, ChatGPT).
-6. Ensure widget build targets browser ESM, not Node/CJS.
+6. Ensure widget build targets browser ESM, not Node/CJS. Use type: module and jest.config.cjs
 
 Prompt3
 
