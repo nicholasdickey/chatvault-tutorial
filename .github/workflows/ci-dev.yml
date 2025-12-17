@@ -53,30 +53,30 @@ jobs:
     runs-on: ubuntu-latest
     environment: test
 
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U testuser -d testdb"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
     env:
-      # Used by Part2 server helper + db-helper. This makes tests use the GHA service,
-      # satisfying "do not use docker if db is already available".
+      # Used by Part2 server helper + db-helper. In CI we use the runner's PostgreSQL
+      # (no docker compose / no service container).
       TEST_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup PostgreSQL + pgvector (no Docker)
+        shell: bash
+        run: |
+          sudo apt-get update
+          # postgres is typically preinstalled, but ensure it exists and pgvector is available.
+          sudo apt-get install -y postgresql postgresql-contrib postgresql-16-pgvector || \
+            sudo apt-get install -y postgresql postgresql-contrib postgresql-pgvector
+
+          sudo systemctl start postgresql.service
+          pg_isready
+
+          sudo -u postgres psql -c "CREATE USER testuser WITH PASSWORD 'testpass';" || true
+          sudo -u postgres psql -c "CREATE DATABASE testdb OWNER testuser;" || true
+          sudo -u postgres psql -d testdb -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
