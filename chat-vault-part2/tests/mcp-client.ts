@@ -53,6 +53,7 @@ export class McpTestClient {
                 : url.protocol === "https:"
                     ? 443
                     : 80;
+            const apiKey = process.env.API_KEY;
             const req = httpRequest(
                 {
                     hostname: url.hostname,
@@ -66,6 +67,7 @@ export class McpTestClient {
                         "Content-Type": "application/json",
                         "Content-Length": Buffer.byteLength(body),
                         ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
+                        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
                     },
                 },
                 (res: IncomingMessage) => {
@@ -168,6 +170,7 @@ export class McpTestClient {
                 : url.protocol === "https:"
                     ? 443
                     : 80;
+            const apiKey = process.env.API_KEY;
             const req = httpRequest(
                 {
                     hostname: url.hostname,
@@ -181,6 +184,7 @@ export class McpTestClient {
                         "Content-Type": "application/json",
                         "Content-Length": Buffer.byteLength(body),
                         ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
+                        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
                     },
                 },
                 (res: IncomingMessage) => {

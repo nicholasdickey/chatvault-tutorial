@@ -24,6 +24,9 @@ describe("chat-vault-part1 (all)", () => {
     let client: McpTestClient;
 
     beforeAll(async () => {
+        process.env.API_KEY = process.env.API_KEY || "test-api-key";
+        console.log(`[Part1 all] beforeAll: API_KEY present=${Boolean(process.env.API_KEY)}`);
+
         console.log(`[Part1 all] beforeAll: cleaning port ${TEST_PORT}`);
         killProcessOnPort(TEST_PORT);
         await new Promise((resolve) => setTimeout(resolve, 250));

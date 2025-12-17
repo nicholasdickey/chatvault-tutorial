@@ -3,6 +3,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { URL, fileURLToPath } from "node:url";
@@ -623,6 +624,40 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+function getBearerTokenFromAuthHeader(
+  header: string | string[] | undefined
+): string | null {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (!raw) return null;
+  const match = raw.match(/^\s*Bearer\s+(.+)\s*$/i);
+  return match?.[1] ?? null;
+}
+
+function isAuthorized(req: IncomingMessage): { ok: true } | { ok: false; status: number; message: string } {
+  const expected = process.env.API_KEY;
+  if (!expected) {
+    return {
+      ok: false,
+      status: 500,
+      message: "Server misconfigured: missing API_KEY env var",
+    };
+  }
+
+  const token = getBearerTokenFromAuthHeader(req.headers.authorization);
+  if (!token) {
+    return { ok: false, status: 401, message: "Missing Authorization: Bearer <API_KEY>" };
+  }
+
+  // Avoid leaking timing differences
+  const a = Buffer.from(token);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { ok: false, status: 401, message: "Invalid API key" };
+  }
+
+  return { ok: true };
+}
+
 export async function handleMcpRequest(
   req: IncomingMessage,
   res: ServerResponse
@@ -636,6 +671,14 @@ export async function handleMcpRequest(
   res.setHeader("Content-Type", "application/json");
 
   try {
+    const auth = isAuthorized(req);
+    if (!auth.ok) {
+      res.setHeader("WWW-Authenticate", "Bearer");
+      res.writeHead(auth.status);
+      res.end(JSON.stringify({ error: auth.message }));
+      return;
+    }
+
     const body = await readRequestBody(req);
     console.log("[MCP] Incoming request body:", body);
     const requestData = JSON.parse(body);
