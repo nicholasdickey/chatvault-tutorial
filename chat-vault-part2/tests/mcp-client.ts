@@ -59,7 +59,10 @@ export class McpTestClient {
                     port: port,
                     path: url.pathname,
                     method: "POST",
+                    // Avoid keeping sockets open across tests (Jest open handle / TCPWRAP)
+                    agent: false,
                     headers: {
+                        Connection: "close",
                         "Content-Type": "application/json",
                         "Content-Length": Buffer.byteLength(body),
                         ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
@@ -171,7 +174,10 @@ export class McpTestClient {
                     port: port,
                     path: url.pathname,
                     method: "POST",
+                    // Avoid keeping sockets open across tests (Jest open handle / TCPWRAP)
+                    agent: false,
                     headers: {
+                        Connection: "close",
                         "Content-Type": "application/json",
                         "Content-Length": Buffer.byteLength(body),
                         ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),

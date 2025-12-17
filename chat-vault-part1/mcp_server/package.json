@@ -4,6 +4,9 @@
   "type": "module",
   "private": true,
   "description": "ChatVault MCP server using the official TypeScript SDK.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "start": "tsx src/server.ts"
   },

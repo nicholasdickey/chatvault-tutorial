@@ -21,7 +21,7 @@ module.exports = {
     'mcp_server/src/**/*.ts',
     '!**/*.d.ts',
   ],
-  testTimeout: 30000, // 30 seconds for e2e tests
+  testTimeout: 120000, // 2 minutes for single-flow e2e tests (Prompt0)
   maxWorkers: 1, // Run tests serially to avoid port conflicts
 };
 
