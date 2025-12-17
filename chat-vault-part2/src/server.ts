@@ -3,6 +3,7 @@ import {
     type IncomingMessage,
     type ServerResponse,
 } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -262,6 +263,54 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
     });
 }
 
+function getBearerTokenFromAuthHeader(
+    header: string | string[] | undefined
+): string | null {
+    const raw = Array.isArray(header) ? header[0] : header;
+    if (!raw) return null;
+    const match = raw.match(/^\s*Bearer\s+(.+)\s*$/i);
+    return match?.[1] ?? null;
+}
+
+function isAuthorized(
+    req: IncomingMessage
+): { ok: true } | { ok: false; status: number; message: string } {
+    const expected = process.env.API_KEY;
+    console.log("[AUTH] Checking API_KEY authorization");
+    console.log("[AUTH] API_KEY env var present =", Boolean(expected));
+    if (!expected) {
+        console.log("[AUTH] DENY: missing API_KEY env var (server misconfigured)");
+        return {
+            ok: false,
+            status: 500,
+            message: "Server misconfigured: missing API_KEY env var",
+        };
+    }
+
+    const token = getBearerTokenFromAuthHeader(req.headers.authorization);
+    console.log("[AUTH] Authorization header present =", Boolean(req.headers.authorization));
+    console.log("[AUTH] Bearer token parsed =", Boolean(token));
+    if (!token) {
+        console.log("[AUTH] DENY: missing/invalid Authorization header (expected Bearer)");
+        return {
+            ok: false,
+            status: 401,
+            message: "Missing Authorization: Bearer <API_KEY>",
+        };
+    }
+
+    const a = Buffer.from(token);
+    const b = Buffer.from(expected);
+    console.log("[AUTH] token length =", a.length, "expected length =", b.length);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        console.log("[AUTH] DENY: token mismatch");
+        return { ok: false, status: 401, message: "Invalid API key" };
+    }
+
+    console.log("[AUTH] ALLOW: token matched");
+    return { ok: true };
+}
+
 // Main MCP request handler
 export async function handleMcpRequest(
     req: IncomingMessage,
@@ -269,10 +318,28 @@ export async function handleMcpRequest(
 ): Promise<void> {
     // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "content-type, mcp-session-id");
+    res.setHeader(
+        "Access-Control-Allow-Headers",
+        "content-type, mcp-session-id, authorization"
+    );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
     try {
+        console.log("[MCP] Incoming request:", {
+            method: req.method,
+            url: req.url,
+            hasAuthHeader: Boolean(req.headers.authorization),
+            hasSessionHeader: Boolean(req.headers["mcp-session-id"]),
+        });
+        const auth = isAuthorized(req);
+        if (!auth.ok) {
+            console.log("[MCP] Auth failed:", { status: auth.status, message: auth.message });
+            res.setHeader("WWW-Authenticate", "Bearer");
+            res.writeHead(auth.status, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: auth.message }));
+            return;
+        }
+
         const body = await readRequestBody(req);
         console.log("[MCP] Incoming request body:", body);
         const requestData = JSON.parse(body);
@@ -471,9 +538,12 @@ const server = createServer((req, res) => {
     if (req.method === "OPTIONS" && req.url === "/mcp") {
         console.log("[MCP] CORS preflight request");
         res.setHeader("Access-Control-Allow-Origin", "*");
-        res.setHeader("Access-Control-Allow-Headers", "content-type, mcp-session-id");
+        res.setHeader(
+            "Access-Control-Allow-Headers",
+            "content-type, mcp-session-id, authorization"
+        );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        res.writeHead(200);
+        res.writeHead(204);
         res.end();
         return;
     }

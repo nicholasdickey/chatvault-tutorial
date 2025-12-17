@@ -31,4 +31,4 @@ Prompt2
 
 Prompt3
 
-1. Add Authorization:Bearer API_KEY to both MCP servers. Check against API_KEY env var.
+1. Add Authorization:Bearer API_KEY to both MCP servers. Check against API_KEY env var. 

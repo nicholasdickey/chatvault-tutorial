@@ -8,6 +8,10 @@ jobs:
   part1-tests:
     name: Part 1 - tests
     runs-on: ubuntu-latest
+    environment: test
+
+    env:
+      API_KEY: ${{ secrets.API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +38,14 @@ jobs:
       - name: Build widget (required before tests)
         run: pnpm -C chat-vault-part1 build
 
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          if [[ -z "${API_KEY:-}" ]]; then
+            echo "Missing required secret: API_KEY (job uses environment: test)"
+            exit 1
+          fi
+
       - name: Run tests (capture logs)
         shell: bash
         run: |
@@ -58,6 +70,7 @@ jobs:
       # (no docker compose / no service container).
       TEST_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      API_KEY: ${{ secrets.API_KEY }}
 
     steps:
       - name: Checkout
@@ -107,6 +120,10 @@ jobs:
         run: |
           if [[ -z "${OPENAI_API_KEY:-}" ]]; then
             echo "Missing required secret: OPENAI_API_KEY (job uses environment: test)"
+            exit 1
+          fi
+          if [[ -z "${API_KEY:-}" ]]; then
+            echo "Missing required secret: API_KEY (job uses environment: test)"
             exit 1
           fi
 

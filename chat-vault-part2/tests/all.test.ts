@@ -31,6 +31,8 @@ describe("chat-vault-part2 (all)", () => {
     let serverUrl: string;
 
     beforeAll(async () => {
+        process.env.API_KEY = process.env.API_KEY || "test-api-key";
+        console.log(`[Part2 all] beforeAll: API_KEY present=${Boolean(process.env.API_KEY)}`);
         console.log(`[Part2 all] beforeAll: OPENAI_API_KEY present=${Boolean(process.env.OPENAI_API_KEY)}`);
         console.log(`[Part2 all] beforeAll: cleaning port ${TEST_PORT}`);
         killProcessOnPort(TEST_PORT);
