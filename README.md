@@ -73,6 +73,17 @@ We take everything to production:
 - Configure environment variables and secrets.
 - Add basic logging/error visibility.
 
+#### Vercel CLI (global install)
+
+For Part 4, install the Vercel CLI globally:
+
+- `npm i -g vercel@latest`
+
+This repo is deployed as a **monorepo** with **two Vercel Projects** using different roots:
+
+- `chat-vault-part1/`
+- `chat-vault-part2/`
+
 ---
 
 ## Repository structure

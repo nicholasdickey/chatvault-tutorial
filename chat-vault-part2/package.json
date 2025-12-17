@@ -9,6 +9,7 @@
   },
   "main": "src/server.ts",
   "scripts": {
+    "build": "echo \"[chat-vault-part2] no build step\"",
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "db:generate": "drizzle-kit generate",

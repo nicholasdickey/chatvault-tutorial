@@ -3,6 +3,8 @@ import {
     type IncomingMessage,
     type ServerResponse,
 } from "node:http";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
     ListToolsRequestSchema,
@@ -261,7 +263,7 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
 }
 
 // Main MCP request handler
-async function handleMcpRequest(
+export async function handleMcpRequest(
     req: IncomingMessage,
     res: ServerResponse
 ): Promise<void> {
@@ -494,7 +496,7 @@ const server = createServer((req, res) => {
 });
 
 // Test database connection and verify pgvector on startup
-async function initializeDatabase() {
+export async function initializeDatabase() {
     try {
         console.log("[DB] Testing database connection...");
         const isConnected = await testConnection();
@@ -535,7 +537,20 @@ async function startServer() {
     }
 }
 
-startServer();
+function isDirectRun(): boolean {
+    try {
+        // With tsx, argv[1] should be the entry file path
+        const entry = process.argv[1];
+        if (!entry) return false;
+        return fileURLToPath(import.meta.url) === resolve(entry);
+    } catch {
+        return false;
+    }
+}
+
+if (isDirectRun()) {
+    startServer();
+}
 
 // Graceful shutdown
 process.on("SIGINT", () => {

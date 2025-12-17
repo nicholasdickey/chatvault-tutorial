@@ -623,12 +623,16 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-async function handleMcpRequest(
+export async function handleMcpRequest(
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "content-type, mcp-session-id");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "content-type, mcp-session-id, authorization"
+  );
   res.setHeader("Content-Type", "application/json");
 
   try {
@@ -800,61 +804,89 @@ async function handleMcpRequest(
   }
 }
 
-const portEnv = Number(process.env.PORT ?? 8000);
-const port = Number.isFinite(portEnv) ? portEnv : 8000;
+function startLocalHttpServer(): void {
+  const portEnv = Number(process.env.PORT ?? 8000);
+  const port = Number.isFinite(portEnv) ? portEnv : 8000;
 
-const httpServer = createServer(
-  async (req: IncomingMessage, res: ServerResponse) => {
-    try {
-      if (!req.url) {
-        res.writeHead(400).end("Missing URL");
-        return;
-      }
+  const httpServer = createServer(
+    async (req: IncomingMessage, res: ServerResponse) => {
+      try {
+        if (!req.url) {
+          res.writeHead(400).end("Missing URL");
+          return;
+        }
 
-      const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+        const url = new URL(
+          req.url,
+          `http://${req.headers.host ?? "localhost"}`
+        );
 
-      if (req.method === "OPTIONS" && url.pathname === "/mcp") {
-        res.writeHead(204, {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "content-type, mcp-session-id",
-        });
-        res.end();
-        return;
-      }
+        if (req.method === "OPTIONS" && url.pathname === "/mcp") {
+          res.writeHead(204, {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers":
+              "content-type, mcp-session-id, authorization",
+          });
+          res.end();
+          return;
+        }
 
-      if (req.method === "POST" && url.pathname === "/mcp") {
-        await handleMcpRequest(req, res);
-        return;
-      }
+        if (req.method === "POST" && url.pathname === "/mcp") {
+          await handleMcpRequest(req, res);
+          return;
+        }
 
-      res.writeHead(404).end("Not Found");
-    } catch (error) {
-      console.error("[HTTP Server] Unhandled error in request handler:", error);
-      if (!res.headersSent) {
-        res.writeHead(500).end("Internal Server Error");
+        res.writeHead(404).end("Not Found");
+      } catch (error) {
+        console.error(
+          "[HTTP Server] Unhandled error in request handler:",
+          error
+        );
+        if (!res.headersSent) {
+          res.writeHead(500).end("Internal Server Error");
+        }
       }
     }
+  );
+
+  httpServer.on("clientError", (err: Error, socket) => {
+    console.error("HTTP client error", err);
+    socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+  });
+
+  // Handle uncaught errors to prevent server crashes
+  process.on("uncaughtException", (error) => {
+    console.error("[Server] Uncaught exception:", error);
+    // Don't exit - let the server continue running
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error(
+      "[Server] Unhandled rejection at:",
+      promise,
+      "reason:",
+      reason
+    );
+    // Don't exit - let the server continue running
+  });
+
+  httpServer.listen(port, () => {
+    console.log(`ChatVault MCP server listening on http://localhost:${port}`);
+    console.log(`  MCP endpoint: POST http://localhost:${port}/mcp`);
+  });
+}
+
+function isDirectRun(): boolean {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    return path.resolve(entry) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
   }
-);
+}
 
-httpServer.on("clientError", (err: Error, socket) => {
-  console.error("HTTP client error", err);
-  socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
-});
-
-// Handle uncaught errors to prevent server crashes
-process.on("uncaughtException", (error) => {
-  console.error("[Server] Uncaught exception:", error);
-  // Don't exit - let the server continue running
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("[Server] Unhandled rejection at:", promise, "reason:", reason);
-  // Don't exit - let the server continue running
-});
-
-httpServer.listen(port, () => {
-  console.log(`ChatVault MCP server listening on http://localhost:${port}`);
-  console.log(`  MCP endpoint: POST http://localhost:${port}/mcp`);
-});
+if (isDirectRun()) {
+  startLocalHttpServer();
+}
