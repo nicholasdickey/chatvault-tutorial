@@ -4,8 +4,12 @@
   "type": "module",
   "private": true,
   "description": "ChatVault backend MCP server with PostgreSQL and vector search",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "main": "src/server.ts",
   "scripts": {
+    "build": "echo \"[chat-vault-part2] no build step\"",
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "db:generate": "drizzle-kit generate",

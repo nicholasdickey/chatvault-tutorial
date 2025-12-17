@@ -10,16 +10,22 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { sql } from "drizzle-orm";
 
-export const TEST_DB_URL = "postgresql://testuser:testpass@localhost:5433/testdb";
+const DEFAULT_TEST_DB_URL = "postgresql://testuser:testpass@localhost:5433/testdb";
+
+function getTestDbUrl(): string {
+    return process.env.TEST_DATABASE_URL || DEFAULT_TEST_DB_URL;
+}
 
 let dbClient: Sql | null = null;
+let startedDockerContainer = false;
+let usingExternalDb = false;
 
 /**
  * Get database client for test database
  */
 export function getTestDb(): Sql {
     if (!dbClient) {
-        dbClient = postgres(TEST_DB_URL, { max: 1 });
+        dbClient = postgres(getTestDbUrl(), { max: 1 });
     }
     return dbClient;
 }
@@ -46,13 +52,34 @@ export async function isDockerContainerRunning(): Promise<boolean> {
     }
 }
 
+async function isDatabaseReachable(): Promise<boolean> {
+    try {
+        const testClient = postgres(getTestDbUrl(), { max: 1, connect_timeout: 2 });
+        await testClient`SELECT 1`;
+        await testClient.end();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Start Docker container for test database
  */
 export async function startTestDatabase(): Promise<void> {
+    // Prompt1 CI requirement: if a DB is already available (e.g., GitHub Actions service),
+    // do NOT try to spin up Docker.
+    if (await isDatabaseReachable()) {
+        usingExternalDb = true;
+        startedDockerContainer = false;
+        console.log(`[DB Helper] Test database already reachable at ${getTestDbUrl()} (skipping docker)`);
+        return;
+    }
+
     const isRunning = await isDockerContainerRunning();
     if (isRunning) {
         console.log("[DB Helper] Test database container is already running");
+        startedDockerContainer = true;
         return;
     }
 
@@ -62,6 +89,7 @@ export async function startTestDatabase(): Promise<void> {
             "docker compose -f docker-compose.test.yml up -d",
             { cwd: process.cwd(), stdio: "inherit" }
         );
+        startedDockerContainer = true;
 
         // Wait for database to be ready
         console.log("[DB Helper] Waiting for database to be ready...");
@@ -69,7 +97,7 @@ export async function startTestDatabase(): Promise<void> {
         let lastError: Error | null = null;
         while (retries > 0) {
             try {
-                const testClient = postgres(TEST_DB_URL, { max: 1, connect_timeout: 2 });
+                const testClient = postgres(getTestDbUrl(), { max: 1, connect_timeout: 2 });
                 await testClient`SELECT 1`;
                 await testClient.end();
                 console.log("[DB Helper] Test database is ready");
@@ -96,6 +124,14 @@ export async function startTestDatabase(): Promise<void> {
  * Stop Docker container for test database
  */
 export async function stopTestDatabase(): Promise<void> {
+    if (usingExternalDb) {
+        console.log("[DB Helper] External test database in use (skip docker stop)");
+        return;
+    }
+    if (!startedDockerContainer) {
+        console.log("[DB Helper] Test database was not started by helper (skip docker stop)");
+        return;
+    }
     try {
         execSync(
             "docker compose -f docker-compose.test.yml down",

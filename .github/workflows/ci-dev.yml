@@ -1,0 +1,125 @@
+name: CI (dev)
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  part1-tests:
+    name: Part 1 - tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - name: Setup Node (latest LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            chat-vault-part1/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: |
+          pnpm -C chat-vault-part1 install --frozen-lockfile
+          # mcp_server is a nested package (no lockfile) used by tests via pnpm start
+          pnpm -C chat-vault-part1/mcp_server install
+
+      - name: Build widget (required before tests)
+        run: pnpm -C chat-vault-part1 build
+
+      - name: Run tests (capture logs)
+        shell: bash
+        run: |
+          mkdir -p ci-logs
+          set -o pipefail
+          pnpm -C chat-vault-part1 test 2>&1 | tee ci-logs/part1-tests.log
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: part1-test-logs
+          path: ci-logs/part1-tests.log
+
+  part2-tests:
+    name: Part 2 - tests
+    runs-on: ubuntu-latest
+    environment: test
+
+    env:
+      # Used by Part2 server helper + db-helper. In CI we use the runner's PostgreSQL
+      # (no docker compose / no service container).
+      TEST_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PostgreSQL + pgvector (no Docker)
+        shell: bash
+        run: |
+          sudo apt-get update
+          # postgres is typically preinstalled, but ensure it exists and pgvector is available.
+          sudo apt-get install -y postgresql postgresql-contrib postgresql-16-pgvector || \
+            sudo apt-get install -y postgresql postgresql-contrib postgresql-pgvector
+
+          sudo systemctl start postgresql.service
+          pg_isready
+
+          sudo -u postgres psql -c "CREATE USER testuser WITH PASSWORD 'testpass';" || true
+          sudo -u postgres psql -c "CREATE DATABASE testdb OWNER testuser;" || true
+          sudo -u postgres psql -d testdb -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - name: Setup Node (latest LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            chat-vault-part2/pnpm-lock.yaml
+            chat-vault-part1/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: |
+          pnpm -C chat-vault-part2 install --frozen-lockfile
+          # Build widget before tests (Prompt1 requirement)
+          pnpm -C chat-vault-part1 install --frozen-lockfile
+          pnpm -C chat-vault-part1/mcp_server install
+
+      - name: Build widget (required before tests)
+        run: pnpm -C chat-vault-part1 build
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+            echo "Missing required secret: OPENAI_API_KEY (job uses environment: test)"
+            exit 1
+          fi
+
+      - name: Run tests (capture logs)
+        shell: bash
+        run: |
+          mkdir -p ci-logs
+          set -o pipefail
+          pnpm -C chat-vault-part2 test 2>&1 | tee ci-logs/part2-tests.log
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: part2-test-logs
+          path: ci-logs/part2-tests.log

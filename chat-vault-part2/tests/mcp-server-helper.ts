@@ -39,21 +39,6 @@ export function killProcessOnPort(port: number): void {
 }
 
 /**
- * Clean up all test ports (8000-8020)
- */
-export function cleanupTestPorts(): void {
-    for (let port = 8000; port <= 8020; port++) {
-        killProcessOnPort(port);
-    }
-    // Also kill any tsx server processes
-    try {
-        execSync(`pkill -f "tsx src/server.ts" 2>/dev/null || true`);
-    } catch (e) {
-        // Ignore errors
-    }
-}
-
-/**
  * Check if a port is available
  */
 function isPortAvailable(port: number): Promise<boolean> {
@@ -97,41 +82,16 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
         await stopMcpServer();
     }
 
-    // Clean up any processes on the requested port first
-    killProcessOnPort(port);
-    // Wait a bit for port to be released
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    // Try to find an available port if the requested one is in use
-    let actualPort = port;
-    let portAvailable = await isPortAvailable(actualPort);
-
+    const portAvailable = await isPortAvailable(port);
     if (!portAvailable) {
-        console.log(
-            `[MCP Server] Port ${actualPort} is in use, trying to find available port...`
+        throw new Error(
+            `[MCP Server] Port ${port} is in use. Prompt0 requires a single fixed port with no fallback.`
         );
-        // Try ports 8000-8020
-        for (let p = 8000; p <= 8020; p++) {
-            // Clean up port before checking
-            killProcessOnPort(p);
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            if (await isPortAvailable(p)) {
-                actualPort = p;
-                portAvailable = true;
-                serverPort = p;
-                console.log(`[MCP Server] Using port ${actualPort} instead`);
-                break;
-            }
-        }
-        if (!portAvailable) {
-            throw new Error(`Could not find an available port in range 8000-8020`);
-        }
     }
 
     return new Promise((resolve, reject) => {
         // Start the server (part2 server is in the root of the project)
-        console.log(`[MCP Server] Starting server on port ${actualPort}...`);
+        console.log(`[MCP Server] Starting server on port ${port}...`);
         // Ensure we have the API key from .env
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
@@ -151,7 +111,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
             cwd: process.cwd(),
             env: {
                 ...process.env,
-                PORT_BACKEND: String(actualPort),
+                PORT_BACKEND: String(port),
                 // Use test database for server in tests
                 DATABASE_URL: process.env.TEST_DATABASE_URL || "postgresql://testuser:testpass@localhost:5433/testdb",
                 // OpenAI API key is needed for embeddings
@@ -165,6 +125,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
         let serverReady = false;
         let outputBuffer = "";
         let pollInterval: NodeJS.Timeout | null = null;
+        let startupTimeout: NodeJS.Timeout | null = null;
 
         const checkServerReady = (): void => {
             if (serverReady) return;
@@ -173,7 +134,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
             const testReq = httpRequest(
                 {
                     hostname: "localhost",
-                    port: actualPort,
+                    port: port,
                     path: "/mcp",
                     method: "OPTIONS",
                     timeout: 1000,
@@ -183,8 +144,12 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
                     if (!serverReady) {
                         serverReady = true;
                         if (pollInterval) clearInterval(pollInterval);
+                        if (startupTimeout) {
+                            clearTimeout(startupTimeout);
+                            startupTimeout = null;
+                        }
                         console.log(
-                            `[MCP Server] Server is ready on port ${actualPort}`
+                            `[MCP Server] Server is ready on port ${port}`
                         );
                         setTimeout(() => resolve(), 200);
                     }
@@ -253,6 +218,10 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
 
         serverProcess.on("exit", (code) => {
             if (code !== 0 && code !== null && !serverReady) {
+                if (startupTimeout) {
+                    clearTimeout(startupTimeout);
+                    startupTimeout = null;
+                }
                 reject(
                     new Error(`Server exited with code ${code} before becoming ready`)
                 );
@@ -260,7 +229,7 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
         });
 
         // Timeout after 15 seconds
-        setTimeout(() => {
+        startupTimeout = setTimeout(() => {
             if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
@@ -310,9 +279,14 @@ export async function stopMcpServer(): Promise<void> {
 
                 // Kill the process
                 let resolved = false;
+                let forceKillTimeout: NodeJS.Timeout | null = null;
                 const cleanup = () => {
                     if (!resolved) {
                         resolved = true;
+                        if (forceKillTimeout) {
+                            clearTimeout(forceKillTimeout);
+                            forceKillTimeout = null;
+                        }
                         resolve();
                     }
                 };
@@ -328,7 +302,7 @@ export async function stopMcpServer(): Promise<void> {
                 proc.once("exit", cleanup);
 
                 // Force kill after 500ms if still running
-                setTimeout(() => {
+                forceKillTimeout = setTimeout(() => {
                     if (!resolved) {
                         try {
                             proc.kill("SIGKILL");
