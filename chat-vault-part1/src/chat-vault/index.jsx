@@ -208,21 +208,85 @@ function App() {
 
     setIsSaving(true);
     setManualSaveError(null);
-    addLog("Starting manual save", { hasTitle: !!manualSaveTitle });
+    addLog("Starting manual save", { hasTitle: !!manualSaveTitle, contentLength: manualSaveContent.length });
 
     try {
       if (!window.openai?.callTool) {
         throw new Error("saveChatManually tool not available");
       }
 
-      const result = await window.openai.callTool("saveChatManually", {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
+      });
+
+      const callToolPromise = window.openai.callTool("saveChatManually", {
         htmlContent: manualSaveContent,
         title: manualSaveTitle.trim() || undefined,
       });
 
+      const result = await Promise.race([callToolPromise, timeoutPromise]);
+      
+      addLog("Manual save result received", { 
+        result, 
+        resultType: typeof result, 
+        isNull: result === null,
+        isUndefined: result === undefined,
+        hasError: !!result?.error,
+        keys: result ? Object.keys(result) : [],
+        stringified: JSON.stringify(result).substring(0, 500)
+      });
+
+      // If result is null/undefined, that's an error
+      if (result == null) {
+        throw new Error("No response received from server");
+      }
+
+      // Check for errors in the response (multiple possible formats)
+      if (result?.error) {
+        const errorMessage = result.error.message || result.error?.data || result.error || "Unknown error occurred";
+        addLog("Error found in result.error", result.error);
+        throw new Error(errorMessage);
+      }
+
+      // Check for JSON-RPC error format
+      if (result?.jsonrpc === "2.0" && result?.error) {
+        const errorMessage = result.error.message || result.error.data || "Unknown error occurred";
+        addLog("JSON-RPC error found", result.error);
+        throw new Error(errorMessage);
+      }
+
+      // Check if content indicates an error
+      if (result?.content && Array.isArray(result.content) && result.content.length > 0) {
+        const firstContent = result.content[0];
+        if (firstContent?.text) {
+          const text = firstContent.text;
+          addLog("Content text found", { text: text.substring(0, 200) });
+          if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed") || text.toLowerCase().includes("could not parse")) {
+            addLog("Error text found in content", text);
+            throw new Error(text);
+          }
+        }
+      }
+
+      // Check structuredContent for error indicators
+      if (result?.structuredContent) {
+        if (result.structuredContent.error) {
+          const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
+          addLog("Error found in structuredContent", result.structuredContent.error);
+          throw new Error(errorMessage);
+        }
+        // Also check if structuredContent has an error-like structure
+        if (result.structuredContent.saved === false || result.structuredContent.success === false) {
+          const errorMessage = result.structuredContent.message || result.structuredContent.error || "Save operation failed";
+          addLog("Save failed indicated in structuredContent", result.structuredContent);
+          throw new Error(errorMessage);
+        }
+      }
+      
       addLog("Manual save successful", result);
       
-      // Close modal and reset form
+      // Close modal and reset form on success
       setShowManualSaveModal(false);
       setManualSaveTitle("");
       setManualSaveContent("");
@@ -243,11 +307,22 @@ function App() {
         }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      addLog("Manual save failed", { error: errorMessage });
-      setManualSaveError(errorMessage);
+      let errorMessage = "Unknown error occurred";
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      } else if (err && typeof err === "object") {
+        // Try to extract error message from various possible structures
+        errorMessage = err.message || err.error?.message || err.error || JSON.stringify(err);
+      }
+      
+      addLog("Manual save failed", { error: errorMessage, err, errType: typeof err, errString: String(err) });
+      setManualSaveError(errorMessage || "Failed to save chat. Please check the debug panel for details.");
     } finally {
       setIsSaving(false);
+      addLog("Manual save handler finished", { isSaving: false });
     }
   };
 

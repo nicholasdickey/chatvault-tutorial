@@ -21,7 +21,9 @@ export interface SaveChatManuallyResult {
 
 /**
  * Parse HTML/text content to extract chat turns
- * Expected format: "You said:" followed by prompt, "ChatGPT said:" followed by response
+ * Supports two formats:
+ * 1. With markers: "You said: ... ChatGPT said: ..."
+ * 2. Plain alternating: user message, ChatGPT response, user message, etc.
  */
 function parseChatContent(content: string): Array<{ prompt: string; response: string }> {
     const turns: Array<{ prompt: string; response: string }> = [];
@@ -29,46 +31,86 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
     // Remove HTML tags if present (simple strip)
     let text = content.replace(/<[^>]*>/g, "").trim();
     
-    // Split by "You said:" markers
+    // Try format 1: "You said:" / "ChatGPT said:" markers
     const youSaidRegex = /You said:\s*/gi;
-    const parts = text.split(youSaidRegex);
+    const hasMarkers = youSaidRegex.test(text);
     
-    // Skip the first part (everything before first "You said:")
-    for (let i = 1; i < parts.length; i++) {
-        const part = parts[i].trim();
-        if (!part) continue;
+    if (hasMarkers) {
+        // Reset regex (it's global and we already tested)
+        const parts = text.split(/You said:\s*/gi);
         
-        // Find "ChatGPT said:" marker
-        const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
-        
-        if (chatGptSaidIndex === -1) {
-            // No ChatGPT response found, skip this turn
-            console.warn("[saveChatManually] No 'ChatGPT said:' found for turn", i);
-            continue;
+        // Skip the first part (everything before first "You said:")
+        for (let i = 1; i < parts.length; i++) {
+            const part = parts[i].trim();
+            if (!part) continue;
+            
+            // Find "ChatGPT said:" marker
+            const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
+            
+            if (chatGptSaidIndex === -1) {
+                // No ChatGPT response found, skip this turn
+                console.warn("[saveChatManually] No 'ChatGPT said:' found for turn", i);
+                continue;
+            }
+            
+            const prompt = part.substring(0, chatGptSaidIndex).trim();
+            const responsePart = part.substring(chatGptSaidIndex);
+            
+            // Extract response (remove "ChatGPT said:" prefix)
+            const responseMatch = responsePart.match(/ChatGPT said:\s*(.*)/is);
+            if (!responseMatch) {
+                console.warn("[saveChatManually] Could not extract response for turn", i);
+                continue;
+            }
+            
+            let response = responseMatch[1].trim();
+            
+            // Remove next "You said:" if it exists in the response
+            const nextYouSaidIndex = response.search(/You said:\s*/i);
+            if (nextYouSaidIndex !== -1) {
+                response = response.substring(0, nextYouSaidIndex).trim();
+            }
+            
+            if (prompt && response) {
+                turns.push({ prompt, response });
+            } else {
+                console.warn("[saveChatManually] Empty prompt or response for turn", i);
+            }
         }
         
-        const prompt = part.substring(0, chatGptSaidIndex).trim();
-        const responsePart = part.substring(chatGptSaidIndex);
-        
-        // Extract response (remove "ChatGPT said:" prefix)
-        const responseMatch = responsePart.match(/ChatGPT said:\s*(.*)/is);
-        if (!responseMatch) {
-            console.warn("[saveChatManually] Could not extract response for turn", i);
-            continue;
+        if (turns.length > 0) {
+            return turns;
+        }
+    }
+    
+    // Format 2: Plain alternating messages (user, ChatGPT, user, ChatGPT, ...)
+    // Split by double newlines (common separator) or single newlines if double doesn't work
+    let messages: string[] = [];
+    
+    // Try splitting by double newlines first
+    if (text.includes("\n\n")) {
+        messages = text.split(/\n\n+/).map(m => m.trim()).filter(m => m.length > 0);
+    } else {
+        // Fall back to single newlines
+        messages = text.split(/\n+/).map(m => m.trim()).filter(m => m.length > 0);
+    }
+    
+    // If we have messages, pair them up (first is user, second is ChatGPT, etc.)
+    if (messages.length >= 2) {
+        for (let i = 0; i < messages.length - 1; i += 2) {
+            const prompt = messages[i].trim();
+            const response = messages[i + 1].trim();
+            
+            if (prompt && response) {
+                turns.push({ prompt, response });
+            }
         }
         
-        let response = responseMatch[1].trim();
-        
-        // Remove next "You said:" if it exists in the response
-        const nextYouSaidIndex = response.search(/You said:\s*/i);
-        if (nextYouSaidIndex !== -1) {
-            response = response.substring(0, nextYouSaidIndex).trim();
-        }
-        
-        if (prompt && response) {
-            turns.push({ prompt, response });
-        } else {
-            console.warn("[saveChatManually] Empty prompt or response for turn", i);
+        // If we have an odd number of messages, the last one might be incomplete
+        // We could either skip it or pair it with an empty response
+        // For now, we'll skip it to avoid incomplete turns
+        if (messages.length % 2 === 1 && messages.length > 2) {
+            console.warn("[saveChatManually] Odd number of messages, last message may be incomplete");
         }
     }
     
@@ -116,7 +158,9 @@ export async function saveChatManually(
         if (turns.length === 0) {
             throw new Error(
                 "Could not parse any chat turns from the content. " +
-                "Please ensure the content follows the format: 'You said: ... ChatGPT said: ...'"
+                "Please ensure the content is in one of these formats:\n" +
+                "1. With markers: 'You said: ... ChatGPT said: ...'\n" +
+                "2. Plain alternating: user message, ChatGPT response, user message, etc."
             );
         }
 
