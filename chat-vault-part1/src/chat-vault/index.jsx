@@ -218,21 +218,7 @@ function App() {
       }, 3000);
     };
 
-    // Try modern Clipboard API first
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        console.log("[copyToClipboard] Clipboard API write successful", { id });
-        addLog("Copied to clipboard", { id });
-        setCopiedState();
-        return;
-      } catch (err) {
-        console.warn("[copyToClipboard] Clipboard API failed, trying fallback", { id, error: err.message });
-        // Fall through to fallback method
-      }
-    }
-
-    // Fallback: Use execCommand (works in iframes with proper permissions)
+    // Use execCommand (works in iframes)
     try {
       // Create a temporary textarea element
       const textarea = document.createElement("textarea");
@@ -248,14 +234,14 @@ function App() {
       document.body.removeChild(textarea);
       
       if (successful) {
-        console.log("[copyToClipboard] execCommand write successful", { id });
-        addLog("Copied to clipboard (fallback method)", { id });
+        console.log("[copyToClipboard] Copy successful", { id });
+        addLog("Copied to clipboard", { id });
         setCopiedState();
       } else {
         throw new Error("execCommand('copy') returned false");
       }
     } catch (err) {
-      console.error("[copyToClipboard] Both methods failed", { id, error: err.message, err });
+      console.error("[copyToClipboard] Copy failed", { id, error: err.message, err });
       addLog("Failed to copy - clipboard access blocked. Please copy manually.", { 
         error: err.message,
         suggestion: "The clipboard API is blocked in this context. You may need to copy the text manually."
@@ -552,16 +538,14 @@ function App() {
                   <button
                     onClick={() => copyEntireChat(selectedChat)}
                     className={`p-1.5 rounded flex items-center flex-shrink-0 ${
-                      copiedItems[`chat-${selectedChat.timestamp}`]
-                        ? "bg-green-500 text-white"
-                        : isDarkMode
+                      isDarkMode
                         ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
                     title="Copy entire chat"
                   >
                     {copiedItems[`chat-${selectedChat.timestamp}`] ? (
-                      <MdCheck className="w-3.5 h-3.5" />
+                      <MdCheck className="w-3.5 h-3.5 text-green-500" />
                     ) : (
                       <MdContentCopy className="w-3.5 h-3.5" />
                     )}
@@ -613,16 +597,14 @@ function App() {
                         <button
                           onClick={() => copyToClipboard(turn.prompt, promptId)}
                           className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            promptCopied
-                              ? "bg-green-500 text-white"
-                              : isDarkMode
+                            isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
                           title="Copy prompt"
                         >
                           {promptCopied ? (
-                            <MdCheck className="w-3.5 h-3.5" />
+                            <MdCheck className="w-3.5 h-3.5 text-green-500" />
                           ) : (
                             <MdContentCopy className="w-3.5 h-3.5" />
                           )}
@@ -648,16 +630,14 @@ function App() {
                         <button
                           onClick={() => copyToClipboard(turn.response, responseId)}
                           className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            responseCopied
-                              ? "bg-green-500 text-white"
-                              : isDarkMode
+                            isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
                           title="Copy response"
                         >
                           {responseCopied ? (
-                            <MdCheck className="w-3.5 h-3.5" />
+                            <MdCheck className="w-3.5 h-3.5 text-green-500" />
                           ) : (
                             <MdContentCopy className="w-3.5 h-3.5" />
                           )}
