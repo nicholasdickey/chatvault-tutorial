@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -178,7 +178,7 @@ function App() {
           next.delete(id);
           return next;
         });
-      }, 5000);
+      }, 3000);
     } catch (err) {
       addLog("Failed to copy", { error: err.message });
     }
@@ -455,41 +455,45 @@ function App() {
                         }`}>
                           Prompt
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => toggleTurnExpansion(index)}
-                            className={`p-1.5 rounded ${
-                              isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                            title={isExpanded ? "Collapse" : "Expand"}
-                          >
-                            {isExpanded ? (
-                              <MdExpandLess className="w-4 h-4" />
-                            ) : (
-                              <MdExpandMore className="w-4 h-4" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => copyToClipboard(turn.prompt, promptId)}
-                            className={`p-1.5 rounded flex items-center ${
-                              promptCopied
-                                ? "bg-green-500 text-white"
-                                : isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                            title="Copy prompt"
-                          >
-                            <MdContentCopy className="w-4 h-4" />
-                          </button>
-                        </div>
-                    </div>
-                      <div className={`text-sm ${
+                        <button
+                          onClick={() => toggleTurnExpansion(index)}
+                          className={`p-1.5 rounded ${
+                            isDarkMode
+                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          }`}
+                          title={isExpanded ? "Collapse" : "Expand"}
+                        >
+                          {isExpanded ? (
+                            <MdExpandLess className="w-4 h-4" />
+                          ) : (
+                            <MdExpandMore className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                      <div className={`text-sm flex items-start justify-between gap-2 ${
                         isDarkMode ? "text-gray-200" : "text-gray-800"
                       }`}>
-                        {isExpanded ? turn.prompt : truncateText(turn.prompt)}
+                        <span className="flex-1">
+                          {isExpanded ? turn.prompt : truncateText(turn.prompt)}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(turn.prompt, promptId)}
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
+                            promptCopied
+                              ? "bg-green-500 text-white"
+                              : isDarkMode
+                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          }`}
+                          title="Copy prompt"
+                        >
+                          {promptCopied ? (
+                            <MdCheck className="w-3.5 h-3.5" />
+                          ) : (
+                            <MdContentCopy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
                     </div>
                     
@@ -501,9 +505,16 @@ function App() {
                         }`}>
                           Response
                         </div>
+                      </div>
+                      <div className={`text-sm flex items-start justify-between gap-2 ${
+                        isDarkMode ? "text-gray-200" : "text-gray-800"
+                      }`}>
+                        <span className="flex-1">
+                          {isExpanded ? turn.response : truncateText(turn.response)}
+                        </span>
                         <button
                           onClick={() => copyToClipboard(turn.response, responseId)}
-                          className={`p-1.5 rounded flex items-center ${
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
                             responseCopied
                               ? "bg-green-500 text-white"
                               : isDarkMode
@@ -512,13 +523,12 @@ function App() {
                           }`}
                           title="Copy response"
                         >
-                          <MdContentCopy className="w-4 h-4" />
+                          {responseCopied ? (
+                            <MdCheck className="w-3.5 h-3.5" />
+                          ) : (
+                            <MdContentCopy className="w-3.5 h-3.5" />
+                          )}
                         </button>
-                        </div>
-                      <div className={`text-sm ${
-                        isDarkMode ? "text-gray-200" : "text-gray-800"
-                      }`}>
-                        {isExpanded ? turn.response : truncateText(turn.response)}
                       </div>
                     </div>
                   </div>
