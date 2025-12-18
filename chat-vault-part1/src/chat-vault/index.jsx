@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -28,6 +29,11 @@ function App() {
   const [copiedItems, setCopiedItems] = useState(new Set());
   const [showDebug, setShowDebug] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showManualSaveModal, setShowManualSaveModal] = useState(false);
+  const [manualSaveTitle, setManualSaveTitle] = useState("");
+  const [manualSaveContent, setManualSaveContent] = useState("");
+  const [manualSaveError, setManualSaveError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Check for dark mode
   useEffect(() => {
@@ -194,6 +200,81 @@ function App() {
     });
   };
 
+  const handleManualSave = async () => {
+    if (!manualSaveContent.trim()) {
+      setManualSaveError("Please paste the ChatGPT conversation");
+      return;
+    }
+
+    setIsSaving(true);
+    setManualSaveError(null);
+    addLog("Starting manual save", { hasTitle: !!manualSaveTitle });
+
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("saveChatManually tool not available");
+      }
+
+      const result = await window.openai.callTool("saveChatManually", {
+        htmlContent: manualSaveContent,
+        title: manualSaveTitle.trim() || undefined,
+      });
+
+      addLog("Manual save successful", result);
+      
+      // Close modal and reset form
+      setShowManualSaveModal(false);
+      setManualSaveTitle("");
+      setManualSaveContent("");
+      setManualSaveError(null);
+
+      // Reload chats
+      if (window.openai?.callTool) {
+        try {
+          const loadResult = await window.openai.callTool("loadChats", {
+            page: 0,
+            pageSize: 10,
+          });
+          if (loadResult?.structuredContent?.chats) {
+            setChats(loadResult.structuredContent.chats);
+          }
+        } catch (err) {
+          addLog("Error reloading chats after manual save", { error: err.message });
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Manual save failed", { error: errorMessage });
+      setManualSaveError(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCloseManualSaveModal = () => {
+    setShowManualSaveModal(false);
+    setManualSaveTitle("");
+    setManualSaveContent("");
+    setManualSaveError(null);
+  };
+
+  // SVG logo component
+  const ChatVaultLogo = () => (
+    <svg width="64" height="64" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A"/>
+      <circle cx="512" cy="512" r="300" fill="none" stroke="#E5E7EB" strokeWidth="80"/>
+      <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB"/>
+      <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB"/>
+      <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB"/>
+      <rect x="692" y="492" width="120" height="40" rx="20" fill="#E5E7EB"/>
+      <circle cx="512" cy="512" r="40" fill="#E5E7EB"/>
+      <rect x="590" y="350" width="220" height="140" rx="40" fill="#3B82F6"/>
+      <path d="M650 490 L620 560 L700 500 Z" fill="#3B82F6"/>
+      <rect x="630" y="385" width="140" height="16" rx="8" fill="#E5E7EB"/>
+      <rect x="630" y="420" width="100" height="16" rx="8" fill="#E5E7EB"/>
+    </svg>
+  );
+
   if (loading) {
     return (
       <div className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${
@@ -229,27 +310,41 @@ function App() {
         <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
           isDarkMode ? "border-gray-700" : "border-black/5"
         }`}>
-          <div className="sm:w-18 w-16 aspect-square rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white font-bold text-xl">CV</span>
-            </div>
+          <div className="sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden">
+            <ChatVaultLogo />
+          </div>
           <div className="flex-1">
             <div className="text-base sm:text-xl font-medium">ChatVault</div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
               {selectedChat ? selectedChat.title : "Your saved conversations"}
             </div>
           </div>
-          {selectedChat && (
+          <div className="flex gap-2">
             <button
-              onClick={handleBackClick}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              onClick={() => setShowManualSaveModal(true)}
+              className={`p-2 rounded-lg ${
                 isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
               }`}
+              title="Save chat manually"
             >
-              Back
+              <MdAdd className="w-5 h-5" />
             </button>
-          )}
+            {selectedChat && (
+              <button
+                onClick={handleBackClick}
+                className={`p-2 rounded-lg ${
+                  isDarkMode
+                    ? "bg-gray-800 text-white hover:bg-gray-700"
+                    : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title="Back"
+              >
+                <MdArrowBack className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -288,25 +383,31 @@ function App() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => toggleTurnExpansion(index)}
-                            className={`text-xs px-2 py-1 rounded ${
+                            className={`p-1.5 rounded ${
                               isDarkMode
                                 ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                             }`}
+                            title={isExpanded ? "Collapse" : "Expand"}
                           >
-                            {isExpanded ? "Collapse" : "Expand"}
+                            {isExpanded ? (
+                              <MdExpandLess className="w-4 h-4" />
+                            ) : (
+                              <MdExpandMore className="w-4 h-4" />
+                            )}
                           </button>
                           <button
                             onClick={() => copyToClipboard(turn.prompt, promptId)}
-                            className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
+                            className={`p-1.5 rounded flex items-center ${
                               promptCopied
                                 ? "bg-green-500 text-white"
                                 : isDarkMode
                                 ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                             }`}
+                            title="Copy prompt"
                           >
-                            {promptCopied ? "✓" : "Copy"}
+                            <MdContentCopy className="w-4 h-4" />
                           </button>
                         </div>
                     </div>
@@ -327,15 +428,16 @@ function App() {
                         </div>
                         <button
                           onClick={() => copyToClipboard(turn.response, responseId)}
-                          className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
+                          className={`p-1.5 rounded flex items-center ${
                             responseCopied
                               ? "bg-green-500 text-white"
                               : isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
+                          title="Copy response"
                         >
-                          {responseCopied ? "✓" : "Copy"}
+                          <MdContentCopy className="w-4 h-4" />
                         </button>
                         </div>
                       <div className={`text-sm ${
@@ -422,6 +524,112 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Manual Save Modal */}
+        {showManualSaveModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`w-full max-w-2xl rounded-lg ${
+              isDarkMode ? "bg-gray-800" : "bg-white"
+            } p-6 max-h-[90vh] flex flex-col`}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className={`text-lg font-semibold ${
+                  isDarkMode ? "text-white" : "text-black"
+                }`}>
+                  Save Chat Manually
+                </h2>
+                <button
+                  onClick={handleCloseManualSaveModal}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "hover:bg-gray-700 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <MdClose className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}>
+                    Title (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={manualSaveTitle}
+                    onChange={(e) => setManualSaveTitle(e.target.value)}
+                    placeholder="manual"
+                    className={`w-full px-3 py-2 rounded-lg border ${
+                      isDarkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "bg-white border-gray-300 text-black placeholder-gray-500"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}>
+                    Paste ChatGPT Conversation
+                  </label>
+                  <textarea
+                    value={manualSaveContent}
+                    onChange={(e) => setManualSaveContent(e.target.value)}
+                    placeholder="Paste the copied conversation here..."
+                    rows={12}
+                    className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
+                      isDarkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "bg-white border-gray-300 text-black placeholder-gray-500"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
+                  />
+                </div>
+
+                {manualSaveError && (
+                  <div className={`p-3 rounded-lg ${
+                    isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
+                  }`}>
+                    <p className={`text-sm ${
+                      isDarkMode ? "text-red-300" : "text-red-700"
+                    }`}>
+                      {manualSaveError}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleCloseManualSaveModal}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleManualSave}
+                  disabled={isSaving || !manualSaveContent.trim()}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isSaving || !manualSaveContent.trim()
+                      ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                      : isDarkMode
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

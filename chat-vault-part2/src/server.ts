@@ -18,6 +18,7 @@ import * as dotenv from "dotenv";
 import { testConnection, db } from "./db/index.js";
 import { sql } from "drizzle-orm";
 import { saveChat } from "./tools/saveChat.js";
+import { saveChatManually } from "./tools/saveChatManually.js";
 import { loadChats } from "./tools/loadChats.js";
 import { searchChats } from "./tools/searchChats.js";
 
@@ -132,6 +133,28 @@ const chatVaultTools: Tool[] = [
             required: ["userId", "query"],
         },
     },
+    {
+        name: "saveChatManually",
+        description: "Save a manually pasted ChatGPT conversation by parsing HTML/text content",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: {
+                    type: "string",
+                    description: "User ID (required)",
+                },
+                htmlContent: {
+                    type: "string",
+                    description: "The pasted HTML/text content from ChatGPT conversation",
+                },
+                title: {
+                    type: "string",
+                    description: "Optional title for the chat (defaults to 'manual save [timestamp]')",
+                },
+            },
+            required: ["userId", "htmlContent"],
+        },
+    },
 ];
 
 // Handler for tools/list
@@ -210,6 +233,18 @@ async function handleCallTool(request: CallToolRequest) {
                     chats: result.chats,
                     search: result.search,
                 },
+            };
+        } else if (toolName === "saveChatManually") {
+            const result = await saveChatManually(args as { userId: string; htmlContent: string; title?: string });
+            console.log("[MCP Handler] handleCallTool - saveChatManually result:", JSON.stringify(result));
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Chat saved successfully with ID: ${result.chatId} (${result.turnsCount} turns)`,
+                    },
+                ],
+                structuredContent: result,
             };
         } else {
             throw new Error(`Unknown tool: ${toolName}`);
