@@ -197,10 +197,8 @@ function App() {
 
   const copyToClipboard = async (text, id) => {
     console.log("[copyToClipboard] Called", { id, textLength: text?.length });
-    try {
-      await navigator.clipboard.writeText(text);
-      console.log("[copyToClipboard] Clipboard write successful", { id });
-      addLog("Copied to clipboard", { id });
+    
+    const setCopiedState = () => {
       setCopiedItems((prev) => {
         const next = {
           ...prev,
@@ -218,9 +216,53 @@ function App() {
           return next;
         });
       }, 3000);
+    };
+
+    // Try modern Clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        console.log("[copyToClipboard] Clipboard API write successful", { id });
+        addLog("Copied to clipboard", { id });
+        setCopiedState();
+        return;
+      } catch (err) {
+        console.warn("[copyToClipboard] Clipboard API failed, trying fallback", { id, error: err.message });
+        // Fall through to fallback method
+      }
+    }
+
+    // Fallback: Use execCommand (works in iframes with proper permissions)
+    try {
+      // Create a temporary textarea element
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-999999px";
+      textarea.style.top = "-999999px";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      
+      if (successful) {
+        console.log("[copyToClipboard] execCommand write successful", { id });
+        addLog("Copied to clipboard (fallback method)", { id });
+        setCopiedState();
+      } else {
+        throw new Error("execCommand('copy') returned false");
+      }
     } catch (err) {
-      console.error("[copyToClipboard] Error", { id, error: err.message, err });
-      addLog("Failed to copy", { error: err.message });
+      console.error("[copyToClipboard] Both methods failed", { id, error: err.message, err });
+      addLog("Failed to copy - clipboard access blocked. Please copy manually.", { 
+        error: err.message,
+        suggestion: "The clipboard API is blocked in this context. You may need to copy the text manually."
+      });
+      
+      // Show a user-friendly message
+      alert("Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.");
     }
   };
 
