@@ -237,9 +237,21 @@ function App() {
   };
 
   const copyEntireChat = async (chat) => {
-    const chatId = `chat-${chat.timestamp}`;
-    const formattedText = formatChatForCopy(chat);
-    await copyToClipboard(formattedText, chatId);
+    console.log("[copyEntireChat] Called", { chat, timestamp: chat?.timestamp });
+    try {
+      if (!chat || !chat.timestamp) {
+        throw new Error("Invalid chat object");
+      }
+      const chatId = `chat-${chat.timestamp}`;
+      console.log("[copyEntireChat] Formatting chat", { chatId, turnsCount: chat.turns?.length });
+      const formattedText = formatChatForCopy(chat);
+      console.log("[copyEntireChat] Formatted text length", { chatId, textLength: formattedText.length });
+      await copyToClipboard(formattedText, chatId);
+      console.log("[copyEntireChat] Success", { chatId });
+    } catch (err) {
+      console.error("[copyEntireChat] Error", { error: err.message, err, chat });
+      addLog("Failed to copy entire chat", { error: err.message });
+    }
   };
 
   const truncateText = (text, maxLength = 150) => {
