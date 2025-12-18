@@ -26,7 +26,7 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
-  const [copiedItems, setCopiedItems] = useState(new Set());
+  const [copiedItems, setCopiedItems] = useState({});
   // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
   const [showDebug, setShowDebug] = useState(() => {
     // Check localStorage for previously enabled debug panel
@@ -196,22 +196,30 @@ function App() {
   };
 
   const copyToClipboard = async (text, id) => {
+    console.log("[copyToClipboard] Called", { id, textLength: text?.length });
     try {
       await navigator.clipboard.writeText(text);
+      console.log("[copyToClipboard] Clipboard write successful", { id });
       addLog("Copied to clipboard", { id });
       setCopiedItems((prev) => {
-        const next = new Set(prev);
-        next.add(id);
+        const next = {
+          ...prev,
+          [id]: true,
+        };
+        console.log("[copyToClipboard] Setting copiedItems", { id, prev, next });
         return next;
       });
       setTimeout(() => {
+        console.log("[copyToClipboard] Removing copied state after timeout", { id });
         setCopiedItems((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
+          const next = { ...prev };
+          delete next[id];
+          console.log("[copyToClipboard] Removed from copiedItems", { id, next });
           return next;
         });
       }, 3000);
     } catch (err) {
+      console.error("[copyToClipboard] Error", { id, error: err.message, err });
       addLog("Failed to copy", { error: err.message });
     }
   };
@@ -490,7 +498,7 @@ function App() {
                   <button
                     onClick={() => copyEntireChat(selectedChat)}
                     className={`p-1.5 rounded flex items-center flex-shrink-0 ${
-                      copiedItems.has(`chat-${selectedChat.timestamp}`)
+                      copiedItems[`chat-${selectedChat.timestamp}`]
                         ? "bg-green-500 text-white"
                         : isDarkMode
                         ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -511,8 +519,8 @@ function App() {
                 const isExpanded = expandedTurns.has(index);
                 const promptId = `prompt-${selectedChat.timestamp}-${index}`;
                 const responseId = `response-${selectedChat.timestamp}-${index}`;
-                const promptCopied = copiedItems.has(promptId);
-                const responseCopied = copiedItems.has(responseId);
+                const promptCopied = !!copiedItems[promptId];
+                const responseCopied = !!copiedItems[responseId];
                 
                 return (
                   <div key={index} className={`space-y-2 p-4 rounded-lg border ${
