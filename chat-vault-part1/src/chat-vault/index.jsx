@@ -220,18 +220,29 @@ function App() {
 
     // Use execCommand (works in iframes)
     try {
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+      
       // Create a temporary textarea element
       const textarea = document.createElement("textarea");
       textarea.value = text;
       textarea.style.position = "fixed";
       textarea.style.left = "-999999px";
       textarea.style.top = "-999999px";
+      textarea.style.opacity = "0";
+      textarea.setAttribute("readonly", "");
       document.body.appendChild(textarea);
-      textarea.focus();
+      
+      // Select text without focusing (to avoid scroll)
       textarea.select();
+      textarea.setSelectionRange(0, text.length);
       
       const successful = document.execCommand("copy");
       document.body.removeChild(textarea);
+      
+      // Restore scroll position
+      window.scrollTo(scrollX, scrollY);
       
       if (successful) {
         console.log("[copyToClipboard] Copy successful", { id });
@@ -536,7 +547,11 @@ function App() {
                     </div>
                   </div>
                   <button
-                    onClick={() => copyEntireChat(selectedChat)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      copyEntireChat(selectedChat);
+                    }}
                     className={`p-1.5 rounded flex items-center flex-shrink-0 ${
                       isDarkMode
                         ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -595,7 +610,11 @@ function App() {
                           {isExpanded ? turn.prompt : truncateText(turn.prompt)}
                         </span>
                         <button
-                          onClick={() => copyToClipboard(turn.prompt, promptId)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            copyToClipboard(turn.prompt, promptId);
+                          }}
                           className={`p-1 rounded flex items-center flex-shrink-0 ${
                             isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -628,7 +647,11 @@ function App() {
                           {isExpanded ? turn.response : truncateText(turn.response)}
                         </span>
                         <button
-                          onClick={() => copyToClipboard(turn.response, responseId)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            copyToClipboard(turn.response, responseId);
+                          }}
                           className={`p-1 rounded flex items-center flex-shrink-0 ${
                             isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
