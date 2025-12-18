@@ -518,7 +518,7 @@ function App() {
                     }`}
                     title="Copy entire chat"
                   >
-                    {copiedItems.has(`chat-${selectedChat.timestamp}`) ? (
+                    {copiedItems[`chat-${selectedChat.timestamp}`] ? (
                       <MdCheck className="w-3.5 h-3.5" />
                     ) : (
                       <MdContentCopy className="w-3.5 h-3.5" />
