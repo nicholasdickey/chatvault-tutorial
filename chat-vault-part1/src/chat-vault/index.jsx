@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -25,13 +26,46 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
-  const [copiedItems, setCopiedItems] = useState(new Set());
-  const [showDebug, setShowDebug] = useState(false);
+  const [copiedItems, setCopiedItems] = useState({});
+  // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
+  const [showDebug, setShowDebug] = useState(() => {
+    // Check localStorage for previously enabled debug panel
+    return localStorage.getItem("chatvault-debug-enabled") === "true";
+  });
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showManualSaveModal, setShowManualSaveModal] = useState(false);
+  const [manualSaveTitle, setManualSaveTitle] = useState("");
+  const [manualSaveContent, setManualSaveContent] = useState("");
+  const [manualSaveError, setManualSaveError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Shift+D (or Cmd+Shift+D on Mac)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "D") {
+        e.preventDefault();
+        const newState = !showDebug;
+        setShowDebug(newState);
+        // Persist in localStorage
+        if (newState) {
+          localStorage.setItem("chatvault-debug-enabled", "true");
+        } else {
+          localStorage.removeItem("chatvault-debug-enabled");
+        }
+        addLog("Debug panel toggled", { enabled: newState });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showDebug]);
 
   // Check for dark mode
   useEffect(() => {
-    addLog("Widget initialized");
+    addLog("Widget initialized", { debugEnabled: showDebug });
     
     const checkDarkMode = () => {
       const root = document.documentElement;
@@ -162,19 +196,100 @@ function App() {
   };
 
   const copyToClipboard = async (text, id) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      addLog("Copied to clipboard", { id });
-      setCopiedItems((prev) => new Set(prev).add(id));
+    console.log("[copyToClipboard] Called", { id, textLength: text?.length });
+    
+    const setCopiedState = () => {
+      setCopiedItems((prev) => {
+        const next = {
+          ...prev,
+          [id]: true,
+        };
+        console.log("[copyToClipboard] Setting copiedItems", { id, prev, next });
+        return next;
+      });
       setTimeout(() => {
+        console.log("[copyToClipboard] Removing copied state after timeout", { id });
         setCopiedItems((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
+          const next = { ...prev };
+          delete next[id];
+          console.log("[copyToClipboard] Removed from copiedItems", { id, next });
           return next;
         });
-      }, 5000);
+      }, 3000);
+    };
+
+    // Use execCommand (works in iframes)
+    try {
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+      
+      // Create a temporary textarea element
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-999999px";
+      textarea.style.top = "-999999px";
+      textarea.style.opacity = "0";
+      textarea.setAttribute("readonly", "");
+      document.body.appendChild(textarea);
+      
+      // Select text without focusing (to avoid scroll)
+      textarea.select();
+      textarea.setSelectionRange(0, text.length);
+      
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      
+      // Restore scroll position
+      window.scrollTo(scrollX, scrollY);
+      
+      if (successful) {
+        console.log("[copyToClipboard] Copy successful", { id });
+        addLog("Copied to clipboard", { id });
+        setCopiedState();
+      } else {
+        throw new Error("execCommand('copy') returned false");
+      }
     } catch (err) {
-      addLog("Failed to copy", { error: err.message });
+      console.error("[copyToClipboard] Copy failed", { id, error: err.message, err });
+      addLog("Failed to copy - clipboard access blocked. Please copy manually.", { 
+        error: err.message,
+        suggestion: "The clipboard API is blocked in this context. You may need to copy the text manually."
+      });
+      
+      // Show a user-friendly message
+      alert("Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.");
+    }
+  };
+
+  const formatChatForCopy = (chat) => {
+    if (!chat || !chat.turns || chat.turns.length === 0) {
+      return "";
+    }
+    
+    return chat.turns
+      .map((turn) => {
+        return `You said:\n${turn.prompt}\n\nChatGPT said:\n${turn.response}`;
+      })
+      .join("\n\n");
+  };
+
+  const copyEntireChat = async (chat) => {
+    console.log("[copyEntireChat] Called", { chat, timestamp: chat?.timestamp });
+    try {
+      if (!chat || !chat.timestamp) {
+        throw new Error("Invalid chat object");
+      }
+      const chatId = `chat-${chat.timestamp}`;
+      console.log("[copyEntireChat] Formatting chat", { chatId, turnsCount: chat.turns?.length });
+      const formattedText = formatChatForCopy(chat);
+      console.log("[copyEntireChat] Formatted text length", { chatId, textLength: formattedText.length });
+      await copyToClipboard(formattedText, chatId);
+      console.log("[copyEntireChat] Success", { chatId });
+    } catch (err) {
+      console.error("[copyEntireChat] Error", { error: err.message, err, chat });
+      addLog("Failed to copy entire chat", { error: err.message });
     }
   };
 
@@ -193,6 +308,156 @@ function App() {
       minute: "2-digit",
     });
   };
+
+  const handleManualSave = async () => {
+    if (!manualSaveContent.trim()) {
+      setManualSaveError("Please paste the ChatGPT conversation");
+      return;
+    }
+
+    setIsSaving(true);
+    setManualSaveError(null);
+    addLog("Starting manual save", { hasTitle: !!manualSaveTitle, contentLength: manualSaveContent.length });
+
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("saveChatManually tool not available");
+      }
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
+      });
+
+      const callToolPromise = window.openai.callTool("saveChatManually", {
+        htmlContent: manualSaveContent,
+        title: manualSaveTitle.trim() || undefined,
+      });
+
+      const result = await Promise.race([callToolPromise, timeoutPromise]);
+      
+      addLog("Manual save result received", { 
+        result, 
+        resultType: typeof result, 
+        isNull: result === null,
+        isUndefined: result === undefined,
+        hasError: !!result?.error,
+        keys: result ? Object.keys(result) : [],
+        stringified: JSON.stringify(result).substring(0, 500)
+      });
+
+      // If result is null/undefined, that's an error
+      if (result == null) {
+        throw new Error("No response received from server");
+      }
+
+      // Check for errors in the response (multiple possible formats)
+      if (result?.error) {
+        const errorMessage = result.error.message || result.error?.data || result.error || "Unknown error occurred";
+        addLog("Error found in result.error", result.error);
+        throw new Error(errorMessage);
+      }
+
+      // Check for JSON-RPC error format
+      if (result?.jsonrpc === "2.0" && result?.error) {
+        const errorMessage = result.error.message || result.error.data || "Unknown error occurred";
+        addLog("JSON-RPC error found", result.error);
+        throw new Error(errorMessage);
+      }
+
+      // Check if content indicates an error
+      if (result?.content && Array.isArray(result.content) && result.content.length > 0) {
+        const firstContent = result.content[0];
+        if (firstContent?.text) {
+          const text = firstContent.text;
+          addLog("Content text found", { text: text.substring(0, 200) });
+          if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed") || text.toLowerCase().includes("could not parse")) {
+            addLog("Error text found in content", text);
+            throw new Error(text);
+          }
+        }
+      }
+
+      // Check structuredContent for error indicators
+      if (result?.structuredContent) {
+        if (result.structuredContent.error) {
+          const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
+          addLog("Error found in structuredContent", result.structuredContent.error);
+          throw new Error(errorMessage);
+        }
+        // Also check if structuredContent has an error-like structure
+        if (result.structuredContent.saved === false || result.structuredContent.success === false) {
+          const errorMessage = result.structuredContent.message || result.structuredContent.error || "Save operation failed";
+          addLog("Save failed indicated in structuredContent", result.structuredContent);
+          throw new Error(errorMessage);
+        }
+      }
+      
+      addLog("Manual save successful", result);
+      
+      // Close modal and reset form on success
+      setShowManualSaveModal(false);
+      setManualSaveTitle("");
+      setManualSaveContent("");
+      setManualSaveError(null);
+
+      // Reload chats
+      if (window.openai?.callTool) {
+        try {
+          const loadResult = await window.openai.callTool("loadChats", {
+            page: 0,
+            pageSize: 10,
+          });
+          if (loadResult?.structuredContent?.chats) {
+            setChats(loadResult.structuredContent.chats);
+          }
+        } catch (err) {
+          addLog("Error reloading chats after manual save", { error: err.message });
+        }
+      }
+    } catch (err) {
+      let errorMessage = "Unknown error occurred";
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      } else if (err && typeof err === "object") {
+        // Try to extract error message from various possible structures
+        errorMessage = err.message || err.error?.message || err.error || JSON.stringify(err);
+      }
+      
+      addLog("Manual save failed", { error: errorMessage, err, errType: typeof err, errString: String(err) });
+      setManualSaveError(errorMessage || "Failed to save chat. Please check the debug panel for details.");
+    } finally {
+      setIsSaving(false);
+      addLog("Manual save handler finished", { isSaving: false });
+    }
+  };
+
+  const handleCloseManualSaveModal = () => {
+    setShowManualSaveModal(false);
+    setManualSaveTitle("");
+    setManualSaveContent("");
+    setManualSaveError(null);
+  };
+
+  // SVG logo component
+  const ChatVaultLogo = () => (
+    <svg width="64" height="64" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A"/>
+      <circle cx="512" cy="512" r="300" fill="none" stroke="#E5E7EB" strokeWidth="80"/>
+      <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB"/>
+      <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB"/>
+      <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB"/>
+      <rect x="692" y="492" width="120" height="40" rx="20" fill="#E5E7EB"/>
+      <circle cx="512" cy="512" r="40" fill="#E5E7EB"/>
+      <rect x="590" y="350" width="220" height="140" rx="40" fill="#3B82F6"/>
+      <path d="M650 490 L620 560 L700 500 Z" fill="#3B82F6"/>
+      <rect x="630" y="385" width="140" height="16" rx="8" fill="#E5E7EB"/>
+      <rect x="630" y="420" width="100" height="16" rx="8" fill="#E5E7EB"/>
+    </svg>
+  );
 
   if (loading) {
     return (
@@ -229,27 +494,41 @@ function App() {
         <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
           isDarkMode ? "border-gray-700" : "border-black/5"
         }`}>
-          <div className="sm:w-18 w-16 aspect-square rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white font-bold text-xl">CV</span>
-            </div>
+          <div className="sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden">
+            <ChatVaultLogo />
+          </div>
           <div className="flex-1">
             <div className="text-base sm:text-xl font-medium">ChatVault</div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
               {selectedChat ? selectedChat.title : "Your saved conversations"}
             </div>
           </div>
-          {selectedChat && (
+          <div className="flex gap-2">
             <button
-              onClick={handleBackClick}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              onClick={() => setShowManualSaveModal(true)}
+              className={`p-2 rounded-lg ${
                 isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
               }`}
+              title="Save chat manually"
             >
-              Back
+              <MdAdd className="w-5 h-5" />
             </button>
-          )}
+            {selectedChat && (
+              <button
+                onClick={handleBackClick}
+                className={`p-2 rounded-lg ${
+                  isDarkMode
+                    ? "bg-gray-800 text-white hover:bg-gray-700"
+                    : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title="Back"
+              >
+                <MdArrowBack className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -260,9 +539,32 @@ function App() {
               <div className={`p-4 rounded-lg ${
                 isDarkMode ? "bg-gray-800" : "bg-gray-50"
               }`}>
-                <div className="font-medium mb-1">{selectedChat.title}</div>
-                <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  {formatDate(selectedChat.timestamp)}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="font-medium mb-1">{selectedChat.title}</div>
+                    <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                      {formatDate(selectedChat.timestamp)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      copyEntireChat(selectedChat);
+                    }}
+                    className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                      isDarkMode
+                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                    title="Copy entire chat"
+                  >
+                    {copiedItems[`chat-${selectedChat.timestamp}`] ? (
+                      <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                    ) : (
+                      <MdContentCopy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
               </div>
               
@@ -270,8 +572,8 @@ function App() {
                 const isExpanded = expandedTurns.has(index);
                 const promptId = `prompt-${selectedChat.timestamp}-${index}`;
                 const responseId = `response-${selectedChat.timestamp}-${index}`;
-                const promptCopied = copiedItems.has(promptId);
-                const responseCopied = copiedItems.has(responseId);
+                const promptCopied = !!copiedItems[promptId];
+                const responseCopied = !!copiedItems[responseId];
                 
                 return (
                   <div key={index} className={`space-y-2 p-4 rounded-lg border ${
@@ -285,35 +587,47 @@ function App() {
                         }`}>
                           Prompt
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => toggleTurnExpansion(index)}
-                            className={`text-xs px-2 py-1 rounded ${
-                              isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                          >
-                            {isExpanded ? "Collapse" : "Expand"}
-                          </button>
-                          <button
-                            onClick={() => copyToClipboard(turn.prompt, promptId)}
-                            className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
-                              promptCopied
-                                ? "bg-green-500 text-white"
-                                : isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                          >
-                            {promptCopied ? "✓" : "Copy"}
-                          </button>
-                        </div>
-                    </div>
-                      <div className={`text-sm ${
+                        <button
+                          onClick={() => toggleTurnExpansion(index)}
+                          className={`p-1.5 rounded ${
+                            isDarkMode
+                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          }`}
+                          title={isExpanded ? "Collapse" : "Expand"}
+                        >
+                          {isExpanded ? (
+                            <MdExpandLess className="w-4 h-4" />
+                          ) : (
+                            <MdExpandMore className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                      <div className={`text-sm flex items-start justify-between gap-2 ${
                         isDarkMode ? "text-gray-200" : "text-gray-800"
                       }`}>
-                        {isExpanded ? turn.prompt : truncateText(turn.prompt)}
+                        <span className="flex-1">
+                          {isExpanded ? turn.prompt : truncateText(turn.prompt)}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            copyToClipboard(turn.prompt, promptId);
+                          }}
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
+                            isDarkMode
+                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          }`}
+                          title="Copy prompt"
+                        >
+                          {promptCopied ? (
+                            <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <MdContentCopy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
                     </div>
                     
@@ -325,23 +639,32 @@ function App() {
                         }`}>
                           Response
                         </div>
+                      </div>
+                      <div className={`text-sm flex items-start justify-between gap-2 ${
+                        isDarkMode ? "text-gray-200" : "text-gray-800"
+                      }`}>
+                        <span className="flex-1">
+                          {isExpanded ? turn.response : truncateText(turn.response)}
+                        </span>
                         <button
-                          onClick={() => copyToClipboard(turn.response, responseId)}
-                          className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
-                            responseCopied
-                              ? "bg-green-500 text-white"
-                              : isDarkMode
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            copyToClipboard(turn.response, responseId);
+                          }}
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
+                            isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
+                          title="Copy response"
                         >
-                          {responseCopied ? "✓" : "Copy"}
+                          {responseCopied ? (
+                            <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <MdContentCopy className="w-3.5 h-3.5" />
+                          )}
                         </button>
-                        </div>
-                      <div className={`text-sm ${
-                        isDarkMode ? "text-gray-200" : "text-gray-800"
-                      }`}>
-                        {isExpanded ? turn.response : truncateText(turn.response)}
                       </div>
                     </div>
                   </div>
@@ -386,21 +709,32 @@ function App() {
           )}
         </div>
 
-        {/* Debug Panel */}
-        <div className={`mt-4 pt-4 border-t ${
-          isDarkMode ? "border-gray-700" : "border-black/5"
-        }`}>
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
-              isDarkMode
-                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-          </button>
-          {showDebug && (
+        {/* Debug Panel - Toggle with Ctrl+Shift+D */}
+        {showDebug && (
+          <div className={`mt-4 pt-4 border-t ${
+            isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}>
+            <button
+              onClick={() => {
+                const newState = !showDebug;
+                setShowDebug(newState);
+                // Persist in localStorage
+                if (newState) {
+                  localStorage.setItem("chatvault-debug-enabled", "true");
+                } else {
+                  localStorage.removeItem("chatvault-debug-enabled");
+                }
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
+                isDarkMode
+                  ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
+              <span className="ml-2 text-xs opacity-60">(Ctrl+Shift+D to toggle)</span>
+            </button>
+            {showDebug && (
             <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
               isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
             }`}>
@@ -420,8 +754,115 @@ function App() {
                 ))
               )}
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+
+        {/* Manual Save Modal */}
+        {showManualSaveModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`w-full max-w-2xl rounded-lg ${
+              isDarkMode ? "bg-gray-800" : "bg-white"
+            } p-6 max-h-[90vh] flex flex-col`}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className={`text-lg font-semibold ${
+                  isDarkMode ? "text-white" : "text-black"
+                }`}>
+                  Save Chat Manually
+                </h2>
+                <button
+                  onClick={handleCloseManualSaveModal}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "hover:bg-gray-700 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <MdClose className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}>
+                    Title (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={manualSaveTitle}
+                    onChange={(e) => setManualSaveTitle(e.target.value)}
+                    placeholder="manual"
+                    className={`w-full px-3 py-2 rounded-lg border ${
+                      isDarkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "bg-white border-gray-300 text-black placeholder-gray-500"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}>
+                    Paste ChatGPT Conversation
+                  </label>
+                  <textarea
+                    value={manualSaveContent}
+                    onChange={(e) => setManualSaveContent(e.target.value)}
+                    placeholder="Paste the copied conversation here..."
+                    rows={12}
+                    className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
+                      isDarkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "bg-white border-gray-300 text-black placeholder-gray-500"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
+                  />
+                </div>
+
+                {manualSaveError && (
+                  <div className={`p-3 rounded-lg ${
+                    isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
+                  }`}>
+                    <p className={`text-sm ${
+                      isDarkMode ? "text-red-300" : "text-red-700"
+                    }`}>
+                      {manualSaveError}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleCloseManualSaveModal}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleManualSave}
+                  disabled={isSaving || !manualSaveContent.trim()}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isSaving || !manualSaveContent.trim()
+                      ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                      : isDarkMode
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
