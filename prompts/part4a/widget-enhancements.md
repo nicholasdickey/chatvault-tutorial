@@ -9,3 +9,5 @@ Prompt2: Add '+' (add) button to top level header, where it says ChatVault, Save
 For the Part2
 
 Prompt0: refactor saveChat to have an extra optional boolean param 'manual' in MCP schema. If manual is specified, parse the passed chat as a html blob and turn it into the structured chats, like any other chat. Use current time for all turns.
+
+---
