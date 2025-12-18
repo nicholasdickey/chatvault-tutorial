@@ -199,7 +199,11 @@ function App() {
     try {
       await navigator.clipboard.writeText(text);
       addLog("Copied to clipboard", { id });
-      setCopiedItems((prev) => new Set(prev).add(id));
+      setCopiedItems((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
       setTimeout(() => {
         setCopiedItems((prev) => {
           const next = new Set(prev);
