@@ -212,6 +212,24 @@ function App() {
     }
   };
 
+  const formatChatForCopy = (chat) => {
+    if (!chat || !chat.turns || chat.turns.length === 0) {
+      return "";
+    }
+    
+    return chat.turns
+      .map((turn) => {
+        return `You said:\n${turn.prompt}\n\nChatGPT said:\n${turn.response}`;
+      })
+      .join("\n\n");
+  };
+
+  const copyEntireChat = async (chat) => {
+    const chatId = `chat-${chat.timestamp}`;
+    const formattedText = formatChatForCopy(chat);
+    await copyToClipboard(formattedText, chatId);
+  };
+
   const truncateText = (text, maxLength = 150) => {
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength) + "...";
@@ -458,9 +476,30 @@ function App() {
               <div className={`p-4 rounded-lg ${
                 isDarkMode ? "bg-gray-800" : "bg-gray-50"
               }`}>
-                <div className="font-medium mb-1">{selectedChat.title}</div>
-                <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  {formatDate(selectedChat.timestamp)}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="font-medium mb-1">{selectedChat.title}</div>
+                    <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                      {formatDate(selectedChat.timestamp)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => copyEntireChat(selectedChat)}
+                    className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                      copiedItems.has(`chat-${selectedChat.timestamp}`)
+                        ? "bg-green-500 text-white"
+                        : isDarkMode
+                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                    title="Copy entire chat"
+                  >
+                    {copiedItems.has(`chat-${selectedChat.timestamp}`) ? (
+                      <MdCheck className="w-3.5 h-3.5" />
+                    ) : (
+                      <MdContentCopy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
               </div>
               
