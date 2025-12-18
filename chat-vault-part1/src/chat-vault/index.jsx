@@ -27,7 +27,11 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
   const [copiedItems, setCopiedItems] = useState(new Set());
-  const [showDebug, setShowDebug] = useState(false);
+  // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
+  const [showDebug, setShowDebug] = useState(() => {
+    // Check localStorage for previously enabled debug panel
+    return localStorage.getItem("chatvault-debug-enabled") === "true";
+  });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showManualSaveModal, setShowManualSaveModal] = useState(false);
   const [manualSaveTitle, setManualSaveTitle] = useState("");
@@ -35,9 +39,33 @@ function App() {
   const [manualSaveError, setManualSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Shift+D (or Cmd+Shift+D on Mac)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "D") {
+        e.preventDefault();
+        const newState = !showDebug;
+        setShowDebug(newState);
+        // Persist in localStorage
+        if (newState) {
+          localStorage.setItem("chatvault-debug-enabled", "true");
+        } else {
+          localStorage.removeItem("chatvault-debug-enabled");
+        }
+        addLog("Debug panel toggled", { enabled: newState });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showDebug]);
+
   // Check for dark mode
   useEffect(() => {
-    addLog("Widget initialized");
+    addLog("Widget initialized", { debugEnabled: showDebug });
     
     const checkDarkMode = () => {
       const root = document.documentElement;
@@ -573,21 +601,32 @@ function App() {
           )}
         </div>
 
-        {/* Debug Panel */}
-        <div className={`mt-4 pt-4 border-t ${
-          isDarkMode ? "border-gray-700" : "border-black/5"
-        }`}>
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
-              isDarkMode
-                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-          </button>
-          {showDebug && (
+        {/* Debug Panel - Toggle with Ctrl+Shift+D */}
+        {showDebug && (
+          <div className={`mt-4 pt-4 border-t ${
+            isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}>
+            <button
+              onClick={() => {
+                const newState = !showDebug;
+                setShowDebug(newState);
+                // Persist in localStorage
+                if (newState) {
+                  localStorage.setItem("chatvault-debug-enabled", "true");
+                } else {
+                  localStorage.removeItem("chatvault-debug-enabled");
+                }
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
+                isDarkMode
+                  ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
+              <span className="ml-2 text-xs opacity-60">(Ctrl+Shift+D to toggle)</span>
+            </button>
+            {showDebug && (
             <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
               isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
             }`}>
@@ -607,8 +646,9 @@ function App() {
                 ))
               )}
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Manual Save Modal */}
         {showManualSaveModal && (
