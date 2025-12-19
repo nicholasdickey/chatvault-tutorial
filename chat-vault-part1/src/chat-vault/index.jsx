@@ -30,6 +30,8 @@ function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [pagination, setPagination] = useState(null);
+  const [pageInputValue, setPageInputValue] = useState("1");
+  const [paginationLoading, setPaginationLoading] = useState(false);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
   const [copiedItems, setCopiedItems] = useState({});
   // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
@@ -156,6 +158,8 @@ function App() {
             if (result?.structuredContent?.chats) {
               setChats(deduplicateChats(result.structuredContent.chats));
               setPagination(result.structuredContent.pagination);
+              setCurrentPage(0);
+              setPageInputValue("1");
             } else if (result?.content?.[0]?.text) {
               addLog("Unexpected result format", result);
             }
@@ -460,6 +464,8 @@ function App() {
           if (loadResult?.structuredContent?.chats) {
             setChats(deduplicateChats(loadResult.structuredContent.chats));
             setPagination(loadResult.structuredContent.pagination);
+            setCurrentPage(0);
+            setPageInputValue("1");
           }
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
@@ -522,6 +528,8 @@ function App() {
         // Always replace results when navigating pages
         setChats(deduplicateChats(result.structuredContent.chats));
         setPagination(result.structuredContent.pagination);
+        setCurrentPage(page);
+        setPageInputValue(String(page + 1));
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -549,6 +557,8 @@ function App() {
         if (result?.structuredContent?.chats) {
           setChats(deduplicateChats(result.structuredContent.chats));
           setPagination(result.structuredContent.pagination);
+          setCurrentPage(0);
+          setPageInputValue("1");
         }
       }
     } catch (err) {
@@ -576,9 +586,10 @@ function App() {
           size: 10,
         });
         if (result?.structuredContent?.chats) {
-          setChats((prev) => [...prev, ...result.structuredContent.chats]);
+          setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
           setPagination(result.structuredContent.pagination);
           setCurrentPage(nextPage);
+          setPageInputValue(String(nextPage + 1));
         }
       } else {
         // Load more regular chats
@@ -587,9 +598,10 @@ function App() {
           size: 10,
         });
         if (result?.structuredContent?.chats) {
-          setChats((prev) => [...prev, ...result.structuredContent.chats]);
+          setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
           setPagination(result.structuredContent.pagination);
           setCurrentPage(nextPage);
+          setPageInputValue(String(nextPage + 1));
         }
       }
     } catch (err) {
@@ -920,9 +932,9 @@ function App() {
           ) : (
             // Chat list view
             <div className="space-y-2">
-              {loading && chats.length === 0 ? (
+              {(loading && chats.length === 0) || paginationLoading ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  Loading chats...
+                  {paginationLoading ? "Loading..." : "Loading chats..."}
                 </div>
               ) : searchLoading ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
@@ -966,32 +978,34 @@ function App() {
                     <div className="pt-4 flex items-center justify-between gap-2">
                       <button
                         onClick={async () => {
-                          if (currentPage > 0 && !loading && !searchLoading) {
+                          if (currentPage > 0 && !paginationLoading && !searchLoading) {
+                            const targetPage = currentPage - 1;
                             if (isSearching && searchQuery) {
-                              await handleSearch(searchQuery, currentPage - 1);
+                              await handleSearch(searchQuery, targetPage);
                             } else {
-                              setLoading(true);
+                              setPaginationLoading(true);
                               try {
                                 const res = await window.openai?.callTool("loadChats", {
-                                  page: currentPage - 1,
+                                  page: targetPage,
                                   size: 10,
                                 });
                                 if (res?.structuredContent?.chats) {
                                   setChats(deduplicateChats(res.structuredContent.chats));
                                   setPagination(res.structuredContent.pagination);
-                                  setCurrentPage(currentPage - 1);
+                                  setCurrentPage(targetPage);
+                                  setPageInputValue(String(targetPage + 1));
                                 }
                               } catch (err) {
                                 addLog("Error loading previous page", { error: err.message });
                               } finally {
-                                setLoading(false);
+                                setPaginationLoading(false);
                               }
                             }
                           }
                         }}
-                        disabled={loading || searchLoading || currentPage === 0}
+                        disabled={paginationLoading || searchLoading || currentPage === 0}
                         className={`px-3 py-1.5 rounded text-sm font-medium ${
-                          loading || currentPage === 0
+                          paginationLoading || currentPage === 0
                             ? "opacity-50 cursor-not-allowed"
                             : isDarkMode
                             ? "bg-gray-800 text-white hover:bg-gray-700"
@@ -1005,38 +1019,45 @@ function App() {
                           Page
                         </span>
                         <input
-                          type="number"
-                          min="1"
-                          max={pagination.totalPages}
-                          value={currentPage + 1}
-                          onChange={async (e) => {
-                            const page = parseInt(e.target.value) - 1;
-                            if (page >= 0 && page < pagination.totalPages && page !== currentPage && !loading && !searchLoading) {
-                              if (isSearching && searchQuery) {
-                                await handleSearch(searchQuery, page);
-                              } else {
-                                setLoading(true);
-                                try {
-                                  const res = await window.openai?.callTool("loadChats", {
-                                    page,
-                                    size: 10,
-                                  });
-                                  if (res?.structuredContent?.chats) {
-                                    setChats(deduplicateChats(res.structuredContent.chats));
-                                    setPagination(res.structuredContent.pagination);
-                                    setCurrentPage(page);
-                                  }
-                                } catch (err) {
-                                  addLog("Error loading page", { error: err.message });
-                                } finally {
-                                  setLoading(false);
-                                }
-                              }
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={pageInputValue}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow numbers
+                            if (value === "" || /^\d+$/.test(value)) {
+                              setPageInputValue(value);
                             }
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              e.currentTarget.blur();
+                              const page = parseInt(pageInputValue) - 1;
+                              if (page >= 0 && page < pagination.totalPages && page !== currentPage && !paginationLoading && !searchLoading) {
+                                if (isSearching && searchQuery) {
+                                  handleSearch(searchQuery, page);
+                                } else {
+                                  setPaginationLoading(true);
+                                  window.openai?.callTool("loadChats", {
+                                    page,
+                                    size: 10,
+                                  }).then((res) => {
+                                    if (res?.structuredContent?.chats) {
+                                      setChats(deduplicateChats(res.structuredContent.chats));
+                                      setPagination(res.structuredContent.pagination);
+                                      setCurrentPage(page);
+                                      setPageInputValue(String(page + 1));
+                                    }
+                                  }).catch((err) => {
+                                    addLog("Error loading page", { error: err.message });
+                                  }).finally(() => {
+                                    setPaginationLoading(false);
+                                  });
+                                }
+                              } else {
+                                // Reset to current page if invalid
+                                setPageInputValue(String(currentPage + 1));
+                              }
                             }
                           }}
                           className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${
@@ -1044,39 +1065,82 @@ function App() {
                               ? "bg-gray-800 border-gray-600 text-white"
                               : "bg-white border-gray-300 text-black"
                           }`}
+                          style={{ WebkitAppearance: "none", MozAppearance: "textfield" }}
                         />
                         <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                           of {pagination.totalPages}
                         </span>
+                        {pageInputValue !== String(currentPage + 1) && parseInt(pageInputValue) >= 1 && parseInt(pageInputValue) <= pagination.totalPages && (
+                          <button
+                            onClick={async () => {
+                              const page = parseInt(pageInputValue) - 1;
+                              if (page >= 0 && page < pagination.totalPages && page !== currentPage && !paginationLoading && !searchLoading) {
+                                if (isSearching && searchQuery) {
+                                  await handleSearch(searchQuery, page);
+                                } else {
+                                  setPaginationLoading(true);
+                                  try {
+                                    const res = await window.openai?.callTool("loadChats", {
+                                      page,
+                                      size: 10,
+                                    });
+                                    if (res?.structuredContent?.chats) {
+                                      setChats(deduplicateChats(res.structuredContent.chats));
+                                      setPagination(res.structuredContent.pagination);
+                                      setCurrentPage(page);
+                                      setPageInputValue(String(page + 1));
+                                    }
+                                  } catch (err) {
+                                    addLog("Error loading page", { error: err.message });
+                                  } finally {
+                                    setPaginationLoading(false);
+                                  }
+                                }
+                              }
+                            }}
+                            disabled={paginationLoading || searchLoading}
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              paginationLoading || searchLoading
+                                ? "opacity-50 cursor-not-allowed"
+                                : isDarkMode
+                                ? "bg-gray-700 text-white hover:bg-gray-600"
+                                : "bg-gray-200 text-black hover:bg-gray-300"
+                            }`}
+                          >
+                            Go
+                          </button>
+                        )}
                       </div>
-              <button
-                onClick={async () => {
-                  if (pagination.hasMore && !loading && !searchLoading) {
-                    if (isSearching && searchQuery) {
-                      await handleSearch(searchQuery, currentPage + 1);
-                    } else {
-                      setLoading(true);
-                      try {
-                        const res = await window.openai?.callTool("loadChats", {
-                          page: currentPage + 1,
-                          size: 10,
-                        });
-                        if (res?.structuredContent?.chats) {
-                          setChats(deduplicateChats(res.structuredContent.chats));
-                          setPagination(res.structuredContent.pagination);
-                          setCurrentPage(currentPage + 1);
-                        }
-                      } catch (err) {
-                        addLog("Error loading next page", { error: err.message });
-                      } finally {
-                        setLoading(false);
-                      }
-                    }
-                  }
-                }}
-                disabled={loading || searchLoading || !pagination.hasMore}
+                      <button
+                        onClick={async () => {
+                          if (pagination.hasMore && !paginationLoading && !searchLoading) {
+                            const targetPage = currentPage + 1;
+                            if (isSearching && searchQuery) {
+                              await handleSearch(searchQuery, targetPage);
+                            } else {
+                              setPaginationLoading(true);
+                              try {
+                                const res = await window.openai?.callTool("loadChats", {
+                                  page: targetPage,
+                                  size: 10,
+                                });
+                                if (res?.structuredContent?.chats) {
+                                  setChats(deduplicateChats(res.structuredContent.chats));
+                                  setPagination(res.structuredContent.pagination);
+                                  setCurrentPage(targetPage);
+                                  setPageInputValue(String(targetPage + 1));
+                                }
+                              } catch (err) {
+                                addLog("Error loading next page", { error: err.message });
+                              } finally {
+                                setPaginationLoading(false);
+                              }
+                            }
+                          }
+                        }}
+                        disabled={paginationLoading || searchLoading || !pagination.hasMore}
                         className={`px-3 py-1.5 rounded text-sm font-medium ${
-                          loading || !pagination.hasMore
+                          paginationLoading || !pagination.hasMore
                             ? "opacity-50 cursor-not-allowed"
                             : isDarkMode
                             ? "bg-gray-800 text-white hover:bg-gray-700"
