@@ -92,7 +92,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "loadChats",
-        description: "Load paginated chat data for a user",
+        description: "Load paginated chat data for a user with optional text search filter",
         inputSchema: {
             type: "object",
             properties: {
@@ -102,11 +102,15 @@ const chatVaultTools: Tool[] = [
                 },
                 page: {
                     type: "number",
-                    description: "Page number (1-indexed, default 1)",
+                    description: "Page number (0-indexed, default 0)",
                 },
-                limit: {
+                size: {
                     type: "number",
                     description: "Number of chats per page (default 10)",
+                },
+                query: {
+                    type: "string",
+                    description: "Optional search query to filter chats by title or content",
                 },
             },
             required: ["userId"],
@@ -126,9 +130,13 @@ const chatVaultTools: Tool[] = [
                     type: "string",
                     description: "Search query text (required)",
                 },
-                limit: {
+                page: {
                     type: "number",
-                    description: "Maximum number of results (default 10)",
+                    description: "Page number (0-indexed, default 0)",
+                },
+                size: {
+                    type: "number",
+                    description: "Number of results per page (default 10)",
                 },
             },
             required: ["userId", "query"],
@@ -210,7 +218,7 @@ async function handleCallTool(request: CallToolRequest) {
                 structuredContent: result,
             };
         } else if (toolName === "loadChats") {
-            const result = await loadChats(args as { userId: string; page?: number; limit?: number });
+            const result = await loadChats(args as { userId: string; page?: number; size?: number; query?: string });
             console.log("[MCP Handler] handleCallTool - loadChats result:", result.chats.length, "chats");
             // Return in Part 1 compatible format: structuredContent with chats and pagination
             return {
@@ -230,9 +238,9 @@ async function handleCallTool(request: CallToolRequest) {
                 },
             };
         } else if (toolName === "searchChats") {
-            const result = await searchChats(args as { userId: string; query: string; limit?: number });
+            const result = await searchChats(args as { userId: string; query: string; page?: number; size?: number });
             console.log("[MCP Handler] handleCallTool - searchChats result:", result.chats.length, "chats");
-            // Return in Part 1 compatible format: structuredContent with chats and search metadata
+            // Return in Part 1 compatible format: structuredContent with chats, search, and pagination
             return {
                 content: [
                     {
@@ -243,10 +251,12 @@ async function handleCallTool(request: CallToolRequest) {
                 structuredContent: {
                     chats: result.chats,
                     search: result.search,
+                    pagination: result.pagination,
                 },
                 _meta: {
                     chats: result.chats,
                     search: result.search,
+                    pagination: result.pagination,
                 },
             };
         } else if (toolName === "saveChatManually") {

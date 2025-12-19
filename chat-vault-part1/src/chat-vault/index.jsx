@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -25,6 +25,10 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pagination, setPagination] = useState(null);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
   const [copiedItems, setCopiedItems] = useState({});
   // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
@@ -136,12 +140,13 @@ function App() {
           try {
             const result = await window.openai.callTool("loadChats", {
               page: 0,
-              pageSize: 10,
+              size: 10,
             });
             addLog("loadChats result", result);
             
             if (result?.structuredContent?.chats) {
               setChats(result.structuredContent.chats);
+              setPagination(result.structuredContent.pagination);
             } else if (result?.content?.[0]?.text) {
               addLog("Unexpected result format", result);
             }
@@ -174,6 +179,7 @@ function App() {
     addLog("Chat clicked", { title: chat.title });
     setSelectedChat(chat);
     setExpandedTurns(new Set());
+    // Search state persists - don't clear it
   };
 
   const handleBackClick = () => {
@@ -406,10 +412,11 @@ function App() {
         try {
           const loadResult = await window.openai.callTool("loadChats", {
             page: 0,
-            pageSize: 10,
+            size: 10,
           });
           if (loadResult?.structuredContent?.chats) {
             setChats(loadResult.structuredContent.chats);
+            setPagination(loadResult.structuredContent.pagination);
           }
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
@@ -441,6 +448,128 @@ function App() {
     setManualSaveContent("");
     setManualSaveError(null);
   };
+
+  const handleSearch = async (query, page = 0) => {
+    if (!query.trim()) {
+      // Clear search - reload regular chats
+      handleClearSearch();
+      return;
+    }
+
+    setIsSearching(true);
+    setLoading(true);
+    setCurrentPage(page);
+    addLog("Searching chats", { query, page });
+
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("loadChats tool not available");
+      }
+
+      // Use loadChats with query parameter (free, no credits)
+      const result = await window.openai.callTool("loadChats", {
+        query: query.trim(),
+        page,
+        size: 10,
+      });
+
+      addLog("Search result", result);
+
+      if (result?.structuredContent?.chats) {
+        // Always replace results when navigating pages
+        setChats(result.structuredContent.chats);
+        setPagination(result.structuredContent.pagination);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Search failed", { error: errorMessage });
+      setError(`Search failed: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = async () => {
+    setSearchQuery("");
+    setIsSearching(false);
+    setCurrentPage(0);
+    setLoading(true);
+    addLog("Clearing search, reloading chats");
+
+    try {
+      if (window.openai?.callTool) {
+        const result = await window.openai.callTool("loadChats", {
+          page: 0,
+          size: 10,
+        });
+        if (result?.structuredContent?.chats) {
+          setChats(result.structuredContent.chats);
+          setPagination(result.structuredContent.pagination);
+        }
+      }
+    } catch (err) {
+      addLog("Error reloading chats", { error: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMoreChats = async () => {
+    if (!pagination?.hasMore || loading) return;
+
+    const nextPage = currentPage + 1;
+    setLoading(true);
+    addLog("Loading more chats", { page: nextPage, isSearching });
+
+    try {
+      if (!window.openai?.callTool) return;
+
+      if (isSearching && searchQuery) {
+        // Load more search results using loadChats with query (free)
+        const result = await window.openai.callTool("loadChats", {
+          query: searchQuery.trim(),
+          page: nextPage,
+          size: 10,
+        });
+        if (result?.structuredContent?.chats) {
+          setChats((prev) => [...prev, ...result.structuredContent.chats]);
+          setPagination(result.structuredContent.pagination);
+          setCurrentPage(nextPage);
+        }
+      } else {
+        // Load more regular chats
+        const result = await window.openai.callTool("loadChats", {
+          page: nextPage,
+          size: 10,
+        });
+        if (result?.structuredContent?.chats) {
+          setChats((prev) => [...prev, ...result.structuredContent.chats]);
+          setPagination(result.structuredContent.pagination);
+          setCurrentPage(nextPage);
+        }
+      }
+    } catch (err) {
+      addLog("Error loading more chats", { error: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Esc key to clear search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && searchQuery && !selectedChat) {
+        e.preventDefault();
+        handleClearSearch();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [searchQuery, selectedChat]);
 
   // SVG logo component
   const ChatVaultLogo = () => (
@@ -530,6 +659,76 @@ function App() {
             )}
           </div>
         </div>
+
+        {/* Search Box - Only show when not viewing a chat */}
+        {!selectedChat && (
+          <div className={`border-b py-3 ${isDarkMode ? "border-gray-700" : "border-black/5"}`}>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (searchQuery.trim()) {
+                        handleSearch(searchQuery, 0);
+                      }
+                    }
+                  }}
+                  placeholder="Search conversations..."
+                  className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${
+                    isDarkMode
+                      ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      : "bg-white border-gray-300 text-black placeholder-gray-500"
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+                {isSearching ? (
+                  <button
+                    onClick={handleClearSearch}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${
+                      isDarkMode
+                        ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    }`}
+                    title="Clear search (Esc)"
+                  >
+                    <MdClose className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                    isDarkMode ? "text-gray-400" : "text-gray-500"
+                  }`}>
+                    <MdSearch className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  if (searchQuery.trim()) {
+                    handleSearch(searchQuery, 0);
+                  }
+                }}
+                disabled={!searchQuery.trim() || loading}
+                className={`p-2 rounded-lg ${
+                  !searchQuery.trim() || loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+                title="Search"
+              >
+                {isSearching ? (
+                  <MdClose className="w-5 h-5" />
+                ) : (
+                  <MdSearch className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="min-w-full text-sm flex flex-col py-4">
@@ -674,36 +873,177 @@ function App() {
           ) : (
             // Chat list view
             <div className="space-y-2">
-              {chats.length === 0 ? (
+              {loading && chats.length === 0 ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  {window.openai?.callTool ? (
+                  {isSearching ? "Searching..." : "Loading chats..."}
+                </div>
+              ) : chats.length === 0 ? (
+                <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                  {isSearching ? (
+                    `No chats found matching "${searchQuery}"`
+                  ) : window.openai?.callTool ? (
                     "No chats found. Start a conversation to save it here."
                   ) : (
                     <div>
                       <div className="mb-2">Widget running in isolation mode</div>
                       <div className="text-xs opacity-75">
                         window.openai.callTool not available. Check debug panel for details.
-                </div>
-                </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               ) : (
-                chats.map((chat) => (
-                  <button
-                    key={chat.timestamp}
-                    onClick={() => handleChatClick(chat)}
-                    className={`w-full text-left p-4 rounded-lg border transition-colors ${
-                      isDarkMode
-                        ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-                        : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="font-medium mb-1">{chat.title}</div>
-                    <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                      {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
-              </div>
-                  </button>
-                ))
+                <>
+                  {chats.map((chat) => (
+                    <button
+                      key={chat.timestamp || chat.id}
+                      onClick={() => handleChatClick(chat)}
+                      className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                        isDarkMode
+                          ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
+                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="font-medium mb-1">{chat.title}</div>
+                      <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                        {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
+                      </div>
+                    </button>
+                  ))}
+                  {/* Pagination */}
+                  {pagination && pagination.totalPages > 1 && (
+                    <div className="pt-4 flex items-center justify-between gap-2">
+                      <button
+                        onClick={async () => {
+                          if (currentPage > 0 && !loading) {
+                            setLoading(true);
+                            try {
+                              if (isSearching && searchQuery) {
+                                await handleSearch(searchQuery, currentPage - 1);
+                              } else {
+                                const res = await window.openai?.callTool("loadChats", {
+                                  page: currentPage - 1,
+                                  size: 10,
+                                });
+                                if (res?.structuredContent?.chats) {
+                                  setChats(res.structuredContent.chats);
+                                  setPagination(res.structuredContent.pagination);
+                                  setCurrentPage(currentPage - 1);
+                                }
+                              }
+                            } catch (err) {
+                              addLog("Error loading previous page", { error: err.message });
+                            } finally {
+                              setLoading(false);
+                            }
+                          }
+                        }}
+                        disabled={loading || currentPage === 0}
+                        className={`px-3 py-1.5 rounded text-sm font-medium ${
+                          loading || currentPage === 0
+                            ? "opacity-50 cursor-not-allowed"
+                            : isDarkMode
+                            ? "bg-gray-800 text-white hover:bg-gray-700"
+                            : "bg-gray-100 text-black hover:bg-gray-200"
+                        }`}
+                      >
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                          Page
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          max={pagination.totalPages}
+                          value={currentPage + 1}
+                          onChange={(e) => {
+                            const page = parseInt(e.target.value) - 1;
+                            if (page >= 0 && page < pagination.totalPages && page !== currentPage) {
+                              if (isSearching && searchQuery) {
+                                handleSearch(searchQuery, page);
+                              } else {
+                                setLoading(true);
+                                window.openai?.callTool("loadChats", {
+                                  page,
+                                  size: 10,
+                                }).then((res) => {
+                                  if (res?.structuredContent?.chats) {
+                                    setChats(res.structuredContent.chats);
+                                    setPagination(res.structuredContent.pagination);
+                                    setCurrentPage(page);
+                                  }
+                                }).catch((err) => {
+                                  addLog("Error loading page", { error: err.message });
+                                }).finally(() => {
+                                  setLoading(false);
+                                });
+                              }
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${
+                            isDarkMode
+                              ? "bg-gray-800 border-gray-600 text-white"
+                              : "bg-white border-gray-300 text-black"
+                          }`}
+                        />
+                        <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                          of {pagination.totalPages}
+                        </span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (pagination.hasMore && !loading) {
+                            setLoading(true);
+                            try {
+                              if (isSearching && searchQuery) {
+                                await handleSearch(searchQuery, currentPage + 1);
+                              } else {
+                                const res = await window.openai?.callTool("loadChats", {
+                                  page: currentPage + 1,
+                                  size: 10,
+                                });
+                                if (res?.structuredContent?.chats) {
+                                  setChats(res.structuredContent.chats);
+                                  setPagination(res.structuredContent.pagination);
+                                  setCurrentPage(currentPage + 1);
+                                }
+                              }
+                            } catch (err) {
+                              addLog("Error loading next page", { error: err.message });
+                            } finally {
+                              setLoading(false);
+                            }
+                          }
+                        }}
+                        disabled={loading || !pagination.hasMore}
+                        className={`px-3 py-1.5 rounded text-sm font-medium ${
+                          loading || !pagination.hasMore
+                            ? "opacity-50 cursor-not-allowed"
+                            : isDarkMode
+                            ? "bg-gray-800 text-white hover:bg-gray-700"
+                            : "bg-gray-100 text-black hover:bg-gray-200"
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                  {pagination && pagination.totalPages <= 1 && chats.length > 0 && (
+                    <div className={`pt-2 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
+                      {isSearching 
+                        ? `Showing all ${chats.length} result${chats.length !== 1 ? "s" : ""}`
+                        : `Showing all ${pagination.total} chat${pagination.total !== 1 ? "s" : ""}`
+                      }
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

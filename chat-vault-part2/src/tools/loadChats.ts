@@ -5,11 +5,13 @@
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq, desc, count } from "drizzle-orm";
+import { performVectorSearch } from "./vectorSearch.js";
 
 export interface LoadChatsParams {
   userId: string;
-  page?: number; // 1-indexed, default 1
-  limit?: number; // default 10
+  page?: number; // 0-indexed, default 0
+  size?: number; // default 10
+  query?: string; // Optional search query - when provided, uses vector similarity search (same as searchChats)
 }
 
 export interface LoadChatsResult {
@@ -33,15 +35,17 @@ export interface LoadChatsResult {
  * Load paginated chats for a user
  */
 export async function loadChats(params: LoadChatsParams): Promise<LoadChatsResult> {
-  const { userId, page = 1, limit = 10 } = params;
+  const { userId, page = 0, size = 10, query } = params;
 
   console.log(
     "[loadChats] Loading chats - userId:",
     userId,
     "page:",
     page,
-    "limit:",
-    limit
+    "size:",
+    size,
+    "query:",
+    query || "none"
   );
 
   try {
@@ -51,12 +55,38 @@ export async function loadChats(params: LoadChatsParams): Promise<LoadChatsResul
     }
 
     // Validate pagination parameters
-    const pageNum = Math.max(1, Math.floor(page)); // Ensure page is at least 1
-    const limitNum = Math.max(1, Math.min(100, Math.floor(limit))); // Limit between 1 and 100
+    const pageNum = Math.max(0, Math.floor(page)); // Ensure page is at least 0
+    const sizeNum = Math.max(1, Math.min(100, Math.floor(size))); // Size between 1 and 100
 
-    // Calculate offset (1-indexed to 0-indexed for SQL)
-    const offset = (pageNum - 1) * limitNum;
+    // Calculate offset (0-indexed page to SQL offset)
+    const offset = pageNum * sizeNum;
 
+    // If query is provided, use vector search (same as searchChats)
+    const searchQuery = query?.trim();
+    if (searchQuery) {
+      console.log("[loadChats] Using vector search for query");
+      const searchResult = await performVectorSearch({
+        userId,
+        query: searchQuery,
+        page: pageNum,
+        size: sizeNum,
+      });
+
+      const result: LoadChatsResult = {
+        chats: searchResult.chats,
+        pagination: {
+          page: searchResult.page,
+          limit: searchResult.size,
+          total: searchResult.total,
+          totalPages: searchResult.totalPages,
+          hasMore: searchResult.hasMore,
+        },
+      };
+
+      return result;
+    }
+
+    // No query - load chats by timestamp (original behavior)
     // Get total count
     console.log("[loadChats] Counting total chats for user:", userId);
     const totalResult = await db
@@ -68,20 +98,20 @@ export async function loadChats(params: LoadChatsParams): Promise<LoadChatsResul
     console.log("[loadChats] Total chats found:", total);
 
     // Query chats with pagination
-    console.log("[loadChats] Querying chats with offset:", offset, "limit:", limitNum);
+    console.log("[loadChats] Querying chats with offset:", offset, "size:", sizeNum);
     const chatResults = await db
       .select()
       .from(chats)
       .where(eq(chats.userId, userId))
       .orderBy(desc(chats.timestamp))
-      .limit(limitNum)
+      .limit(sizeNum)
       .offset(offset);
 
     console.log("[loadChats] Retrieved", chatResults.length, "chats");
 
     // Calculate pagination metadata
-    const totalPages = Math.ceil(total / limitNum);
-    const hasMore = pageNum < totalPages;
+    const totalPages = Math.ceil(total / sizeNum);
+    const hasMore = pageNum + 1 < totalPages;
 
     // Format response (exclude embedding from response)
     const formattedChats = chatResults.map((chat) => ({
@@ -96,7 +126,7 @@ export async function loadChats(params: LoadChatsParams): Promise<LoadChatsResul
       chats: formattedChats,
       pagination: {
         page: pageNum,
-        limit: limitNum,
+        limit: sizeNum,
         total,
         totalPages,
         hasMore,

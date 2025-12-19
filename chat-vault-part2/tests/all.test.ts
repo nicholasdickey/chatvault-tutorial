@@ -148,17 +148,21 @@ describe("chat-vault-part2 (all)", () => {
         expect(Array.isArray(result.tools)).toBe(true);
         expect(result.tools.length).toBeGreaterThanOrEqual(3); // All three ChatVault tools should be present
 
-        // Verify all three tools are in the list
+        // Verify all tools are in the list
         const toolNames = (result.tools as Array<{ name: string }>).map((t) => t.name);
         expect(toolNames).toContain("saveChat");
         expect(toolNames).toContain("loadChats");
         expect(toolNames).toContain("searchChats");
+        expect(toolNames).toContain("saveChatManually");
+        expect(toolNames).toContain("explainHowToUse");
 
         // Verify tool schemas
         const tools = result.tools as Array<{ name: string; description: string; inputSchema: unknown }>;
         const saveChatTool = tools.find((t) => t.name === "saveChat");
         const loadChatsTool = tools.find((t) => t.name === "loadChats");
         const searchChatsTool = tools.find((t) => t.name === "searchChats");
+        const saveChatManuallyTool = tools.find((t) => t.name === "saveChatManually");
+        const explainHowToUseTool = tools.find((t) => t.name === "explainHowToUse");
 
         expect(saveChatTool).toBeDefined();
         expect(saveChatTool?.description).toBeDefined();
@@ -171,6 +175,14 @@ describe("chat-vault-part2 (all)", () => {
         expect(searchChatsTool).toBeDefined();
         expect(searchChatsTool?.description).toBeDefined();
         expect(searchChatsTool?.inputSchema).toBeDefined();
+
+        expect(saveChatManuallyTool).toBeDefined();
+        expect(saveChatManuallyTool?.description).toBeDefined();
+        expect(saveChatManuallyTool?.inputSchema).toBeDefined();
+
+        expect(explainHowToUseTool).toBeDefined();
+        expect(explainHowToUseTool?.description).toBeDefined();
+        expect(explainHowToUseTool?.inputSchema).toBeDefined();
     });
 
     test("should handle invalid JSON-RPC version", async () => {
@@ -304,8 +316,8 @@ describe("chat-vault-part2 (all)", () => {
 
     test("should error on missing userId", async () => {
         const response = await client.callTool("loadChats", {
-            page: 1,
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(response.error).toBeDefined();
@@ -318,22 +330,22 @@ describe("chat-vault-part2 (all)", () => {
             page: -1,
         });
 
-        // Should either error or default to page 1
+        // Should either error or default to page 0
         if (response.error) {
             expect(response.error.code).toBeDefined();
         } else {
-            // If it doesn't error, it should default to page 1
+            // If it doesn't error, it should default to page 0
             const result = response.result as {
                 structuredContent: { pagination: { page: number } };
             };
-            expect(result.structuredContent.pagination.page).toBeGreaterThanOrEqual(1);
+            expect(result.structuredContent.pagination.page).toBeGreaterThanOrEqual(0);
         }
     });
 
-    test("should handle invalid limit (negative)", async () => {
+    test("should handle invalid size (negative)", async () => {
         const response = await client.callTool("loadChats", {
             userId: "test-user",
-            limit: -5,
+            size: -5,
         });
 
         // Should either error or clamp to valid range
@@ -347,13 +359,13 @@ describe("chat-vault-part2 (all)", () => {
         }
     });
 
-    test("should handle very large limit", async () => {
+    test("should handle very large size", async () => {
         const response = await client.callTool("loadChats", {
             userId: "test-user",
-            limit: 10000,
+            size: 10000,
         });
 
-        // Should clamp to max limit (100)
+        // Should clamp to max size (100)
         if (!response.error) {
             const result = response.result as {
                 structuredContent: { pagination: { limit: number } };
@@ -417,7 +429,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(response.error?.code).toBeDefined();
     });
 
-    test("should handle invalid limit (negative)", async () => {
+    test("should handle invalid size (negative)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
             console.log("[Error Case Tests] Skipping test - OPENAI_API_KEY not set");
@@ -427,7 +439,7 @@ describe("chat-vault-part2 (all)", () => {
         const response = await client.callTool("searchChats", {
             userId: "test-user",
             query: "test",
-            limit: -5,
+            size: -5,
         });
 
         // Should either error or clamp to valid range
@@ -435,13 +447,13 @@ describe("chat-vault-part2 (all)", () => {
             expect(response.error.code).toBeDefined();
         } else {
             const result = response.result as {
-                structuredContent: { search: { limit: number } };
+                structuredContent: { pagination: { limit: number } };
             };
-            expect(result.structuredContent.search.limit).toBeGreaterThan(0);
+            expect(result.structuredContent.pagination.limit).toBeGreaterThan(0);
         }
     });
 
-    test("should handle very large limit", async () => {
+    test("should handle very large size", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
             console.log("[Error Case Tests] Skipping test - OPENAI_API_KEY not set");
@@ -451,15 +463,15 @@ describe("chat-vault-part2 (all)", () => {
         const response = await client.callTool("searchChats", {
             userId: "test-user",
             query: "test",
-            limit: 10000,
+            size: 10000,
         });
 
-        // Should clamp to max limit (100)
+        // Should clamp to max size (100)
         if (!response.error) {
             const result = response.result as {
-                structuredContent: { search: { limit: number } };
+                structuredContent: { pagination: { limit: number } };
             };
-            expect(result.structuredContent.search.limit).toBeLessThanOrEqual(100);
+            expect(result.structuredContent.pagination.limit).toBeLessThanOrEqual(100);
         }
     });
 
@@ -836,8 +848,8 @@ describe("chat-vault-part2 (all)", () => {
         // Load first page
         const response = await client.callTool("loadChats", {
             userId,
-            page: 1,
-            limit: 2,
+            page: 0,
+            size: 2,
         });
 
         expect(response.jsonrpc).toBe("2.0");
@@ -860,7 +872,7 @@ describe("chat-vault-part2 (all)", () => {
 
         expect(result.structuredContent).toBeDefined();
         expect(result.structuredContent.chats).toHaveLength(2);
-        expect(result.structuredContent.pagination.page).toBe(1);
+        expect(result.structuredContent.pagination.page).toBe(0);
         expect(result.structuredContent.pagination.limit).toBe(2);
         expect(result.structuredContent.pagination.total).toBe(3);
         expect(result.structuredContent.pagination.totalPages).toBe(2);
@@ -870,8 +882,8 @@ describe("chat-vault-part2 (all)", () => {
     test("should return empty array for user with no chats", async () => {
         const response = await client.callTool("loadChats", {
             userId: "non-existent-user",
-            page: 1,
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(response.jsonrpc).toBe("2.0");
@@ -899,15 +911,15 @@ describe("chat-vault-part2 (all)", () => {
 
     test("should require userId parameter", async () => {
         const response = await client.callTool("loadChats", {
-            page: 1,
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
     });
 
-    test("should use default page and limit when not provided", async () => {
+    test("should use default page and size when not provided", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
             console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
@@ -923,7 +935,7 @@ describe("chat-vault-part2 (all)", () => {
             turns: [{ prompt: "Q", response: "A" }],
         });
 
-        // Load without page/limit
+        // Load without page/size
         const response = await client.callTool("loadChats", {
             userId,
         });
@@ -939,8 +951,8 @@ describe("chat-vault-part2 (all)", () => {
             };
         };
 
-        expect(result.structuredContent.pagination.page).toBe(1); // Default page
-        expect(result.structuredContent.pagination.limit).toBe(10); // Default limit
+        expect(result.structuredContent.pagination.page).toBe(0); // Default page (0-based)
+        expect(result.structuredContent.pagination.limit).toBe(10); // Default size
         expect(result.structuredContent.chats).toHaveLength(1);
     });
 
@@ -975,8 +987,8 @@ describe("chat-vault-part2 (all)", () => {
         // Load chats
         const response = await client.callTool("loadChats", {
             userId,
-            page: 1,
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(response.error).toBeUndefined();
@@ -993,7 +1005,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(result.structuredContent.chats[2].title).toBe("Oldest Chat");
     });
 
-    test("should handle pagination correctly (1-indexed pages)", async () => {
+    test("should handle pagination correctly (0-indexed pages)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
             console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
@@ -1011,11 +1023,29 @@ describe("chat-vault-part2 (all)", () => {
             });
         }
 
-        // Load page 1 (should get first 2)
+        // Load page 0 (should get first 2)
+        const page0 = await client.callTool("loadChats", {
+            userId,
+            page: 0,
+            size: 2,
+        });
+
+        expect(page0.error).toBeUndefined();
+        const result0 = page0.result as {
+            structuredContent: {
+                chats: Array<{ title: string }>;
+                pagination: { page: number; hasMore: boolean };
+            };
+        };
+        expect(result0.structuredContent.chats).toHaveLength(2);
+        expect(result0.structuredContent.pagination.page).toBe(0);
+        expect(result0.structuredContent.pagination.hasMore).toBe(true);
+
+        // Load page 1 (should get next 2)
         const page1 = await client.callTool("loadChats", {
             userId,
             page: 1,
-            limit: 2,
+            size: 2,
         });
 
         expect(page1.error).toBeUndefined();
@@ -1029,11 +1059,11 @@ describe("chat-vault-part2 (all)", () => {
         expect(result1.structuredContent.pagination.page).toBe(1);
         expect(result1.structuredContent.pagination.hasMore).toBe(true);
 
-        // Load page 2 (should get next 2)
+        // Load page 2 (should get last 1)
         const page2 = await client.callTool("loadChats", {
             userId,
             page: 2,
-            limit: 2,
+            size: 2,
         });
 
         expect(page2.error).toBeUndefined();
@@ -1043,27 +1073,9 @@ describe("chat-vault-part2 (all)", () => {
                 pagination: { page: number; hasMore: boolean };
             };
         };
-        expect(result2.structuredContent.chats).toHaveLength(2);
+        expect(result2.structuredContent.chats).toHaveLength(1);
         expect(result2.structuredContent.pagination.page).toBe(2);
-        expect(result2.structuredContent.pagination.hasMore).toBe(true);
-
-        // Load page 3 (should get last 1)
-        const page3 = await client.callTool("loadChats", {
-            userId,
-            page: 3,
-            limit: 2,
-        });
-
-        expect(page3.error).toBeUndefined();
-        const result3 = page3.result as {
-            structuredContent: {
-                chats: Array<{ title: string }>;
-                pagination: { page: number; hasMore: boolean };
-            };
-        };
-        expect(result3.structuredContent.chats).toHaveLength(1);
-        expect(result3.structuredContent.pagination.page).toBe(3);
-        expect(result3.structuredContent.pagination.hasMore).toBe(false);
+        expect(result2.structuredContent.pagination.hasMore).toBe(false);
     });
 
     test("should only return chats for specified userId", async () => {
@@ -1211,7 +1223,8 @@ describe("chat-vault-part2 (all)", () => {
         const response = await client.callTool("searchChats", {
             userId,
             query: "Python programming language",
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(response.jsonrpc).toBe("2.0");
@@ -1224,6 +1237,9 @@ describe("chat-vault-part2 (all)", () => {
                 chats: Array<{ title: string; similarity?: number }>;
                 search: {
                     query: string;
+                };
+                pagination: {
+                    page: number;
                     limit: number;
                     total: number;
                 };
@@ -1234,7 +1250,8 @@ describe("chat-vault-part2 (all)", () => {
         expect(result.structuredContent.chats.length).toBeGreaterThan(0);
         expect(result.structuredContent.chats[0].title).toBe("Python Programming");
         expect(result.structuredContent.search.query).toBe("Python programming language");
-        expect(result.structuredContent.search.limit).toBe(10);
+        expect(result.structuredContent.pagination.page).toBe(0);
+        expect(result.structuredContent.pagination.limit).toBe(10);
     });
 
     test("should require userId parameter", async () => {
@@ -1276,13 +1293,15 @@ describe("chat-vault-part2 (all)", () => {
                 chats: unknown[];
                 search: {
                     query: string;
+                };
+                pagination: {
                     total: number;
                 };
             };
         };
 
         expect(result.structuredContent.chats).toHaveLength(0);
-        expect(result.structuredContent.search.total).toBe(0);
+        expect(result.structuredContent.pagination.total).toBe(0);
     });
 
     test("should only return chats for specified userId", async () => {
@@ -1362,7 +1381,7 @@ describe("chat-vault-part2 (all)", () => {
             };
         };
 
-        expect(result.structuredContent.search.limit).toBe(10); // Default limit
+        expect(result.structuredContent.pagination.limit).toBe(10); // Default size
     });
 
     test("should return results ordered by similarity (most similar first)", async () => {
@@ -1490,6 +1509,9 @@ describe("chat-vault-part2 (all)", () => {
                 }>;
                 search: {
                     query: string;
+                };
+                pagination: {
+                    page: number;
                     limit: number;
                     total: number;
                 };
@@ -1497,6 +1519,7 @@ describe("chat-vault-part2 (all)", () => {
             _meta?: {
                 chats: unknown[];
                 search: unknown;
+                pagination: unknown;
             };
         };
 
@@ -1507,8 +1530,10 @@ describe("chat-vault-part2 (all)", () => {
         expect(result.structuredContent.search).toBeDefined();
         expect(Array.isArray(result.structuredContent.chats)).toBe(true);
         expect(result.structuredContent.search.query).toBeDefined();
-        expect(result.structuredContent.search.limit).toBeDefined();
-        expect(result.structuredContent.search.total).toBeDefined();
+        expect(result.structuredContent.pagination).toBeDefined();
+        expect(result.structuredContent.pagination.page).toBeDefined();
+        expect(result.structuredContent.pagination.limit).toBeDefined();
+        expect(result.structuredContent.pagination.total).toBeDefined();
 
         // Verify _meta structure exists
         expect(result._meta).toBeDefined();
@@ -1574,8 +1599,8 @@ describe("chat-vault-part2 (all)", () => {
         // Step 2: Load chats
         const loadResponse = await client.callTool("loadChats", {
             userId,
-            page: 1,
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(loadResponse.error).toBeUndefined();
@@ -1596,7 +1621,8 @@ describe("chat-vault-part2 (all)", () => {
         const searchResponse = await client.callTool("searchChats", {
             userId,
             query: "Python programming language",
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(searchResponse.error).toBeUndefined();
@@ -1639,45 +1665,46 @@ describe("chat-vault-part2 (all)", () => {
         expect(Number(savedChats[0]?.count ?? 0)).toBe(15);
 
         // Load first page (10 items)
+        const page0 = await client.callTool("loadChats", {
+            userId,
+            page: 0,
+            size: 10,
+        });
+
+        expect(page0.error).toBeUndefined();
+        const page0Result = page0.result as {
+            structuredContent: {
+                chats: unknown[];
+                pagination: { page: number; limit: number; total: number; hasMore: boolean };
+            };
+        };
+        expect(page0Result.structuredContent.chats).toHaveLength(10);
+        expect(page0Result.structuredContent.pagination.total).toBe(15);
+        expect(page0Result.structuredContent.pagination.hasMore).toBe(true);
+
+        // Load second page (5 items)
         const page1 = await client.callTool("loadChats", {
             userId,
             page: 1,
-            limit: 10,
+            size: 10,
         });
 
         expect(page1.error).toBeUndefined();
         const page1Result = page1.result as {
             structuredContent: {
                 chats: unknown[];
-                pagination: { page: number; limit: number; total: number; hasMore: boolean };
-            };
-        };
-        expect(page1Result.structuredContent.chats).toHaveLength(10);
-        expect(page1Result.structuredContent.pagination.total).toBe(15);
-        expect(page1Result.structuredContent.pagination.hasMore).toBe(true);
-
-        // Load second page (5 items)
-        const page2 = await client.callTool("loadChats", {
-            userId,
-            page: 2,
-            limit: 10,
-        });
-
-        expect(page2.error).toBeUndefined();
-        const page2Result = page2.result as {
-            structuredContent: {
-                chats: unknown[];
                 pagination: { page: number; hasMore: boolean };
             };
         };
-        expect(page2Result.structuredContent.chats).toHaveLength(5);
-        expect(page2Result.structuredContent.pagination.hasMore).toBe(false);
+        expect(page1Result.structuredContent.chats).toHaveLength(5);
+        expect(page1Result.structuredContent.pagination.hasMore).toBe(false);
 
         // Search should find relevant chats
         const searchResponse = await client.callTool("searchChats", {
             userId,
             query: "question answer",
-            limit: 10,
+            page: 0,
+            size: 10,
         });
 
         expect(searchResponse.error).toBeUndefined();
@@ -1772,11 +1799,12 @@ describe("chat-vault-part2 (all)", () => {
             const searchResult = searchResponse.result as {
                 structuredContent: {
                     chats: unknown[];
-                    search: { total: number };
+                    search: { query: string };
+                    pagination: { total: number };
                 };
             };
             expect(searchResult.structuredContent.chats).toHaveLength(0);
-            expect(searchResult.structuredContent.search.total).toBe(0);
+            expect(searchResult.structuredContent.pagination.total).toBe(0);
         }
     });
 
@@ -1837,6 +1865,366 @@ describe("chat-vault-part2 (all)", () => {
         expect(loadResult.structuredContent.chats[0].id).toBe(chatId);
         expect(loadResult.structuredContent.chats[0].title).toBe("Database Verification Chat");
         expect(loadResult.structuredContent.chats[0].turns).toHaveLength(1);
+    });
+
+    // -------------------------------------------------------------------------
+    // New tests for saveChatManually tool
+    // -------------------------------------------------------------------------
+
+    test("should save chat manually with You said/ChatGPT said format", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const htmlContent = `You said: What is React?
+ChatGPT said: React is a JavaScript library for building user interfaces.
+
+You said: How do I use hooks?
+ChatGPT said: React hooks let you use state in functional components.`;
+
+        const response = await client.callTool("saveChatManually", {
+            userId: "test-user-manual-1",
+            htmlContent,
+            title: "Manual React Chat",
+        });
+
+        expect(response.error).toBeUndefined();
+        const result = response.result as {
+            structuredContent: { chatId: string; turnsCount: number };
+        };
+
+        expect(result.structuredContent.chatId).toBeDefined();
+        expect(result.structuredContent.turnsCount).toBe(2);
+
+        // Verify chat was saved
+        const db = getTestDrizzle();
+        const savedChats = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.userId, "test-user-manual-1"));
+
+        expect(savedChats.length).toBe(1);
+        expect(savedChats[0].title).toBe("Manual React Chat");
+        expect(savedChats[0].turns).toHaveLength(2);
+        expect(savedChats[0].turns[0].prompt).toBe("What is React?");
+        expect(savedChats[0].turns[0].response).toContain("React is a JavaScript library");
+    });
+
+    test("should save chat manually with alternating messages format", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const htmlContent = `What is Python?
+
+Python is a programming language known for its simplicity.
+
+How do I install it?
+
+You can download Python from python.org.`;
+
+        const response = await client.callTool("saveChatManually", {
+            userId: "test-user-manual-2",
+            htmlContent,
+        });
+
+        expect(response.error).toBeUndefined();
+        const result = response.result as {
+            structuredContent: { chatId: string; turnsCount: number };
+        };
+
+        expect(result.structuredContent.chatId).toBeDefined();
+        expect(result.structuredContent.turnsCount).toBe(2);
+
+        // Verify auto-generated title
+        const db = getTestDrizzle();
+        const savedChats = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.userId, "test-user-manual-2"));
+
+        expect(savedChats.length).toBe(1);
+        expect(savedChats[0].title).toMatch(/^manual save /);
+        expect(savedChats[0].turns).toHaveLength(2);
+    });
+
+    test("should error on missing userId for saveChatManually", async () => {
+        const response = await client.callTool("saveChatManually", {
+            htmlContent: "Some content",
+        });
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+    });
+
+    test("should error on missing htmlContent for saveChatManually", async () => {
+        const response = await client.callTool("saveChatManually", {
+            userId: "test-user",
+        });
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+    });
+
+    test("should error on empty htmlContent for saveChatManually", async () => {
+        const response = await client.callTool("saveChatManually", {
+            userId: "test-user",
+            htmlContent: "",
+        });
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+    });
+
+    test("should error on unparseable htmlContent for saveChatManually", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const response = await client.callTool("saveChatManually", {
+            userId: "test-user",
+            htmlContent: "This is just random text with no structure",
+        });
+
+        // Should error because no turns can be parsed
+        expect(response.error).toBeDefined();
+    });
+
+    // -------------------------------------------------------------------------
+    // New tests for explainHowToUse tool
+    // -------------------------------------------------------------------------
+
+    test("should return help text from explainHowToUse", async () => {
+        const response = await client.callTool("explainHowToUse", {
+            userId: "test-user",
+        });
+
+        expect(response.error).toBeUndefined();
+        const result = response.result as {
+            content: Array<{ type: string; text: string }>;
+            structuredContent: { helpText: string };
+        };
+
+        expect(result.content).toBeDefined();
+        expect(result.content[0].text).toBeDefined();
+        expect(result.structuredContent.helpText).toBeDefined();
+        expect(typeof result.structuredContent.helpText).toBe("string");
+        expect(result.structuredContent.helpText.length).toBeGreaterThan(0);
+    });
+
+    test("should error on missing userId for explainHowToUse", async () => {
+        const response = await client.callTool("explainHowToUse", {});
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+    });
+
+    // -------------------------------------------------------------------------
+    // New tests for loadChats with query parameter
+    // -------------------------------------------------------------------------
+
+    test("should use vector search when query provided to loadChats", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[loadChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-query-1";
+
+        // Save chats with different topics
+        await client.callTool("saveChat", {
+            userId,
+            title: "Python Tutorial",
+            turns: [{ prompt: "What is Python?", response: "Python is a programming language." }],
+        });
+
+        await client.callTool("saveChat", {
+            userId,
+            title: "JavaScript Basics",
+            turns: [{ prompt: "What is JavaScript?", response: "JavaScript is for web development." }],
+        });
+
+        // Load with query - should use vector search
+        const response = await client.callTool("loadChats", {
+            userId,
+            query: "Python programming",
+            page: 0,
+            size: 10,
+        });
+
+        expect(response.error).toBeUndefined();
+        const result = response.result as {
+            structuredContent: {
+                chats: Array<{ title: string }>;
+                pagination: { page: number; total: number };
+            };
+        };
+
+        expect(result.structuredContent.chats.length).toBeGreaterThan(0);
+        // Should find Python-related chat first (vector similarity)
+        expect(result.structuredContent.chats[0].title).toBe("Python Tutorial");
+        expect(result.structuredContent.pagination.page).toBe(0);
+    });
+
+    test("should use timestamp ordering when no query provided to loadChats", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[loadChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-query-2";
+
+        // Save chats with delays
+        await client.callTool("saveChat", {
+            userId,
+            title: "First Chat",
+            turns: [{ prompt: "Q1", response: "A1" }],
+        });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await client.callTool("saveChat", {
+            userId,
+            title: "Second Chat",
+            turns: [{ prompt: "Q2", response: "A2" }],
+        });
+
+        // Load without query - should use timestamp ordering
+        const response = await client.callTool("loadChats", {
+            userId,
+            page: 0,
+            size: 10,
+        });
+
+        expect(response.error).toBeUndefined();
+        const result = response.result as {
+            structuredContent: {
+                chats: Array<{ title: string }>;
+            };
+        };
+
+        // Should be ordered by timestamp descending (newest first)
+        expect(result.structuredContent.chats[0].title).toBe("Second Chat");
+        expect(result.structuredContent.chats[1].title).toBe("First Chat");
+    });
+
+    test("should return same results for loadChats with query and searchChats", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[loadChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-query-3";
+
+        // Save a chat
+        await client.callTool("saveChat", {
+            userId,
+            title: "React Hooks",
+            turns: [{ prompt: "How do I use useState?", response: "useState is a React hook." }],
+        });
+
+        // Search with loadChats query
+        const loadResponse = await client.callTool("loadChats", {
+            userId,
+            query: "React hooks",
+            page: 0,
+            size: 10,
+        });
+
+        // Search with searchChats
+        const searchResponse = await client.callTool("searchChats", {
+            userId,
+            query: "React hooks",
+            page: 0,
+            size: 10,
+        });
+
+        expect(loadResponse.error).toBeUndefined();
+        expect(searchResponse.error).toBeUndefined();
+
+        const loadResult = loadResponse.result as {
+            structuredContent: {
+                chats: Array<{ title: string }>;
+            };
+        };
+
+        const searchResult = searchResponse.result as {
+            structuredContent: {
+                chats: Array<{ title: string }>;
+            };
+        };
+
+        // Should return same chats (both use vector search)
+        expect(loadResult.structuredContent.chats.length).toBeGreaterThan(0);
+        expect(searchResult.structuredContent.chats.length).toBeGreaterThan(0);
+        expect(loadResult.structuredContent.chats[0].title).toBe(searchResult.structuredContent.chats[0].title);
+    });
+
+    // -------------------------------------------------------------------------
+    // New tests for searchChats with 0-based pagination
+    // -------------------------------------------------------------------------
+
+    test("should handle pagination correctly for searchChats (0-indexed)", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[searchChats Pagination Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-search-pag-1";
+
+        // Save multiple chats
+        for (let i = 1; i <= 5; i++) {
+            await client.callTool("saveChat", {
+                userId,
+                title: `Chat ${i}`,
+                turns: [{ prompt: `Question ${i}`, response: `Answer ${i}` }],
+            });
+        }
+
+        // Search page 0
+        const page0 = await client.callTool("searchChats", {
+            userId,
+            query: "question",
+            page: 0,
+            size: 2,
+        });
+
+        expect(page0.error).toBeUndefined();
+        const result0 = page0.result as {
+            structuredContent: {
+                chats: unknown[];
+                pagination: { page: number; limit: number; hasMore: boolean };
+            };
+        };
+        expect(result0.structuredContent.chats).toHaveLength(2);
+        expect(result0.structuredContent.pagination.page).toBe(0);
+        expect(result0.structuredContent.pagination.hasMore).toBe(true);
+
+        // Search page 1
+        const page1 = await client.callTool("searchChats", {
+            userId,
+            query: "question",
+            page: 1,
+            size: 2,
+        });
+
+        expect(page1.error).toBeUndefined();
+        const result1 = page1.result as {
+            structuredContent: {
+                chats: unknown[];
+                pagination: { page: number; hasMore: boolean };
+            };
+        };
+        expect(result1.structuredContent.chats.length).toBeGreaterThan(0);
+        expect(result1.structuredContent.pagination.page).toBe(1);
     });
 });
 
