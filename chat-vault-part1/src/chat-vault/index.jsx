@@ -833,6 +833,12 @@ function App() {
                 const promptCopied = !!copiedItems[promptId];
                 const responseCopied = !!copiedItems[responseId];
                 
+                // Check if either prompt or response needs truncation (longer than 150 chars)
+                const maxLength = 150;
+                const promptNeedsTruncation = turn.prompt.length > maxLength;
+                const responseNeedsTruncation = turn.response.length > maxLength;
+                const needsExpansion = promptNeedsTruncation || responseNeedsTruncation;
+                
                 return (
                   <div key={index} className={`space-y-2 p-4 rounded-lg border ${
                     isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
@@ -845,26 +851,41 @@ function App() {
                         }`}>
                           Prompt
                         </div>
-                        <button
-                          onClick={() => toggleTurnExpansion(index)}
-                          className={`p-1.5 rounded ${
-                            isDarkMode
-                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          }`}
-                          title={isExpanded ? "Collapse" : "Expand"}
-                        >
-                          {isExpanded ? (
-                            <MdExpandLess className="w-4 h-4" />
-                          ) : (
-                            <MdExpandMore className="w-4 h-4" />
-                          )}
-                        </button>
+                        {needsExpansion && (
+                          <button
+                            onClick={() => toggleTurnExpansion(index)}
+                            className={`p-1.5 rounded ${
+                              isDarkMode
+                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
+                            title={isExpanded ? "Collapse" : "Expand"}
+                          >
+                            {isExpanded ? (
+                              <MdExpandLess className="w-4 h-4" />
+                            ) : (
+                              <MdExpandMore className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
                       </div>
                       <div className={`text-sm flex items-start justify-between gap-2 ${
                         isDarkMode ? "text-gray-200" : "text-gray-800"
                       }`}>
-                        <span className="flex-1">
+                        <span 
+                          className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                          onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                          onMouseDown={(e) => {
+                            // If expanded, allow text selection by not preventing default
+                            if (isExpanded) {
+                              return; // Allow normal text selection
+                            }
+                            // If not expanded and clickable, prevent text selection on click
+                            if (needsExpansion) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
                           {isExpanded ? turn.prompt : truncateText(turn.prompt)}
                         </span>
                         <button
@@ -901,7 +922,20 @@ function App() {
                       <div className={`text-sm flex items-start justify-between gap-2 ${
                         isDarkMode ? "text-gray-200" : "text-gray-800"
                       }`}>
-                        <span className="flex-1">
+                        <span 
+                          className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                          onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                          onMouseDown={(e) => {
+                            // If expanded, allow text selection by not preventing default
+                            if (isExpanded) {
+                              return; // Allow normal text selection
+                            }
+                            // If not expanded and clickable, prevent text selection on click
+                            if (needsExpansion) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
                           {isExpanded ? turn.response : truncateText(turn.response)}
                         </span>
                         <button
