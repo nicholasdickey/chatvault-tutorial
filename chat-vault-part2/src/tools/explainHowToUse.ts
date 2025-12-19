@@ -17,6 +17,10 @@ export interface ExplainHowToUseResult {
 export function explainHowToUse(params: ExplainHowToUseParams): ExplainHowToUseResult {
     const { userId } = params;
 
+    if (!userId) {
+        throw new Error("userId is required");
+    }
+
     console.log("[explainHowToUse] Generating help text for userId:", userId);
 
     const helpText = `# How to Use ChatVault
