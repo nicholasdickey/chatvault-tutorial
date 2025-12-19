@@ -678,11 +678,25 @@ function App() {
         <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
           isDarkMode ? "border-gray-700" : "border-black/5"
         }`}>
-          <div className="sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden">
+          <div 
+            className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${
+              selectedChat ? "cursor-pointer hover:opacity-80" : ""
+            }`}
+            onClick={selectedChat ? handleBackClick : undefined}
+            title={selectedChat ? "Back to conversations" : undefined}
+          >
             <ChatVaultLogo />
           </div>
           <div className="flex-1">
-            <div className="text-base sm:text-xl font-medium">ChatVault</div>
+            <div 
+              className={`text-base sm:text-xl font-medium ${
+                selectedChat ? "cursor-pointer hover:opacity-80" : ""
+              }`}
+              onClick={selectedChat ? handleBackClick : undefined}
+              title={selectedChat ? "Back to conversations" : undefined}
+            >
+              ChatVault
+            </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
               {selectedChat ? selectedChat.title : "Your saved conversations"}
             </div>
@@ -690,7 +704,12 @@ function App() {
           <div className="flex gap-2">
             <button
               onClick={() => setShowManualSaveModal(true)}
+              disabled={paginationLoading || searchLoading}
               className={`p-2 rounded-lg ${
+                paginationLoading || searchLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              } ${
                 isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
@@ -723,8 +742,13 @@ function App() {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={paginationLoading || searchLoading}
+                  onChange={(e) => {
+                    if (paginationLoading || searchLoading) return;
+                    setSearchQuery(e.target.value);
+                  }}
                   onKeyDown={(e) => {
+                    if (paginationLoading || searchLoading) return;
                     if (e.key === "Enter") {
                       e.preventDefault();
                       if (searchQuery.trim()) {
@@ -734,6 +758,10 @@ function App() {
                   }}
                   placeholder="Search conversations..."
                   className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${
+                    paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  } ${
                     isDarkMode
                       ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                       : "bg-white border-gray-300 text-black placeholder-gray-500"
@@ -742,7 +770,12 @@ function App() {
                 {isSearching ? (
                   <button
                     onClick={handleClearSearch}
+                    disabled={paginationLoading || searchLoading}
                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${
+                      paginationLoading || searchLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    } ${
                       isDarkMode
                         ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -761,6 +794,7 @@ function App() {
               </div>
               <button
                 onClick={async () => {
+                  if (paginationLoading || searchLoading) return;
                   if (isSearching) {
                     // Clear search if already searching
                     await handleClearSearch();
@@ -769,9 +803,9 @@ function App() {
                     await handleSearch(searchQuery, 0);
                   }
                 }}
-                disabled={(!searchQuery.trim() && !isSearching) || searchLoading}
+                disabled={(!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading}
                 className={`p-2 rounded-lg ${
-                  ((!searchQuery.trim() && !isSearching) || searchLoading)
+                  ((!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading)
                     ? "opacity-50 cursor-not-allowed"
                     : isDarkMode
                     ? "bg-blue-600 text-white hover:bg-blue-700"
