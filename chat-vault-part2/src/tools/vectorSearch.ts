@@ -74,8 +74,8 @@ export async function performVectorSearch(
 
     // Minimum similarity threshold to filter out low-relevance results
     // Cosine similarity ranges from -1 to 1, but for embeddings it's typically 0 to 1
-    // A threshold of 0.3 filters out low-relevance matches, keeping only highly relevant results
-    const minSimilarity = 0.3;
+    // A threshold of 0.2 filters out low-relevance matches, keeping moderately to highly relevant results
+    const minSimilarity = 0.2;
 
     // First, get total count of matching results above threshold
     const countQuery = sql.raw(`
