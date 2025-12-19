@@ -7,6 +7,36 @@ import { chats } from "../db/schema.js";
 import { eq, desc, count } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
 
+/**
+ * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
+ * This ensures pagination works correctly by removing duplicates before pagination calculations
+ */
+function deduplicateChats<T extends { userId: string; title: string; turns: Array<{ prompt: string; response: string }>; timestamp: Date }>(
+    chatList: T[]
+): T[] {
+    const seen = new Map<string, T>();
+    
+    for (const chat of chatList) {
+        // Create a signature based on userId, title, and turns
+        const signature = `${chat.userId}|${chat.title}|${JSON.stringify(chat.turns)}`;
+        
+        if (!seen.has(signature)) {
+            seen.set(signature, chat);
+        } else {
+            // If we've seen this before, keep the one with the latest timestamp
+            const existing = seen.get(signature)!;
+            const existingTime = new Date(existing.timestamp).getTime();
+            const currentTime = new Date(chat.timestamp).getTime();
+            
+            if (currentTime > existingTime) {
+                seen.set(signature, chat);
+            }
+        }
+    }
+    
+    return Array.from(seen.values());
+}
+
 export interface LoadChatsParams {
   userId: string;
   page?: number; // 0-indexed, default 0
@@ -87,34 +117,30 @@ export async function loadChats(params: LoadChatsParams): Promise<LoadChatsResul
     }
 
     // No query - load chats by timestamp (original behavior)
-    // Get total count
-    console.log("[loadChats] Counting total chats for user:", userId);
-    const totalResult = await db
-      .select({ count: count() })
-      .from(chats)
-      .where(eq(chats.userId, userId));
-
-    const total = totalResult[0]?.count ?? 0;
-    console.log("[loadChats] Total chats found:", total);
-
-    // Query chats with pagination
-    console.log("[loadChats] Querying chats with offset:", offset, "size:", sizeNum);
-    const chatResults = await db
+    // Fetch all chats for the user (we need to deduplicate before pagination)
+    console.log("[loadChats] Fetching all chats for user:", userId);
+    const allChatResults = await db
       .select()
       .from(chats)
       .where(eq(chats.userId, userId))
-      .orderBy(desc(chats.timestamp))
-      .limit(sizeNum)
-      .offset(offset);
+      .orderBy(desc(chats.timestamp));
 
-    console.log("[loadChats] Retrieved", chatResults.length, "chats");
+    console.log("[loadChats] Retrieved", allChatResults.length, "chats before deduplication");
+
+    // Deduplicate chats (keep most recent for each unique title+turns combination)
+    const deduplicatedChats = deduplicateChats(allChatResults);
+    console.log("[loadChats] After deduplication:", deduplicatedChats.length, "unique chats");
+
+    // Apply pagination to deduplicated results
+    const total = deduplicatedChats.length;
+    const paginatedChats = deduplicatedChats.slice(offset, offset + sizeNum);
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / sizeNum);
     const hasMore = pageNum + 1 < totalPages;
 
     // Format response (exclude embedding from response)
-    const formattedChats = chatResults.map((chat) => ({
+    const formattedChats = paginatedChats.map((chat) => ({
       id: chat.id,
       userId: chat.userId,
       title: chat.title,

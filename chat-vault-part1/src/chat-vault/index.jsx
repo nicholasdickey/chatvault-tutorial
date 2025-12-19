@@ -135,7 +135,7 @@ function App() {
           try {
             const initialChats = JSON.parse(dataScript.textContent || "[]");
             addLog("Loaded chats from embedded data", { count: initialChats.length });
-            setChats(initialChats);
+            setChats(deduplicateChats(initialChats));
             setLoading(false);
             return;
           } catch (e) {
@@ -154,7 +154,7 @@ function App() {
             addLog("loadChats result", result);
             
             if (result?.structuredContent?.chats) {
-              setChats(result.structuredContent.chats);
+              setChats(deduplicateChats(result.structuredContent.chats));
               setPagination(result.structuredContent.pagination);
             } else if (result?.content?.[0]?.text) {
               addLog("Unexpected result format", result);
@@ -183,6 +183,40 @@ function App() {
     
     loadInitialData();
   }, []);
+
+  // Deduplicate chats based on title and content
+  // Keeps the most recent chat (by timestamp) when duplicates are found
+  const deduplicateChats = (chatList) => {
+    const seen = new Map();
+    const deduplicated = [];
+    
+    for (const chat of chatList) {
+      // Create a signature based on title and first turn content
+      const firstTurn = chat.turns?.[0];
+      const signature = `${chat.title || ""}|${firstTurn?.prompt || ""}|${firstTurn?.response || ""}`;
+      
+      if (!seen.has(signature)) {
+        seen.set(signature, chat);
+        deduplicated.push(chat);
+      } else {
+        // If we've seen this before, keep the one with the latest timestamp
+        const existing = seen.get(signature);
+        const existingTime = new Date(existing.timestamp).getTime();
+        const currentTime = new Date(chat.timestamp).getTime();
+        
+        if (currentTime > existingTime) {
+          // Replace the existing one with the newer one
+          const index = deduplicated.indexOf(existing);
+          if (index !== -1) {
+            deduplicated[index] = chat;
+            seen.set(signature, chat);
+          }
+        }
+      }
+    }
+    
+    return deduplicated;
+  };
 
   const handleChatClick = (chat) => {
     addLog("Chat clicked", { title: chat.title });
@@ -424,7 +458,7 @@ function App() {
             size: 10,
           });
           if (loadResult?.structuredContent?.chats) {
-            setChats(loadResult.structuredContent.chats);
+            setChats(deduplicateChats(loadResult.structuredContent.chats));
             setPagination(loadResult.structuredContent.pagination);
           }
         } catch (err) {
@@ -486,7 +520,7 @@ function App() {
 
       if (result?.structuredContent?.chats) {
         // Always replace results when navigating pages
-        setChats(result.structuredContent.chats);
+        setChats(deduplicateChats(result.structuredContent.chats));
         setPagination(result.structuredContent.pagination);
       }
     } catch (err) {
@@ -513,7 +547,7 @@ function App() {
           size: 10,
         });
         if (result?.structuredContent?.chats) {
-          setChats(result.structuredContent.chats);
+          setChats(deduplicateChats(result.structuredContent.chats));
           setPagination(result.structuredContent.pagination);
         }
       }
@@ -943,7 +977,7 @@ function App() {
                                   size: 10,
                                 });
                                 if (res?.structuredContent?.chats) {
-                                  setChats(res.structuredContent.chats);
+                                  setChats(deduplicateChats(res.structuredContent.chats));
                                   setPagination(res.structuredContent.pagination);
                                   setCurrentPage(currentPage - 1);
                                 }
@@ -988,7 +1022,7 @@ function App() {
                                     size: 10,
                                   });
                                   if (res?.structuredContent?.chats) {
-                                    setChats(res.structuredContent.chats);
+                                    setChats(deduplicateChats(res.structuredContent.chats));
                                     setPagination(res.structuredContent.pagination);
                                     setCurrentPage(page);
                                   }
@@ -1028,7 +1062,7 @@ function App() {
                           size: 10,
                         });
                         if (res?.structuredContent?.chats) {
-                          setChats(res.structuredContent.chats);
+                          setChats(deduplicateChats(res.structuredContent.chats));
                           setPagination(res.structuredContent.pagination);
                           setCurrentPage(currentPage + 1);
                         }

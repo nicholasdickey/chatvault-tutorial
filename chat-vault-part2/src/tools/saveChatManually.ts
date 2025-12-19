@@ -5,6 +5,8 @@
 
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
+import { eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { generateEmbedding, combineChatText } from "../utils/embeddings.js";
 
 export interface SaveChatManuallyParams {
@@ -17,6 +19,41 @@ export interface SaveChatManuallyResult {
     chatId: string;
     saved: boolean;
     turnsCount: number;
+}
+
+/**
+ * Check if an identical chat already exists for idempotency
+ * If the same save operation is called multiple times (retries, double-clicks, etc.),
+ * we return the existing chat ID instead of creating a duplicate
+ * This check happens BEFORE generating embeddings to save API costs
+ */
+async function checkForExistingChat(
+    userId: string,
+    title: string,
+    turns: Array<{ prompt: string; response: string }>
+): Promise<string | null> {
+    // Query for chats with same userId, title, and turns (JSON comparison)
+    // This ensures idempotency: same inputs = same result
+    const existingChats = await db
+        .select({ id: chats.id, timestamp: chats.timestamp })
+        .from(chats)
+        .where(
+            and(
+                eq(chats.userId, userId),
+                eq(chats.title, title),
+                sql`turns = ${JSON.stringify(turns)}::jsonb`
+            )
+        )
+        .orderBy(sql`timestamp DESC`)
+        .limit(1);
+    
+    if (existingChats.length > 0) {
+        const existing = existingChats[0];
+        console.log("[saveChatManually] Idempotency check: found existing chat:", existing.id, "at", existing.timestamp);
+        return existing.id;
+    }
+    
+    return null;
 }
 
 /**
@@ -169,6 +206,19 @@ export async function saveChatManually(
         // Use provided title or generate default
         const finalTitle = title?.trim() || generateDefaultTitle();
         console.log("[saveChatManually] Using title:", finalTitle);
+
+        // Idempotency check: if same chat already exists, return existing ID
+        // This prevents duplicates from retries, double-clicks, etc.
+        console.log("[saveChatManually] Checking for existing chat (idempotency)...");
+        const existingId = await checkForExistingChat(userId, finalTitle, turns);
+        if (existingId) {
+            console.log("[saveChatManually] Existing chat found, returning existing chat ID:", existingId);
+            return {
+                chatId: existingId,
+                saved: false, // Not newly saved, but operation is idempotent
+                turnsCount: turns.length,
+            };
+        }
 
         // Combine all prompts and responses into a single text
         const chatText = combineChatText(turns);

@@ -6,6 +6,36 @@ import { db } from "../db/index.js";
 import { sql } from "drizzle-orm";
 import { generateEmbedding } from "../utils/embeddings.js";
 
+/**
+ * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
+ * This ensures pagination works correctly by removing duplicates before pagination calculations
+ */
+function deduplicateChats<T extends { userId: string; title: string; turns: Array<{ prompt: string; response: string }>; timestamp: Date }>(
+    chatList: T[]
+): T[] {
+    const seen = new Map<string, T>();
+    
+    for (const chat of chatList) {
+        // Create a signature based on userId, title, and turns
+        const signature = `${chat.userId}|${chat.title}|${JSON.stringify(chat.turns)}`;
+        
+        if (!seen.has(signature)) {
+            seen.set(signature, chat);
+        } else {
+            // If we've seen this before, keep the one with the latest timestamp
+            const existing = seen.get(signature)!;
+            const existingTime = new Date(existing.timestamp).getTime();
+            const currentTime = new Date(chat.timestamp).getTime();
+            
+            if (currentTime > existingTime) {
+                seen.set(signature, chat);
+            }
+        }
+    }
+    
+    return Array.from(seen.values());
+}
+
 export interface VectorSearchParams {
     userId: string;
     query: string;
@@ -77,19 +107,9 @@ export async function performVectorSearch(
     // A threshold of 0.2 filters out low-relevance matches, keeping moderately to highly relevant results
     const minSimilarity = 0.2;
 
-    // First, get total count of matching results above threshold
-    const countQuery = sql.raw(`
-      SELECT COUNT(*) as total
-      FROM chats
-      WHERE user_id = '${safeUserId}'
-        AND embedding IS NOT NULL
-        AND 1 - (embedding <=> '${embeddingString}'::vector) >= ${minSimilarity}
-    `);
-    const countResult = await db.execute(countQuery);
-    const total = Number((countResult[0] as any)?.total ?? 0);
-    console.log("[vectorSearch] Total matching chats (similarity >= " + minSimilarity + "):", total);
-
-    // Perform vector similarity search with pagination and similarity threshold
+    // Fetch all matching results (we need to deduplicate before pagination)
+    // We'll fetch more than needed to account for deduplication, but cap it reasonably
+    const maxFetch = Math.min(1000, sizeNum * 10); // Fetch up to 10x the page size, max 1000
     const searchResults = await db.execute(
         sql.raw(`
       SELECT 
@@ -104,12 +124,11 @@ export async function performVectorSearch(
         AND embedding IS NOT NULL
         AND 1 - (embedding <=> '${embeddingString}'::vector) >= ${minSimilarity}
       ORDER BY embedding <=> '${embeddingString}'::vector
-      LIMIT ${sizeNum}
-      OFFSET ${offset}
+      LIMIT ${maxFetch}
     `)
     );
 
-    console.log("[vectorSearch] Found", searchResults.length, "matching chats on page", pageNum);
+    console.log("[vectorSearch] Found", searchResults.length, "matching chats before deduplication");
 
     // Format results
     const formattedChats = searchResults.map((row: any) => ({
@@ -121,12 +140,20 @@ export async function performVectorSearch(
         similarity: row.similarity ? Number(row.similarity) : undefined,
     }));
 
+    // Deduplicate chats (keep most recent for each unique title+turns combination)
+    const deduplicatedChats = deduplicateChats(formattedChats);
+    console.log("[vectorSearch] After deduplication:", deduplicatedChats.length, "unique chats");
+
+    // Apply pagination to deduplicated results
+    const total = deduplicatedChats.length;
+    const paginatedChats = deduplicatedChats.slice(offset, offset + sizeNum);
+
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / sizeNum);
     const hasMore = pageNum + 1 < totalPages;
 
     return {
-        chats: formattedChats,
+        chats: paginatedChats,
         total,
         page: pageNum,
         size: sizeNum,
