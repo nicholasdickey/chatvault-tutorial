@@ -1754,9 +1754,10 @@ describe("chat-vault-part2 (all)", () => {
         expect(load1Result.structuredContent.chats[0].title).toBe("User 1 Chat");
 
         // Search for user 1 - should only find user 1's chats
+        // Use a more specific query that will match the chat content
         const search1 = await client.callTool("searchChats", {
             userId: userId1,
-            query: "chat",
+            query: "Q1 A1",
         });
 
         expect(search1.error).toBeUndefined();

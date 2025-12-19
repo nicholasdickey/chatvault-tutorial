@@ -72,18 +72,24 @@ export async function performVectorSearch(
     // 2. Have non-null embeddings
     console.log("[vectorSearch] Performing vector similarity search...");
 
-    // First, get total count of matching results
+    // Minimum similarity threshold to filter out low-relevance results
+    // Cosine similarity ranges from -1 to 1, but for embeddings it's typically 0 to 1
+    // A threshold of 0.3 filters out low-relevance matches, keeping only highly relevant results
+    const minSimilarity = 0.3;
+
+    // First, get total count of matching results above threshold
     const countQuery = sql.raw(`
       SELECT COUNT(*) as total
       FROM chats
       WHERE user_id = '${safeUserId}'
         AND embedding IS NOT NULL
+        AND 1 - (embedding <=> '${embeddingString}'::vector) >= ${minSimilarity}
     `);
     const countResult = await db.execute(countQuery);
     const total = Number((countResult[0] as any)?.total ?? 0);
-    console.log("[vectorSearch] Total matching chats:", total);
+    console.log("[vectorSearch] Total matching chats (similarity >= " + minSimilarity + "):", total);
 
-    // Perform vector similarity search with pagination
+    // Perform vector similarity search with pagination and similarity threshold
     const searchResults = await db.execute(
         sql.raw(`
       SELECT 
@@ -96,6 +102,7 @@ export async function performVectorSearch(
       FROM chats
       WHERE user_id = '${safeUserId}'
         AND embedding IS NOT NULL
+        AND 1 - (embedding <=> '${embeddingString}'::vector) >= ${minSimilarity}
       ORDER BY embedding <=> '${embeddingString}'::vector
       LIMIT ${sizeNum}
       OFFSET ${offset}
