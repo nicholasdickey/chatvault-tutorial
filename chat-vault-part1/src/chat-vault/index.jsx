@@ -27,6 +27,7 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [pagination, setPagination] = useState(null);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
@@ -457,7 +458,7 @@ function App() {
     }
 
     setIsSearching(true);
-    setLoading(true);
+    setSearchLoading(true);
     setCurrentPage(page);
     addLog("Searching chats", { query, page });
 
@@ -485,8 +486,8 @@ function App() {
       addLog("Search failed", { error: errorMessage });
       setError(`Search failed: ${errorMessage}`);
     } finally {
-      setLoading(false);
-      setIsSearching(false);
+      setSearchLoading(false);
+      // Keep isSearching true - it indicates search is active
     }
   };
 
@@ -705,20 +706,24 @@ function App() {
                 )}
               </div>
               <button
-                onClick={() => {
-                  if (searchQuery.trim()) {
-                    handleSearch(searchQuery, 0);
+                onClick={async () => {
+                  if (isSearching) {
+                    // Clear search if already searching
+                    await handleClearSearch();
+                  } else if (searchQuery.trim() && !searchLoading) {
+                    // Perform search
+                    await handleSearch(searchQuery, 0);
                   }
                 }}
-                disabled={!searchQuery.trim() || loading}
+                disabled={(!searchQuery.trim() && !isSearching) || searchLoading}
                 className={`p-2 rounded-lg ${
-                  !searchQuery.trim() || loading
+                  ((!searchQuery.trim() && !isSearching) || searchLoading)
                     ? "opacity-50 cursor-not-allowed"
                     : isDarkMode
                     ? "bg-blue-600 text-white hover:bg-blue-700"
                     : "bg-blue-600 text-white hover:bg-blue-700"
                 }`}
-                title="Search"
+                title={isSearching ? "Clear search" : "Search"}
               >
                 {isSearching ? (
                   <MdClose className="w-5 h-5" />
@@ -875,7 +880,11 @@ function App() {
             <div className="space-y-2">
               {loading && chats.length === 0 ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  {isSearching ? "Searching..." : "Loading chats..."}
+                  Loading chats...
+                </div>
+              ) : searchLoading ? (
+                <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                  Searching...
                 </div>
               ) : chats.length === 0 ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
@@ -915,12 +924,12 @@ function App() {
                     <div className="pt-4 flex items-center justify-between gap-2">
                       <button
                         onClick={async () => {
-                          if (currentPage > 0 && !loading) {
-                            setLoading(true);
-                            try {
-                              if (isSearching && searchQuery) {
-                                await handleSearch(searchQuery, currentPage - 1);
-                              } else {
+                          if (currentPage > 0 && !loading && !searchLoading) {
+                            if (isSearching && searchQuery) {
+                              await handleSearch(searchQuery, currentPage - 1);
+                            } else {
+                              setLoading(true);
+                              try {
                                 const res = await window.openai?.callTool("loadChats", {
                                   page: currentPage - 1,
                                   size: 10,
@@ -930,15 +939,15 @@ function App() {
                                   setPagination(res.structuredContent.pagination);
                                   setCurrentPage(currentPage - 1);
                                 }
+                              } catch (err) {
+                                addLog("Error loading previous page", { error: err.message });
+                              } finally {
+                                setLoading(false);
                               }
-                            } catch (err) {
-                              addLog("Error loading previous page", { error: err.message });
-                            } finally {
-                              setLoading(false);
                             }
                           }
                         }}
-                        disabled={loading || currentPage === 0}
+                        disabled={loading || searchLoading || currentPage === 0}
                         className={`px-3 py-1.5 rounded text-sm font-medium ${
                           loading || currentPage === 0
                             ? "opacity-50 cursor-not-allowed"
@@ -958,27 +967,28 @@ function App() {
                           min="1"
                           max={pagination.totalPages}
                           value={currentPage + 1}
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const page = parseInt(e.target.value) - 1;
-                            if (page >= 0 && page < pagination.totalPages && page !== currentPage) {
+                            if (page >= 0 && page < pagination.totalPages && page !== currentPage && !loading && !searchLoading) {
                               if (isSearching && searchQuery) {
-                                handleSearch(searchQuery, page);
+                                await handleSearch(searchQuery, page);
                               } else {
                                 setLoading(true);
-                                window.openai?.callTool("loadChats", {
-                                  page,
-                                  size: 10,
-                                }).then((res) => {
+                                try {
+                                  const res = await window.openai?.callTool("loadChats", {
+                                    page,
+                                    size: 10,
+                                  });
                                   if (res?.structuredContent?.chats) {
                                     setChats(res.structuredContent.chats);
                                     setPagination(res.structuredContent.pagination);
                                     setCurrentPage(page);
                                   }
-                                }).catch((err) => {
+                                } catch (err) {
                                   addLog("Error loading page", { error: err.message });
-                                }).finally(() => {
+                                } finally {
                                   setLoading(false);
-                                });
+                                }
                               }
                             }
                           }}
@@ -997,32 +1007,32 @@ function App() {
                           of {pagination.totalPages}
                         </span>
                       </div>
-                      <button
-                        onClick={async () => {
-                          if (pagination.hasMore && !loading) {
-                            setLoading(true);
-                            try {
-                              if (isSearching && searchQuery) {
-                                await handleSearch(searchQuery, currentPage + 1);
-                              } else {
-                                const res = await window.openai?.callTool("loadChats", {
-                                  page: currentPage + 1,
-                                  size: 10,
-                                });
-                                if (res?.structuredContent?.chats) {
-                                  setChats(res.structuredContent.chats);
-                                  setPagination(res.structuredContent.pagination);
-                                  setCurrentPage(currentPage + 1);
-                                }
-                              }
-                            } catch (err) {
-                              addLog("Error loading next page", { error: err.message });
-                            } finally {
-                              setLoading(false);
-                            }
-                          }
-                        }}
-                        disabled={loading || !pagination.hasMore}
+              <button
+                onClick={async () => {
+                  if (pagination.hasMore && !loading && !searchLoading) {
+                    if (isSearching && searchQuery) {
+                      await handleSearch(searchQuery, currentPage + 1);
+                    } else {
+                      setLoading(true);
+                      try {
+                        const res = await window.openai?.callTool("loadChats", {
+                          page: currentPage + 1,
+                          size: 10,
+                        });
+                        if (res?.structuredContent?.chats) {
+                          setChats(res.structuredContent.chats);
+                          setPagination(res.structuredContent.pagination);
+                          setCurrentPage(currentPage + 1);
+                        }
+                      } catch (err) {
+                        addLog("Error loading next page", { error: err.message });
+                      } finally {
+                        setLoading(false);
+                      }
+                    }
+                  }
+                }}
+                disabled={loading || searchLoading || !pagination.hasMore}
                         className={`px-3 py-1.5 rounded text-sm font-medium ${
                           loading || !pagination.hasMore
                             ? "opacity-50 cursor-not-allowed"
