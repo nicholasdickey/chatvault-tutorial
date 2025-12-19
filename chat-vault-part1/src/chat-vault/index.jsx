@@ -116,8 +116,16 @@ function App() {
   }, []);
 
   // Load initial data from embedded script or call loadChats
+  // Only run once on mount
+  const hasLoadedInitial = useRef(false);
   useEffect(() => {
+    // Skip if we've already loaded initial data
+    if (hasLoadedInitial.current) {
+      return;
+    }
+
     const loadInitialData = async () => {
+      hasLoadedInitial.current = true;
       try {
         addLog("Loading initial chat data");
         
