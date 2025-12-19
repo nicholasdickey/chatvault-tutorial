@@ -931,12 +931,12 @@ function App() {
             </div>
           ) : (
             // Chat list view
-            <div className="space-y-2">
-              {(loading && chats.length === 0) || paginationLoading ? (
+            <div className="space-y-2 relative">
+              {loading && chats.length === 0 ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  {paginationLoading ? "Loading..." : "Loading chats..."}
+                  Loading chats...
                 </div>
-              ) : searchLoading ? (
+              ) : searchLoading && chats.length === 0 ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
                   Searching...
                 </div>
@@ -957,22 +957,36 @@ function App() {
                 </div>
               ) : (
                 <>
-                  {chats.map((chat) => (
-                    <button
-                      key={chat.timestamp || chat.id}
-                      onClick={() => handleChatClick(chat)}
-                      className={`w-full text-left p-4 rounded-lg border transition-colors ${
-                        isDarkMode
-                          ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                      }`}
-                    >
-                      <div className="font-medium mb-1">{chat.title}</div>
-                      <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                        {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
+                  <div className="relative">
+                    {chats.map((chat) => (
+                      <button
+                        key={chat.timestamp || chat.id}
+                        onClick={() => handleChatClick(chat)}
+                        className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                          isDarkMode
+                            ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
+                            : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        <div className="font-medium mb-1">{chat.title}</div>
+                        <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                          {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
+                        </div>
+                      </button>
+                    ))}
+                    {/* Loading overlay for pagination/search */}
+                    {(paginationLoading || (searchLoading && chats.length > 0)) && (
+                      <div className={`absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                        isDarkMode ? "bg-black/50" : "bg-white/70"
+                      }`}>
+                        <div className={`px-4 py-2 rounded-lg font-medium ${
+                          isDarkMode ? "bg-gray-800 text-white" : "bg-white text-black shadow-lg"
+                        }`}>
+                          Loading...
+                        </div>
                       </div>
-                    </button>
-                  ))}
+                    )}
+                  </div>
                   {/* Pagination */}
                   {pagination && pagination.totalPages > 1 && (
                     <div className="pt-4 flex items-center justify-between gap-2">
@@ -1023,7 +1037,9 @@ function App() {
                           inputMode="numeric"
                           pattern="[0-9]*"
                           value={pageInputValue}
+                          disabled={paginationLoading || searchLoading}
                           onChange={(e) => {
+                            if (paginationLoading || searchLoading) return;
                             const value = e.target.value;
                             // Only allow numbers
                             if (value === "" || /^\d+$/.test(value)) {
@@ -1031,6 +1047,7 @@ function App() {
                             }
                           }}
                           onKeyDown={(e) => {
+                            if (paginationLoading || searchLoading) return;
                             if (e.key === "Enter") {
                               const page = parseInt(pageInputValue) - 1;
                               if (page >= 0 && page < pagination.totalPages && page !== currentPage && !paginationLoading && !searchLoading) {
@@ -1061,6 +1078,10 @@ function App() {
                             }
                           }}
                           className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${
+                            paginationLoading || searchLoading
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                          } ${
                             isDarkMode
                               ? "bg-gray-800 border-gray-600 text-white"
                               : "bg-white border-gray-300 text-black"
@@ -1140,7 +1161,7 @@ function App() {
                         }}
                         disabled={paginationLoading || searchLoading || !pagination.hasMore}
                         className={`px-3 py-1.5 rounded text-sm font-medium ${
-                          paginationLoading || !pagination.hasMore
+                          paginationLoading || searchLoading || !pagination.hasMore
                             ? "opacity-50 cursor-not-allowed"
                             : isDarkMode
                             ? "bg-gray-800 text-white hover:bg-gray-700"
