@@ -150,5 +150,3 @@ If you’re following along with the series and get stuck:
 
 - Open an **Issue** on GitHub with context.
 - Mention which **part** you’re on and which toolchain you’re using (vibe‑coded backend, n8n, Make, Zapier, Findexar, etc.).
-
-Happy building!
