@@ -545,7 +545,7 @@ function App() {
     setSearchQuery("");
     setIsSearching(false);
     setCurrentPage(0);
-    setLoading(true);
+    setPaginationLoading(true);
     addLog("Clearing search, reloading chats");
 
     try {
@@ -564,7 +564,7 @@ function App() {
     } catch (err) {
       addLog("Error reloading chats", { error: err.message });
     } finally {
-      setLoading(false);
+      setPaginationLoading(false);
     }
   };
 
