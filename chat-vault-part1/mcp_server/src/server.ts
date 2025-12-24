@@ -179,7 +179,7 @@ function getWidgetHtml(componentName: string): string {
 
 const widgets: ChatVaultWidget[] = [
   {
-    id: "browseSavedChats",
+    id: "browseMySavedChats",
     title: "ChatVault",
     templateUri: "ui://widget/chat-vault.html",
     invoking: "Browsing saved chats",
@@ -328,7 +328,7 @@ const searchChatSchema = {
 // Define all ChatVault tools
 const chatVaultTools: Tool[] = [
   {
-    name: "browseSavedChats",
+    name: "browseMySavedChats",
     description: "Browse and display saved chats in the ChatVault widget",
     inputSchema: browseSavedChatsSchema,
     title: "Browse Saved Chats",
@@ -340,7 +340,7 @@ const chatVaultTools: Tool[] = [
     },
   },
   {
-    name: "loadChats",
+    name: "loadMyChats",
     description: "Load saved chats with pagination support",
     inputSchema: loadChatsSchema,
     title: "Load Chats",
@@ -409,8 +409,8 @@ async function handleCallTool(request: CallToolRequest) {
   const args = request.params.arguments ?? {};
 
   switch (toolName) {
-    case "browseSavedChats": {
-      const widget = widgetsById.get("browseSavedChats");
+    case "browseMySavedChats": {
+      const widget = widgetsById.get("browseMySavedChats");
       if (!widget) {
         throw new Error("Widget not found");
       }
@@ -426,11 +426,11 @@ async function handleCallTool(request: CallToolRequest) {
         structuredContent: {},
         _meta: widgetInvocationMeta(widget),
       };
-      console.log("[MCP Handler] handleCallTool - returning browseSavedChats widget");
+      console.log("[MCP Handler] handleCallTool - returning browseMySavedChats widget");
       return result;
     }
 
-    case "loadChats": {
+    case "loadMyChats": {
       const page = (args.page as number) ?? 0;
       const pageSize = (args.pageSize as number) ?? 10;
       const start = page * pageSize;
@@ -452,7 +452,7 @@ async function handleCallTool(request: CallToolRequest) {
           hasMore: end < exampleChats.length,
         },
       };
-      console.log("[MCP Handler] handleCallTool - loadChats returning", paginatedChats.length, "chats");
+      console.log("[MCP Handler] handleCallTool - loadMyChats returning", paginatedChats.length, "chats");
       return result;
     }
 

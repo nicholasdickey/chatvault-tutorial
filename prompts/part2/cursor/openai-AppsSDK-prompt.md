@@ -101,7 +101,7 @@ Write tests for the initialize handshake, session management, JSON-RPC complianc
 After completing these generic prompts, proceed to the project-specific prompts in `chatVaultPrompts.md` (starting at Prompt6) to implement:
 
 - Database schema for ChatVault
-- `saveChat`, `loadChats`, `searchChats` tools
+- `saveChat`, `loadMyChats`, `searchMyChats` tools
 - Vector search implementation
 - Updated tests for ChatVault-specific behavior
 - ChatGPT integration

@@ -4,7 +4,7 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
 
 ## Features
 
-- ✅ **Three MCP Tools**: `saveChat`, `loadChats`, `searchChats`
+- ✅ **Three MCP Tools**: `saveChat`, `loadMyChats`, `searchMyChats`
 - ✅ **Vector Search**: Semantic search using pgvector and OpenAI embeddings
 - ✅ **PostgreSQL Database**: Neon PostgreSQL with pgvector extension
 - ✅ **Comprehensive Tests**: 60+ tests covering all tools, error cases, and integration
@@ -97,15 +97,15 @@ chat-vault-part2/
 │   │   └── migrate.ts         # Migration runner
 │   ├── tools/
 │   │   ├── saveChat.ts        # Save chat with embeddings
-│   │   ├── loadChats.ts       # Load paginated chats
-│   │   └── searchChats.ts     # Vector similarity search
+│   │   ├── loadMyChats.ts       # Load paginated chats
+│   │   └── searchMyChats.ts     # Vector similarity search
 │   └── utils/
 │       └── embeddings.ts      # OpenAI embeddings utility
 ├── tests/
 │   ├── mcp-protocol-compliance.test.ts
 │   ├── saveChat.test.ts
-│   ├── loadChats.test.ts
-│   ├── searchChats.test.ts
+│   ├── loadMyChats.test.ts
+│   ├── searchMyChats.test.ts
 │   ├── chatvault-integration.test.ts
 │   ├── chatvault-error-cases.test.ts
 │   └── helpers/               # Test utilities
@@ -131,7 +131,7 @@ Save a chat conversation with automatic embedding generation.
 
 **Returns:** Chat ID and saved status
 
-### `loadChats`
+### `loadMyChats`
 
 Load paginated chats for a user, ordered by timestamp (newest first).
 
@@ -143,7 +143,7 @@ Load paginated chats for a user, ordered by timestamp (newest first).
 
 **Returns:** Array of chats with pagination metadata
 
-### `searchChats`
+### `searchMyChats`
 
 Perform semantic search on chat embeddings using vector similarity.
 
@@ -172,8 +172,8 @@ pnpm test
 
 # Run specific test suite
 pnpm test saveChat
-pnpm test loadChats
-pnpm test searchChats
+pnpm test loadMyChats
+pnpm test searchMyChats
 pnpm test integration
 ```
 

@@ -90,7 +90,7 @@ Server → Client: 200 OK
   "result": {
     "tools": [
       {
-        "name": "browseSavedChats",
+        "name": "browseMySavedChats",
         "description": "...",
         "inputSchema": { ... },
         "_meta": {
@@ -111,7 +111,7 @@ Client → Server: POST /mcp
   "id": 3,
   "method": "tools/call",
   "params": {
-    "name": "browseSavedChats",
+    "name": "browseMySavedChats",
     "arguments": {}
   }
 }

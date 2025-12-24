@@ -108,7 +108,7 @@ Save a chat with the following:
 
 Expected: Chat should be saved successfully with a chat ID returned.
 
-### Test 2: loadChats
+### Test 2: loadMyChats
 
 ```
 Load chats for user test-user-123, page 1, limit 10
@@ -116,7 +116,7 @@ Load chats for user test-user-123, page 1, limit 10
 
 Expected: Should return the chat you just saved, with pagination metadata.
 
-### Test 3: searchChats
+### Test 3: searchMyChats
 
 ```
 Search for chats about "programming language" for user test-user-123
@@ -177,8 +177,8 @@ The server logs all operations. Watch for:
 - `[MCP]` - MCP protocol messages
 - `[MCP Handler]` - Tool handler execution
 - `[saveChat]` - Save chat operations
-- `[loadChats]` - Load chats operations
-- `[searchChats]` - Search chats operations
+- `[loadMyChats]` - Load chats operations
+- `[searchMyChats]` - Search chats operations
 - `[Embeddings]` - Embedding generation
 
 ## Production Checklist

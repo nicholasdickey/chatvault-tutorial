@@ -151,16 +151,16 @@ describe("chat-vault-part2 (all)", () => {
         // Verify all tools are in the list
         const toolNames = (result.tools as Array<{ name: string }>).map((t) => t.name);
         expect(toolNames).toContain("saveChat");
-        expect(toolNames).toContain("loadChats");
-        expect(toolNames).toContain("searchChats");
+        expect(toolNames).toContain("loadMyChats");
+        expect(toolNames).toContain("searchMyChats");
         expect(toolNames).toContain("saveChatManually");
         expect(toolNames).toContain("explainHowToUse");
 
         // Verify tool schemas
         const tools = result.tools as Array<{ name: string; description: string; inputSchema: unknown }>;
         const saveChatTool = tools.find((t) => t.name === "saveChat");
-        const loadChatsTool = tools.find((t) => t.name === "loadChats");
-        const searchChatsTool = tools.find((t) => t.name === "searchChats");
+        const loadChatsTool = tools.find((t) => t.name === "loadMyChats");
+        const searchChatsTool = tools.find((t) => t.name === "searchMyChats");
         const saveChatManuallyTool = tools.find((t) => t.name === "saveChatManually");
         const explainHowToUseTool = tools.find((t) => t.name === "explainHowToUse");
 
@@ -315,7 +315,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing userId", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             page: 0,
             size: 10,
         });
@@ -325,7 +325,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle invalid page number (negative)", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId: "test-user",
             page: -1,
         });
@@ -343,7 +343,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle invalid size (negative)", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId: "test-user",
             size: -5,
         });
@@ -360,7 +360,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle very large size", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId: "test-user",
             size: 10000,
         });
@@ -375,7 +375,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle page beyond available data", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId: "non-existent-user",
             page: 999,
         });
@@ -392,7 +392,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing userId", async () => {
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             query: "test query",
         });
 
@@ -401,7 +401,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing query", async () => {
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
         });
 
@@ -410,7 +410,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on empty query", async () => {
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
             query: "",
         });
@@ -420,7 +420,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on whitespace-only query", async () => {
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
             query: "   ",
         });
@@ -436,7 +436,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
             query: "test",
             size: -5,
@@ -460,7 +460,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
             query: "test",
             size: 10000,
@@ -505,7 +505,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         const longQuery = "A".repeat(10000);
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
             query: longQuery,
         });
@@ -535,7 +535,7 @@ describe("chat-vault-part2 (all)", () => {
         // Should handle special characters (may succeed or error based on validation)
         if (!response.error) {
             // If it succeeds, verify we can load it
-            const loadResponse = await client.callTool("loadChats", {
+            const loadResponse = await client.callTool("loadMyChats", {
                 userId: specialUserId,
             });
             expect(loadResponse.error).toBeUndefined();
@@ -563,7 +563,7 @@ describe("chat-vault-part2 (all)", () => {
         if (!response.error) {
             expect(response.error).toBeUndefined();
             // Verify we can load it back
-            const loadResponse = await client.callTool("loadChats", {
+            const loadResponse = await client.callTool("loadMyChats", {
                 userId: "test-user",
             });
             expect(loadResponse.error).toBeUndefined();
@@ -822,7 +822,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should load chats for a user with pagination", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -846,7 +846,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Load first page
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId,
             page: 0,
             size: 2,
@@ -880,7 +880,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should return empty array for user with no chats", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId: "non-existent-user",
             page: 0,
             size: 10,
@@ -910,7 +910,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should require userId parameter", async () => {
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             page: 0,
             size: 10,
         });
@@ -922,7 +922,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should use default page and size when not provided", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -936,7 +936,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Load without page/size
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId,
         });
 
@@ -959,7 +959,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should return chats ordered by timestamp descending", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -985,7 +985,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Load chats
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId,
             page: 0,
             size: 10,
@@ -1008,7 +1008,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should handle pagination correctly (0-indexed pages)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1024,7 +1024,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         // Load page 0 (should get first 2)
-        const page0 = await client.callTool("loadChats", {
+        const page0 = await client.callTool("loadMyChats", {
             userId,
             page: 0,
             size: 2,
@@ -1042,7 +1042,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(result0.structuredContent.pagination.hasMore).toBe(true);
 
         // Load page 1 (should get next 2)
-        const page1 = await client.callTool("loadChats", {
+        const page1 = await client.callTool("loadMyChats", {
             userId,
             page: 1,
             size: 2,
@@ -1060,7 +1060,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(result1.structuredContent.pagination.hasMore).toBe(true);
 
         // Load page 2 (should get last 1)
-        const page2 = await client.callTool("loadChats", {
+        const page2 = await client.callTool("loadMyChats", {
             userId,
             page: 2,
             size: 2,
@@ -1081,7 +1081,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should only return chats for specified userId", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1101,7 +1101,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Load chats for user 1
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId: userId1,
         });
 
@@ -1120,7 +1120,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should return response in Part 1 compatible format", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1132,7 +1132,7 @@ describe("chat-vault-part2 (all)", () => {
             turns: [{ prompt: "Q", response: "A" }],
         });
 
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId,
         });
 
@@ -1179,7 +1179,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should search chats by semantic similarity", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1220,7 +1220,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Search for Python-related content
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId,
             query: "Python programming language",
             page: 0,
@@ -1255,7 +1255,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should require userId parameter", async () => {
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             query: "test query",
         });
 
@@ -1264,7 +1264,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should require query parameter", async () => {
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: "test-user",
         });
 
@@ -1275,14 +1275,14 @@ describe("chat-vault-part2 (all)", () => {
     test("should return empty array when no matches found", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-search-2";
 
         // Search without any chats saved
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId,
             query: "some random query that won't match anything",
         });
@@ -1307,7 +1307,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should only return chats for specified userId", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1328,7 +1328,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Search for user 1
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId: userId1,
             query: "programming language",
         });
@@ -1350,7 +1350,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should use default limit when not provided", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1366,7 +1366,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         // Search without limit
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId,
             query: "question",
         });
@@ -1387,7 +1387,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should return results ordered by similarity (most similar first)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1417,7 +1417,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Search for machine learning
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId,
             query: "artificial intelligence and machine learning",
         });
@@ -1446,7 +1446,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should only return chats with embeddings", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1460,7 +1460,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Search - should only return the chat with embedding
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId,
             query: "test",
         });
@@ -1479,7 +1479,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should return response in Part 1 compatible format", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1491,7 +1491,7 @@ describe("chat-vault-part2 (all)", () => {
             turns: [{ prompt: "Q", response: "A" }],
         });
 
-        const response = await client.callTool("searchChats", {
+        const response = await client.callTool("searchMyChats", {
             userId,
             query: "test",
         });
@@ -1597,7 +1597,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(Number(savedChats[0]?.count ?? 0)).toBe(2);
 
         // Step 2: Load chats
-        const loadResponse = await client.callTool("loadChats", {
+        const loadResponse = await client.callTool("loadMyChats", {
             userId,
             page: 0,
             size: 10,
@@ -1618,7 +1618,7 @@ describe("chat-vault-part2 (all)", () => {
         ]);
 
         // Step 3: Search chats
-        const searchResponse = await client.callTool("searchChats", {
+        const searchResponse = await client.callTool("searchMyChats", {
             userId,
             query: "Python programming language",
             page: 0,
@@ -1665,7 +1665,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(Number(savedChats[0]?.count ?? 0)).toBe(15);
 
         // Load first page (10 items)
-        const page0 = await client.callTool("loadChats", {
+        const page0 = await client.callTool("loadMyChats", {
             userId,
             page: 0,
             size: 10,
@@ -1683,7 +1683,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(page0Result.structuredContent.pagination.hasMore).toBe(true);
 
         // Load second page (5 items)
-        const page1 = await client.callTool("loadChats", {
+        const page1 = await client.callTool("loadMyChats", {
             userId,
             page: 1,
             size: 10,
@@ -1700,7 +1700,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(page1Result.structuredContent.pagination.hasMore).toBe(false);
 
         // Search should find relevant chats
-        const searchResponse = await client.callTool("searchChats", {
+        const searchResponse = await client.callTool("searchMyChats", {
             userId,
             query: "question answer",
             page: 0,
@@ -1738,7 +1738,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Load for user 1 - should only see user 1's chats
-        const load1 = await client.callTool("loadChats", {
+        const load1 = await client.callTool("loadMyChats", {
             userId: userId1,
         });
 
@@ -1755,7 +1755,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Search for user 1 - should only find user 1's chats
         // Use a more specific query that will match the chat content
-        const search1 = await client.callTool("searchChats", {
+        const search1 = await client.callTool("searchMyChats", {
             userId: userId1,
             query: "Q1 A1",
         });
@@ -1775,7 +1775,7 @@ describe("chat-vault-part2 (all)", () => {
         const userId = "integration-user-5";
 
         // Load with no chats
-        const loadResponse = await client.callTool("loadChats", {
+        const loadResponse = await client.callTool("loadMyChats", {
             userId,
         });
 
@@ -1791,7 +1791,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Search with no chats (skip if no API key)
         if (process.env.OPENAI_API_KEY) {
-            const searchResponse = await client.callTool("searchChats", {
+            const searchResponse = await client.callTool("searchMyChats", {
                 userId,
                 query: "anything",
             });
@@ -1851,7 +1851,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(Array.isArray(dbChat[0].embedding)).toBe(true);
 
         // Load via API and verify matches database
-        const loadResponse = await client.callTool("loadChats", {
+        const loadResponse = await client.callTool("loadMyChats", {
             userId,
         });
 
@@ -2027,13 +2027,13 @@ You can download Python from python.org.`;
     });
 
     // -------------------------------------------------------------------------
-    // New tests for loadChats with query parameter
+    // New tests for loadMyChats with query parameter
     // -------------------------------------------------------------------------
 
-    test("should use vector search when query provided to loadChats", async () => {
+    test("should use vector search when query provided to loadMyChats", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Query Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -2053,7 +2053,7 @@ You can download Python from python.org.`;
         });
 
         // Load with query - should use vector search
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId,
             query: "Python programming",
             page: 0,
@@ -2074,10 +2074,10 @@ You can download Python from python.org.`;
         expect(result.structuredContent.pagination.page).toBe(0);
     });
 
-    test("should use timestamp ordering when no query provided to loadChats", async () => {
+    test("should use timestamp ordering when no query provided to loadMyChats", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Query Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -2097,7 +2097,7 @@ You can download Python from python.org.`;
         });
 
         // Load without query - should use timestamp ordering
-        const response = await client.callTool("loadChats", {
+        const response = await client.callTool("loadMyChats", {
             userId,
             page: 0,
             size: 10,
@@ -2115,10 +2115,10 @@ You can download Python from python.org.`;
         expect(result.structuredContent.chats[1].title).toBe("First Chat");
     });
 
-    test("should return same results for loadChats with query and searchChats", async () => {
+    test("should return same results for loadMyChats with query and searchMyChats", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadMyChats Query Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -2131,16 +2131,16 @@ You can download Python from python.org.`;
             turns: [{ prompt: "How do I use useState?", response: "useState is a React hook." }],
         });
 
-        // Search with loadChats query
-        const loadResponse = await client.callTool("loadChats", {
+        // Search with loadMyChats query
+        const loadResponse = await client.callTool("loadMyChats", {
             userId,
             query: "React hooks",
             page: 0,
             size: 10,
         });
 
-        // Search with searchChats
-        const searchResponse = await client.callTool("searchChats", {
+        // Search with searchMyChats
+        const searchResponse = await client.callTool("searchMyChats", {
             userId,
             query: "React hooks",
             page: 0,
@@ -2169,13 +2169,13 @@ You can download Python from python.org.`;
     });
 
     // -------------------------------------------------------------------------
-    // New tests for searchChats with 0-based pagination
+    // New tests for searchMyChats with 0-based pagination
     // -------------------------------------------------------------------------
 
-    test("should handle pagination correctly for searchChats (0-indexed)", async () => {
+    test("should handle pagination correctly for searchMyChats (0-indexed)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchChats Pagination Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchMyChats Pagination Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -2191,7 +2191,7 @@ You can download Python from python.org.`;
         }
 
         // Search page 0
-        const page0 = await client.callTool("searchChats", {
+        const page0 = await client.callTool("searchMyChats", {
             userId,
             query: "question",
             page: 0,
@@ -2210,7 +2210,7 @@ You can download Python from python.org.`;
         expect(result0.structuredContent.pagination.hasMore).toBe(true);
 
         // Search page 1
-        const page1 = await client.callTool("searchChats", {
+        const page1 = await client.callTool("searchMyChats", {
             userId,
             query: "question",
             page: 1,

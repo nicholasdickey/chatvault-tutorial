@@ -19,8 +19,8 @@ import { testConnection, db } from "./db/index.js";
 import { sql } from "drizzle-orm";
 import { saveChat } from "./tools/saveChat.js";
 import { saveChatManually } from "./tools/saveChatManually.js";
-import { loadChats } from "./tools/loadChats.js";
-import { searchChats } from "./tools/searchChats.js";
+import { loadMyChats } from "./tools/loadMyChats.js";
+import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
 
 dotenv.config();
@@ -91,7 +91,7 @@ const chatVaultTools: Tool[] = [
         },
     },
     {
-        name: "loadChats",
+        name: "loadMyChats",
         description: "Load paginated chat data for a user with optional text search filter",
         inputSchema: {
             type: "object",
@@ -117,7 +117,7 @@ const chatVaultTools: Tool[] = [
         },
     },
     {
-        name: "searchChats",
+        name: "searchMyChats",
         description: "Search chats using vector similarity search",
         inputSchema: {
             type: "object",
@@ -217,9 +217,9 @@ async function handleCallTool(request: CallToolRequest) {
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "loadChats") {
-            const result = await loadChats(args as { userId: string; page?: number; size?: number; query?: string });
-            console.log("[MCP Handler] handleCallTool - loadChats result:", result.chats.length, "chats");
+        } else if (toolName === "loadMyChats") {
+            const result = await loadMyChats(args as { userId: string; page?: number; size?: number; query?: string });
+            console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats");
             // Return in Part 1 compatible format: structuredContent with chats and pagination
             return {
                 content: [
@@ -237,9 +237,9 @@ async function handleCallTool(request: CallToolRequest) {
                     pagination: result.pagination,
                 },
             };
-        } else if (toolName === "searchChats") {
-            const result = await searchChats(args as { userId: string; query: string; page?: number; size?: number });
-            console.log("[MCP Handler] handleCallTool - searchChats result:", result.chats.length, "chats");
+        } else if (toolName === "searchMyChats") {
+            const result = await searchMyChats(args as { userId: string; query: string; page?: number; size?: number });
+            console.log("[MCP Handler] handleCallTool - searchMyChats result:", result.chats.length, "chats");
             // Return in Part 1 compatible format: structuredContent with chats, search, and pagination
             return {
                 content: [
