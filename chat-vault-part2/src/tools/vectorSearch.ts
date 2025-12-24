@@ -1,5 +1,5 @@
 /**
- * Shared vector search functionality for loadChats and searchChats
+ * Shared vector search functionality for loadMyChats and searchMyChats
  */
 
 import { db } from "../db/index.js";
@@ -14,11 +14,11 @@ function deduplicateChats<T extends { userId: string; title: string; turns: Arra
     chatList: T[]
 ): T[] {
     const seen = new Map<string, T>();
-    
+
     for (const chat of chatList) {
         // Create a signature based on userId, title, and turns
         const signature = `${chat.userId}|${chat.title}|${JSON.stringify(chat.turns)}`;
-        
+
         if (!seen.has(signature)) {
             seen.set(signature, chat);
         } else {
@@ -26,13 +26,13 @@ function deduplicateChats<T extends { userId: string; title: string; turns: Arra
             const existing = seen.get(signature)!;
             const existingTime = new Date(existing.timestamp).getTime();
             const currentTime = new Date(chat.timestamp).getTime();
-            
+
             if (currentTime > existingTime) {
                 seen.set(signature, chat);
             }
         }
     }
-    
+
     return Array.from(seen.values());
 }
 

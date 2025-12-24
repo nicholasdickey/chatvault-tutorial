@@ -16,7 +16,7 @@ According to `prompts/part1/chatVaultPrompts.md`, Prompt4 requires implementing 
 
 **Required:**
 
-- Tool name: `browseSavedChats`
+- Tool name: `browseMySavedChats`
 - Parameters: None (or search query if needed)
 - Response: Should trigger widget display
 
@@ -25,13 +25,13 @@ According to `prompts/part1/chatVaultPrompts.md`, Prompt4 requires implementing 
 1. `saveChat`: Save current conversation
    - Need to store chat data somewhere (file system? database?)
    - Format: JSON with metadata (title, date, content)
-2. `loadChats`: Load saved conversations
+2. `loadMyChats`: Load saved conversations
    - Read from storage
    - Return list of chats
 3. `searchChat`: Search saved conversations
    - Filter by query string
    - Return matching chats
-4. `browseSavedChats`: Browse and display saved chats
+4. `browseMySavedChats`: Browse and display saved chats
    - This is the widget action
    - Should return widget resource
 
@@ -93,7 +93,7 @@ inputSchema: {
 **Required:**
 
 ```typescript
-// For browseSavedChats - no parameters needed
+// For browseMySavedChats - no parameters needed
 inputSchema: {
   type: "object",
   properties: {},
@@ -137,9 +137,9 @@ inputSchema: {
 
 - [ ] Create storage directory structure
 - [ ] Implement `saveChat` function
-- [ ] Implement `loadChats` function
+- [ ] Implement `loadMyChats` function
 - [ ] Implement `searchChat` function
-- [ ] Update `browseSavedChats` tool to load and pass data
+- [ ] Update `browseMySavedChats` tool to load and pass data
 - [ ] Update widget to display chat list
 - [ ] Implement search/filter in widget
 - [ ] Implement "Save Chat" button functionality
@@ -164,7 +164,7 @@ inputSchema: {
    - Style the UI
 
 3. `tests/browse-saved-chats.test.ts`
-   - Update tool name from `chat-vault` to `browseSavedChats`
+   - Update tool name from `chat-vault` to `browseMySavedChats`
    - Update parameter expectations
    - Add tests for save/load/search
 

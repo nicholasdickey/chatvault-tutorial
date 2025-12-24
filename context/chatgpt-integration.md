@@ -91,7 +91,7 @@ Ask ChatGPT:
 What tools are available from ChatVault?
 ```
 
-Expected: ChatGPT should list `browseSavedChats`, `loadChats`, `saveChat`, `searchChat`
+Expected: ChatGPT should list `browseMySavedChats`, `loadMyChats`, `saveChat`, `searchChat`
 
 ### Test 2: Browse Saved Chats
 
@@ -109,7 +109,7 @@ Browse my saved chats
 
 Expected:
 
-- ChatGPT calls `browseSavedChats` tool
+- ChatGPT calls `browseMySavedChats` tool
 - Widget appears inline in the chat
 - Widget shows the list of saved chats (3 example chats)
 
@@ -125,13 +125,13 @@ In the widget:
 
 ### Test 4: Load Chats via Skybridge
 
-The widget should automatically call `loadChats` via `window.openai.callTool` when it loads.
+The widget should automatically call `loadMyChats` via `window.openai.callTool` when it loads.
 
 Check the debug panel in the widget to see:
 
 - "Widget initialized"
-- "Calling loadChats via skybridge"
-- "loadChats result" with chat data
+- "Calling loadMyChats via skybridge"
+- "loadMyChats result" with chat data
 
 ## Troubleshooting
 
@@ -170,13 +170,13 @@ Check the debug panel in the widget to see:
 ### Full Flow
 
 1. User asks ChatGPT to browse saved chats
-2. ChatGPT calls `browseSavedChats` tool via MCP
+2. ChatGPT calls `browseMySavedChats` tool via MCP
 3. MCP server returns widget metadata
 4. ChatGPT requests widget HTML via `resources/read`
 5. MCP server returns inlined HTML with embedded chat data
 6. ChatGPT renders widget in iframe
 7. Widget loads and displays chat list
-8. Widget calls `loadChats` via skybridge (if needed)
+8. Widget calls `loadMyChats` via skybridge (if needed)
 9. User interacts with widget (expand, copy, etc.)
 
 ### Debug Panel Logs
@@ -185,7 +185,7 @@ You should see in the widget's debug panel:
 
 - "Widget initialized"
 - "Loading initial chat data"
-- "Loaded chats from embedded data" (or "Calling loadChats via skybridge")
+- "Loaded chats from embedded data" (or "Calling loadMyChats via skybridge")
 - Interaction logs (clicks, expands, copies)
 
 ## Verification Checklist
@@ -194,7 +194,7 @@ You should see in the widget's debug panel:
 - [ ] Ngrok tunnel is active and forwarding
 - [ ] ChatGPT can connect to MCP server
 - [ ] Tools are listed correctly
-- [ ] `browseSavedChats` tool call works
+- [ ] `browseMySavedChats` tool call works
 - [ ] Widget HTML is returned correctly
 - [ ] Widget renders in ChatGPT
 - [ ] Chat list displays correctly
@@ -221,7 +221,3 @@ You should see in the widget's debug panel:
 - Check both server logs and widget debug panel
 - Widget should work even if skybridge is unavailable (isolation mode)
 - All widget interactions should be responsive and smooth
-
-
-
-

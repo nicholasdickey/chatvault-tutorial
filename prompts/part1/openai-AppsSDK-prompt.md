@@ -159,7 +159,7 @@ Add Jest and create end-to-end tests to verify the project-specific **browse** a
 
 Notes:
 
-- The exact action name and behavior (for example, `browseSavedChats`, `browseSavedItems`, or similar) is defined in the **project-specific Prompt4**.
+- The exact action name and behavior (for example, `browseMySavedChats`, `browseSavedItems`, or similar) is defined in the **project-specific Prompt4**.
 - When Prompt4 is implemented (adding real tools, resources, and widget behavior), you **must revisit and update these tests** so they:
   - Exercise the MCP action end-to-end via the **real MCP server** (no mocks), calling `/mcp` exactly as the Apps SDK would.
   - Validate that the skybridge widget can load and render the project’s browse view using the MCP resource and tools defined in Prompt4.

@@ -64,8 +64,8 @@ Ask ChatGPT: **"What MCP tools are available?"**
 You should see:
 
 - `saveChat`
-- `loadChats`
-- `searchChats`
+- `loadMyChats`
+- `searchMyChats`
 
 ## 🧪 Step 5: Test the Tools
 
@@ -80,13 +80,13 @@ Save a chat with:
   - response: "Python is a high-level programming language."
 ```
 
-### Test loadChats:
+### Test loadMyChats:
 
 ```
 Load chats for user "test-user-123", page 1, limit 10
 ```
 
-### Test searchChats:
+### Test searchMyChats:
 
 ```
 Search for chats about "programming language" for user "test-user-123"
@@ -98,8 +98,8 @@ Search for chats about "programming language" for user "test-user-123"
 - [ ] ngrok tunnel is active
 - [ ] ChatGPT shows all three tools available
 - [ ] saveChat works and returns a chat ID
-- [ ] loadChats returns the saved chat
-- [ ] searchChats finds the chat by semantic similarity
+- [ ] loadMyChats returns the saved chat
+- [ ] searchMyChats finds the chat by semantic similarity
 - [ ] Error messages are clear when testing invalid inputs
 
 ## 📝 Notes

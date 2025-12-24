@@ -50,7 +50,7 @@ Try these prompts:
 
 ## Expected Behavior
 
-1. ChatGPT calls `browseSavedChats` tool
+1. ChatGPT calls `browseMySavedChats` tool
 2. Widget appears inline showing 3 example chats
 3. Click a chat to view details
 4. Expand/collapse turns
@@ -66,7 +66,3 @@ Try these prompts:
 ## Stop Services
 
 Press `Ctrl+C` in both terminals to stop ngrok and the MCP server.
-
-
-
-

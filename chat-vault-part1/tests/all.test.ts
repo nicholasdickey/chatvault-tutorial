@@ -166,7 +166,7 @@ describe("chat-vault-part1 (all)", () => {
 
     test("should return tools/call in correct format", async () => {
         await client.initialize();
-        const response = await client.callTool("browseSavedChats", {});
+        const response = await client.callTool("browseMySavedChats", {});
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -273,7 +273,7 @@ describe("chat-vault-part1 (all)", () => {
         const newClient = new McpTestClient(`http://localhost:${TEST_PORT}`);
 
         // Try to call a tool without initializing
-        const response = await newClient.callTool("browseSavedChats", {});
+        const response = await newClient.callTool("browseMySavedChats", {});
 
         // Should return an error about missing session
         expect(response.error).toBeDefined();
@@ -310,7 +310,7 @@ describe("chat-vault-part1 (all)", () => {
         expect(typeof sessionId).toBe("string");
     });
 
-    test("should list tools and include browseSavedChats", async () => {
+    test("should list tools and include browseMySavedChats", async () => {
         const response = await client.listTools();
 
         expect(response.error).toBeUndefined();
@@ -321,12 +321,12 @@ describe("chat-vault-part1 (all)", () => {
         expect(Array.isArray(result.tools)).toBe(true);
         expect(result.tools!.length).toBeGreaterThan(0);
 
-        // Find the browseSavedChats tool
+        // Find the browseMySavedChats tool
         const chatVaultTool = result.tools!.find(
-            (tool: any) => tool.name === "browseSavedChats"
+            (tool: any) => tool.name === "browseMySavedChats"
         ) as any;
         expect(chatVaultTool).toBeDefined();
-        expect(chatVaultTool?.name).toBe("browseSavedChats");
+        expect(chatVaultTool?.name).toBe("browseMySavedChats");
         expect(chatVaultTool?.description).toBeDefined();
         expect(chatVaultTool?.inputSchema).toBeDefined();
 
@@ -336,8 +336,8 @@ describe("chat-vault-part1 (all)", () => {
         expect(chatVaultTool?._meta?.["openai/widgetAccessible"]).toBe(true);
     });
 
-    test("should call browseSavedChats tool and return widget metadata", async () => {
-        const response = await client.callTool("browseSavedChats", {});
+    test("should call browseMySavedChats tool and return widget metadata", async () => {
+        const response = await client.callTool("browseMySavedChats", {});
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -417,13 +417,13 @@ describe("chat-vault-part1 (all)", () => {
         expect(content._meta?.["openai/outputTemplate"]).toBe("ui://widget/chat-vault.html");
     });
 
-    test("should complete full browseSavedChats flow end-to-end", async () => {
+    test("should complete full browseMySavedChats flow end-to-end", async () => {
         // 1. List tools
         const toolsResponse = await client.listTools();
         expect(toolsResponse.error).toBeUndefined();
 
         // 2. Call the browse tool
-        const callResponse = await client.callTool("browseSavedChats", {});
+        const callResponse = await client.callTool("browseMySavedChats", {});
         expect(callResponse.error).toBeUndefined();
         const callResult = callResponse.result as any;
         expect(callResult?._meta).toBeDefined();

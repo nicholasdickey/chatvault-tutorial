@@ -1,5 +1,5 @@
 /**
- * searchChats tool implementation - Vector similarity search
+ * searchMyChats tool implementation - Vector similarity search
  */
 
 import { performVectorSearch } from "./vectorSearch.js";
@@ -35,11 +35,11 @@ export interface SearchChatsResult {
 /**
  * Perform vector similarity search on chat embeddings
  */
-export async function searchChats(params: SearchChatsParams): Promise<SearchChatsResult> {
+export async function searchMyChats(params: SearchChatsParams): Promise<SearchChatsResult> {
     const { userId, query, page = 0, size = 10 } = params;
 
     console.log(
-        "[searchChats] Searching chats - userId:",
+        "[searchMyChats] Searching chats - userId:",
         userId,
         "query:",
         query.substring(0, 50) + "...",
@@ -81,7 +81,7 @@ export async function searchChats(params: SearchChatsParams): Promise<SearchChat
         };
 
         console.log(
-            "[searchChats] Returning",
+            "[searchMyChats] Returning",
             searchResult.chats.length,
             "chats for query:",
             query.substring(0, 30) + "...",
@@ -94,7 +94,7 @@ export async function searchChats(params: SearchChatsParams): Promise<SearchChat
         return result;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("[searchChats] Error searching chats:", errorMessage);
+        console.error("[searchMyChats] Error searching chats:", errorMessage);
         throw error;
     }
 }

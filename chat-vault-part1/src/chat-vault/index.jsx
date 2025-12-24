@@ -117,7 +117,7 @@ function App() {
     };
   }, []);
 
-  // Load initial data from embedded script or call loadChats
+  // Load initial data from embedded script or call loadMyChats
   // Only run once on mount
   const hasLoadedInitial = useRef(false);
   useEffect(() => {
@@ -145,15 +145,15 @@ function App() {
           }
         }
         
-        // Fallback: call loadChats via skybridge
+        // Fallback: call loadMyChats via skybridge
         if (window.openai?.callTool) {
-          addLog("Calling loadChats via skybridge");
+          addLog("Calling loadMyChats via skybridge");
           try {
-            const result = await window.openai.callTool("loadChats", {
+            const result = await window.openai.callTool("loadMyChats", {
               page: 0,
               size: 10,
             });
-            addLog("loadChats result", result);
+            addLog("loadMyChats result", result);
             
             if (result?.structuredContent?.chats) {
               setChats(deduplicateChats(result.structuredContent.chats));
@@ -165,7 +165,7 @@ function App() {
             }
           } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err);
-            addLog("Error calling loadChats via skybridge", { error: errorMessage });
+            addLog("Error calling loadMyChats via skybridge", { error: errorMessage });
             setError(`Failed to load chats: ${errorMessage}`);
           }
         } else {
@@ -457,7 +457,7 @@ function App() {
       // Reload chats
       if (window.openai?.callTool) {
         try {
-          const loadResult = await window.openai.callTool("loadChats", {
+          const loadResult = await window.openai.callTool("loadMyChats", {
             page: 0,
             size: 10,
           });
@@ -512,11 +512,11 @@ function App() {
 
     try {
       if (!window.openai?.callTool) {
-        throw new Error("loadChats tool not available");
+        throw new Error("loadMyChats tool not available");
       }
 
-      // Use loadChats with query parameter (free, no credits)
-      const result = await window.openai.callTool("loadChats", {
+      // Use loadMyChats with query parameter (free, no credits)
+      const result = await window.openai.callTool("loadMyChats", {
         query: query.trim(),
         page,
         size: 10,
@@ -550,7 +550,7 @@ function App() {
 
     try {
       if (window.openai?.callTool) {
-        const result = await window.openai.callTool("loadChats", {
+        const result = await window.openai.callTool("loadMyChats", {
           page: 0,
           size: 10,
         });
@@ -579,8 +579,8 @@ function App() {
       if (!window.openai?.callTool) return;
 
       if (isSearching && searchQuery) {
-        // Load more search results using loadChats with query (free)
-        const result = await window.openai.callTool("loadChats", {
+        // Load more search results using loadMyChats with query (free)
+        const result = await window.openai.callTool("loadMyChats", {
           query: searchQuery.trim(),
           page: nextPage,
           size: 10,
@@ -593,7 +593,7 @@ function App() {
         }
       } else {
         // Load more regular chats
-        const result = await window.openai.callTool("loadChats", {
+        const result = await window.openai.callTool("loadMyChats", {
           page: nextPage,
           size: 10,
         });
@@ -1067,7 +1067,7 @@ function App() {
                             } else {
                               setPaginationLoading(true);
                               try {
-                                const res = await window.openai?.callTool("loadChats", {
+                                const res = await window.openai?.callTool("loadMyChats", {
                                   page: targetPage,
                                   size: 10,
                                 });
@@ -1123,7 +1123,7 @@ function App() {
                                   handleSearch(searchQuery, page);
                                 } else {
                                   setPaginationLoading(true);
-                                  window.openai?.callTool("loadChats", {
+                                  window.openai?.callTool("loadMyChats", {
                                     page,
                                     size: 10,
                                   }).then((res) => {
@@ -1169,7 +1169,7 @@ function App() {
                                 } else {
                                   setPaginationLoading(true);
                                   try {
-                                    const res = await window.openai?.callTool("loadChats", {
+                                    const res = await window.openai?.callTool("loadMyChats", {
                                       page,
                                       size: 10,
                                     });
@@ -1209,7 +1209,7 @@ function App() {
                             } else {
                               setPaginationLoading(true);
                               try {
-                                const res = await window.openai?.callTool("loadChats", {
+                                const res = await window.openai?.callTool("loadMyChats", {
                                   page: targetPage,
                                   size: 10,
                                 });

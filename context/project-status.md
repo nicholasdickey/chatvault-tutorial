@@ -127,12 +127,12 @@ According to `prompts/part1/chatVaultPrompts.md`:
 
 **Prompt4:** Implement ChatVault-specific functionality
 
-- Tool: `browseSavedChats` (currently `chat-vault` placeholder)
+- Tool: `browseMySavedChats` (currently `chat-vault` placeholder)
 - Actions needed:
   - `saveChat`: Save current conversation
-  - `loadChats`: Load saved conversations
+  - `loadMyChats`: Load saved conversations
   - `searchChat`: Search saved conversations
-  - `browseSavedChats`: Browse and display saved chats (widget UI)
+  - `browseMySavedChats`: Browse and display saved chats (widget UI)
 - Widget UI: Display list of saved chats with search/filter
 
 **Prompt5:** Isolated widget test on port 4444
