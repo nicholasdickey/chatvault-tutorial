@@ -49,10 +49,6 @@ Use the '+' button in the ChatVault widget to manually add conversations:
 
 Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
 
-## Subscription Management
-
-To see your current subscription or to upgrade, ask ChatGPT to "manage my subscription".
-
 ## Getting Started
 
 The easiest way to start is to simply ask ChatGPT: "Save this conversation to my ChatVault" or "Add this chat about [topic] to my vault". ChatGPT will handle the rest!
