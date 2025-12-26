@@ -197,6 +197,13 @@ function App() {
     loadInitialData();
   }, []);
 
+  // Debug alert state changes
+  useEffect(() => {
+    if (alertMessage) {
+      addLog("Alert message state changed", { alertMessage, alertPortalLink, deleteConfirmation });
+    }
+  }, [alertMessage, alertPortalLink, deleteConfirmation]);
+
   // Deduplicate chats based on title and content
   // Keeps the most recent chat (by timestamp) when duplicates are found
   const deduplicateChats = (chatList) => {
@@ -292,9 +299,12 @@ function App() {
         ? `${message} Click here to manage your account.`
         : message;
       
+      addLog("Counter clicked - setting alert", { message: fullMessage, portalLink: userInfo.portalLink });
       setAlertMessage(fullMessage);
       setAlertPortalLink(userInfo.portalLink || null);
-      addLog("Counter clicked", { message: fullMessage });
+      addLog("Counter clicked - alert state set", { message: fullMessage });
+    } else {
+      addLog("Counter clicked but user is not anonymous", { isAnon: userInfo?.isAnon });
     }
   };
 
@@ -886,8 +896,11 @@ function App() {
           )}
         </div>
         {/* Alert Area */}
-        {alertMessage && (
-          <div className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
+        {alertMessage && (() => {
+          console.log("[ChatVault] Rendering alert", { alertMessage, alertPortalLink, deleteConfirmation });
+          return (
+          <div 
+            className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
             isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
           } ${
             deleteConfirmation
@@ -913,7 +926,7 @@ function App() {
                 ? "text-gray-300"
                 : "text-gray-700"
             }`}>
-              {alertMessage}
+              <div className="whitespace-pre-wrap">{alertMessage}</div>
               {alertPortalLink && !deleteConfirmation && (
                 <button
                   onClick={handleAlertPortalClick}
@@ -971,7 +984,8 @@ function App() {
               </button>
             )}
           </div>
-        )}
+          );
+        })()}
         {/* Header */}
         <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
           isDarkMode ? "border-gray-700" : "border-black/5"
