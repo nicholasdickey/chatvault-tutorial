@@ -332,6 +332,22 @@ async function handleCallTool(request: CallToolRequest, userContext: UserContext
                 };
             }
             
+            // If parse error, return appropriate message
+            if (result.error === "parse_error") {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: result.message || "Could not parse chat content",
+                        },
+                    ],
+                    structuredContent: {
+                        error: result.error,
+                        message: result.message,
+                    },
+                };
+            }
+            
             return {
                 content: [
                     {

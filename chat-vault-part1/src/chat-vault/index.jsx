@@ -409,9 +409,9 @@ function App() {
     let html = markdown;
     
     // Convert headers
-    html = html.replace(/^### (.*$)/gim, '<h5 class="font-semibold mt-4 mb-2">$1</h5>');
-    html = html.replace(/^## (.*$)/gim, '<h4 class="font-semibold mt-4 mb-2">$1</h4>');
-    html = html.replace(/^# (.*$)/gim, '<h3 class="font-semibold mt-4 mb-2">$1</h3>');
+    html = html.replace(/^### (.*$)/gim, '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>');
+    html = html.replace(/^## (.*$)/gim, '<h4 class="text-lg font-semibold mt-6 mb-3">$1</h4>');
+    html = html.replace(/^# (.*$)/gim, '<h3 class="text-xl font-semibold mt-6 mb-4">$1</h3>');
     
     // Convert bold
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -681,6 +681,16 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           setAlertMessage(message);
           setAlertPortalLink(portalLink || null);
           return; // Don't throw, just show error in alert
+        }
+        
+        // Check for parse_error
+        if (result.structuredContent.error === "parse_error") {
+          const message = result.structuredContent.message || "Could not parse the chat content";
+          addLog("Parse error", { message });
+          
+          // Show error in modal (keep modal open so user can fix the content)
+          setManualSaveError(message);
+          return; // Don't throw, just show error in modal
         }
         
         if (result.structuredContent.error) {
@@ -1753,7 +1763,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-2">
+              <div className="flex-1 overflow-y-auto px-2">
                 <div className="space-y-4">
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${
@@ -1784,7 +1794,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                       value={manualSaveContent}
                       onChange={(e) => setManualSaveContent(e.target.value)}
                       placeholder="Paste the copied conversation here..."
-                      rows={2}
+                      rows={6}
                       className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
                         isDarkMode
                           ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"

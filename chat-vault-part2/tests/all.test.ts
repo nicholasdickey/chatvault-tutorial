@@ -1994,7 +1994,14 @@ You can download Python from python.org.`;
         });
 
         // Should error because no turns can be parsed
-        expect(response.error).toBeDefined();
+        // Check structuredContent error (not JSON-RPC error, as we return structured error response)
+        expect(response.error).toBeUndefined(); // No JSON-RPC error
+        expect(response.result).toBeDefined();
+        const result = response.result as {
+            structuredContent: { error?: string; message?: string };
+        };
+        expect(result.structuredContent.error).toBe("parse_error");
+        expect(result.structuredContent.message).toBeDefined();
     });
 
     // -------------------------------------------------------------------------
