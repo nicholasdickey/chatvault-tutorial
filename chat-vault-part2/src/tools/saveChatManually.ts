@@ -83,8 +83,8 @@ async function checkForExistingChat(
 /**
  * Parse HTML/text content to extract chat turns
  * Supports two formats:
- * 1. With markers: "You said: ... ChatGPT said: ..."
- * 2. Plain alternating: user message, ChatGPT response, user message, etc.
+ * 1. With markers: "You said: ... AI said: ..." (or "ChatGPT said:" for backward compatibility)
+ * 2. Plain alternating: user message, AI response, user message, etc.
  */
 function parseChatContent(content: string): Array<{ prompt: string; response: string }> {
     const turns: Array<{ prompt: string; response: string }> = [];
@@ -92,7 +92,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
     // Remove HTML tags if present (simple strip)
     let text = content.replace(/<[^>]*>/g, "").trim();
     
-    // Try format 1: "You said:" / "ChatGPT said:" markers
+    // Try format 1: "You said:" / "AI said:" or "ChatGPT said:" markers
     const youSaidRegex = /You said:\s*/gi;
     const hasMarkers = youSaidRegex.test(text);
     
@@ -105,20 +105,22 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
             const part = parts[i].trim();
             if (!part) continue;
             
-            // Find "ChatGPT said:" marker
+            // Find "AI said:" or "ChatGPT said:" marker (prefer "AI said:")
+            const aiSaidIndex = part.search(/AI said:\s*/i);
             const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
+            const saidIndex = aiSaidIndex !== -1 ? aiSaidIndex : chatGptSaidIndex;
             
-            if (chatGptSaidIndex === -1) {
-                // No ChatGPT response found, skip this turn
-                console.warn("[saveChatManually] No 'ChatGPT said:' found for turn", i);
+            if (saidIndex === -1) {
+                // No AI response found, skip this turn
+                console.warn("[saveChatManually] No 'AI said:' or 'ChatGPT said:' found for turn", i);
                 continue;
             }
             
-            const prompt = part.substring(0, chatGptSaidIndex).trim();
-            const responsePart = part.substring(chatGptSaidIndex);
+            const prompt = part.substring(0, saidIndex).trim();
+            const responsePart = part.substring(saidIndex);
             
-            // Extract response (remove "ChatGPT said:" prefix)
-            const responseMatch = responsePart.match(/ChatGPT said:\s*(.*)/is);
+            // Extract response (remove "AI said:" or "ChatGPT said:" prefix)
+            const responseMatch = responsePart.match(/(?:AI|ChatGPT) said:\s*(.*)/is);
             if (!responseMatch) {
                 console.warn("[saveChatManually] Could not extract response for turn", i);
                 continue;
@@ -241,8 +243,8 @@ export async function saveChatManually(
             throw new Error(
                 "Could not parse any chat turns from the content. " +
                 "Please ensure the content is in one of these formats:\n" +
-                "1. With markers: 'You said: ... ChatGPT said: ...'\n" +
-                "2. Plain alternating: user message, ChatGPT response, user message, etc."
+                "1. With markers: 'You said: ... AI said: ...'\n" +
+                "2. Plain alternating: user message, AI response, user message, etc."
             );
         }
 
