@@ -1855,32 +1855,32 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed bottom-0 left-0 right-0 max-h-96 border-t rounded-t-lg z-40 flex flex-col ${
+        <div className={`fixed bottom-4 left-0 right-0 max-h-96 border-t rounded-t-lg z-40 flex flex-col ${
           isDarkMode
             ? "bg-gray-800 border-gray-600 text-white"
             : "bg-gray-50 border-gray-300 text-black"
         }`}>
-          <div className={`flex items-center justify-between px-6 py-4 border-b flex-shrink-0 ${
+          <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${
             isDarkMode ? "border-gray-700" : "border-gray-200"
-          }`} style={{ minHeight: '3.5rem' }}>
+          }`} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${
               isDarkMode ? "text-white" : "text-black"
             }`}>
-              How to Use ChatVault
+              Help
             </h3>
             <button
               onClick={() => setShowHelp(false)}
-              className={`p-2 rounded flex-shrink-0 ml-4 ${
+              className={`p-1.5 rounded flex-shrink-0 ${
                 isDarkMode
                   ? "text-white hover:bg-gray-700"
                   : "text-black hover:bg-gray-200"
               }`}
               title="Close help"
             >
-              <MdClose className="w-6 h-6" />
+              <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 px-6 pb-8 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
+          <div className="overflow-y-auto flex-1 px-6 py-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
             {helpText ? (
               <div 
                 className={`text-sm ${
