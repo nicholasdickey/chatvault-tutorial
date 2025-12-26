@@ -46,6 +46,9 @@ function App() {
   const [manualSaveError, setManualSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [alertMessage, setAlertMessage] = useState(null);
+  const [alertPortalLink, setAlertPortalLink] = useState(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -286,53 +289,72 @@ function App() {
         : 10;
       const message = `The number of saved chats is limited in the free version to ${maxChats}.`;
       const fullMessage = userInfo.portalLink
-        ? `${message}\n\nClick here to manage your account.`
+        ? `${message} Click here to manage your account.`
         : message;
       
-      if (userInfo.portalLink) {
-        const openPortal = window.confirm(fullMessage);
-        if (openPortal) {
-          window.open(userInfo.portalLink, "_blank");
-        }
-      } else {
-        alert(fullMessage);
-      }
+      setAlertMessage(fullMessage);
+      setAlertPortalLink(userInfo.portalLink || null);
       addLog("Counter clicked", { message: fullMessage });
+    }
+  };
+
+  const handleCloseAlert = () => {
+    if (deleteConfirmation) {
+      handleCancelDelete();
+    } else {
+      setAlertMessage(null);
+      setAlertPortalLink(null);
+    }
+  };
+
+  const handleAlertPortalClick = () => {
+    if (alertPortalLink) {
+      window.open(alertPortalLink, "_blank");
+      handleCloseAlert();
     }
   };
 
   const handleDeleteChat = async (chat) => {
     addLog("Delete chat clicked", { chatId: chat.id, title: chat.title });
     
-    // Show confirmation dialog
-    const confirmed = window.confirm(`Are you sure you want to delete "${chat.title}"?`);
-    if (!confirmed) {
-      addLog("Delete cancelled by user");
-      return;
-    }
+    // Show confirmation in alert area
+    setDeleteConfirmation({
+      chatId: chat.id,
+      title: chat.title,
+      userId: chat.userId || (chats.length > 0 && chats[0].userId) || "",
+    });
+    setAlertMessage(`Are you sure you want to delete "${chat.title}"?`);
+    setAlertPortalLink(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmation) return;
+
+    const { chatId, userId } = deleteConfirmation;
+    setDeleteConfirmation(null);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
 
     try {
       if (!window.openai?.callTool) {
         throw new Error("deleteChat tool not available");
       }
 
-      // Get userId from chat object or first chat in list
-      const userId = chat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
-      addLog("Calling deleteChat tool", { chatId: chat.id, userId });
+      addLog("Calling deleteChat tool", { chatId, userId });
       const result = await window.openai.callTool("deleteChat", {
-        chatId: chat.id,
-        userId: userId,
+        chatId,
+        userId,
       });
 
       addLog("Delete chat result", result);
 
       if (result?.structuredContent?.deleted) {
         // Remove from local state immediately
-        setChats((prev) => prev.filter((c) => c.id !== chat.id));
+        setChats((prev) => prev.filter((c) => c.id !== chatId));
         addLog("Chat removed from local state");
 
         // Refresh the list to update counts
@@ -343,8 +365,16 @@ function App() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       addLog("Error deleting chat", { error: errorMessage });
-      alert(`Failed to delete chat: ${errorMessage}`);
+      setAlertMessage(`Failed to delete chat: ${errorMessage}`);
+      setAlertPortalLink(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmation(null);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+    addLog("Delete cancelled by user");
   };
 
   const toggleTurnExpansion = (index) => {
@@ -424,7 +454,8 @@ function App() {
       });
       
       // Show a user-friendly message
-      alert("Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.");
+      setAlertMessage("Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.");
+      setAlertPortalLink(null);
     }
   };
 
@@ -551,16 +582,12 @@ function App() {
           const portalLink = result.structuredContent.portalLink;
           addLog("Limit reached error", { message, portalLink });
           
-          // Show error message with portal link option
-          let errorMessage = message;
-          if (portalLink) {
-            const openPortal = window.confirm(`${message}\n\nWould you like to upgrade your account?`);
-            if (openPortal) {
-              window.open(portalLink, "_blank");
-            }
-          }
-          setManualSaveError(message);
-          return; // Don't throw, just show error in modal
+          // Show error in alert area (close modal first)
+          setShowManualSaveModal(false);
+          setManualSaveError(null);
+          setAlertMessage(message);
+          setAlertPortalLink(portalLink || null);
+          return; // Don't throw, just show error in alert
         }
         
         if (result.structuredContent.error) {
@@ -858,6 +885,93 @@ function App() {
             </button>
           )}
         </div>
+        {/* Alert Area */}
+        {alertMessage && (
+          <div className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
+            isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
+          } ${
+            deleteConfirmation
+              ? "border-red-500"
+              : userInfo?.isAnon && userInfo.remainingSlots !== undefined
+              ? userInfo.remainingSlots === 0
+                ? "border-red-500"
+                : userInfo.remainingSlots === 1
+                ? "border-yellow-500"
+                : "border-green-500"
+              : "border-gray-300"
+          }`}>
+            <div className={`flex-1 text-sm ${
+              deleteConfirmation
+                ? "text-red-500"
+                : userInfo?.isAnon && userInfo.remainingSlots !== undefined
+                ? userInfo.remainingSlots === 0
+                  ? "text-red-500"
+                  : userInfo.remainingSlots === 1
+                  ? "text-yellow-500"
+                  : "text-green-500"
+                : isDarkMode
+                ? "text-gray-300"
+                : "text-gray-700"
+            }`}>
+              {alertMessage}
+              {alertPortalLink && !deleteConfirmation && (
+                <button
+                  onClick={handleAlertPortalClick}
+                  className={`ml-2 underline font-medium ${
+                    userInfo?.isAnon && userInfo.remainingSlots !== undefined
+                      ? userInfo.remainingSlots === 0
+                        ? "text-red-600 hover:text-red-700"
+                        : userInfo.remainingSlots === 1
+                        ? "text-yellow-600 hover:text-yellow-700"
+                        : "text-green-600 hover:text-green-700"
+                      : isDarkMode
+                      ? "text-blue-400 hover:text-blue-300"
+                      : "text-blue-600 hover:text-blue-700"
+                  }`}
+                >
+                  Click here to manage your account.
+                </button>
+              )}
+              {deleteConfirmation && (
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={handleConfirmDelete}
+                    className={`px-3 py-1.5 rounded text-sm font-medium ${
+                      isDarkMode
+                        ? "bg-red-600 text-white hover:bg-red-700"
+                        : "bg-red-500 text-white hover:bg-red-600"
+                    }`}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={handleCancelDelete}
+                    className={`px-3 py-1.5 rounded text-sm font-medium ${
+                      isDarkMode
+                        ? "bg-gray-700 text-white hover:bg-gray-600"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+            {!deleteConfirmation && (
+              <button
+                onClick={handleCloseAlert}
+                className={`p-1 rounded ${
+                  isDarkMode
+                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                }`}
+                title="Close"
+              >
+                <MdClose className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
         {/* Header */}
         <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
           isDarkMode ? "border-gray-700" : "border-black/5"
@@ -890,28 +1004,26 @@ function App() {
               onClick={() => {
                 // Check if limit reached for anonymous users
                 if (userInfo?.isAnon && userInfo.remainingSlots === 0) {
+                  const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
+                    ? userInfo.totalChats + userInfo.remainingSlots 
+                    : 10;
                   const message = userInfo.portalLink
-                    ? `You've reached the limit of ${userInfo.totalChats + userInfo.remainingSlots} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.`
-                    : `You've reached the limit of ${userInfo.totalChats + userInfo.remainingSlots} free chats. Please delete a chat to add more.`;
-                  alert(message);
-                  if (userInfo.portalLink) {
-                    const openPortal = window.confirm("Would you like to upgrade your account?");
-                    if (openPortal) {
-                      window.open(userInfo.portalLink, "_blank");
-                    }
-                  }
+                    ? `You've reached the limit of ${maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.`
+                    : `You've reached the limit of ${maxChats} free chats. Please delete a chat to add more.`;
+                  setAlertMessage(message);
+                  setAlertPortalLink(userInfo.portalLink || null);
                   return;
                 }
                 setShowManualSaveModal(true);
               }}
               disabled={paginationLoading || searchLoading}
-              className={`p-2 rounded-lg ${
+              className={`p-2 rounded-lg transition-colors ${
                 paginationLoading || searchLoading
                   ? "opacity-50 cursor-not-allowed"
                   : ""
               } ${
                 userInfo?.isAnon && userInfo.remainingSlots === 0
-                  ? "bg-red-500 text-white hover:bg-red-600"
+                  ? "hover:bg-gray-100"
                   : isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
@@ -920,7 +1032,11 @@ function App() {
                 ? "Chat limit reached - delete a chat or upgrade" 
                 : "Save chat manually"}
             >
-              <MdAdd className="w-5 h-5" />
+              <MdAdd className={`w-5 h-5 ${
+                userInfo?.isAnon && userInfo.remainingSlots === 0 
+                  ? "text-red-500" 
+                  : ""
+              }`} />
             </button>
             {selectedChat && (
               <button
