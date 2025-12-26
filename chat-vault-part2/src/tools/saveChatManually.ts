@@ -81,18 +81,196 @@ async function checkForExistingChat(
 }
 
 /**
+ * Parse HTML structure to extract chat turns
+ * ChatGPT uses <article> tags with data-turn="user" and data-turn="assistant" attributes
+ */
+function parseHtmlStructure(html: string): Array<{ prompt: string; response: string }> {
+    const turns: Array<{ prompt: string; response: string }> = [];
+
+    // Remove script and style tags
+    let cleanHtml = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    cleanHtml = cleanHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+
+    // Extract all article tags with data-turn attributes
+    // Pattern: <article[^>]*data-turn=["']?(user|assistant)["']?[^>]*>([\s\S]*?)<\/article>
+    const articleRegex = /<article[^>]*data-turn\s*=\s*["']?(user|assistant)["']?[^>]*>([\s\S]*?)<\/article>/gi;
+
+    const messages: Array<{ type: 'user' | 'assistant'; text: string }> = [];
+
+    let match;
+    while ((match = articleRegex.exec(cleanHtml)) !== null) {
+        const type = (match[1]?.toLowerCase() || '') as 'user' | 'assistant';
+        if (type !== 'user' && type !== 'assistant') continue;
+
+        // Extract text content from the article, removing nested HTML tags
+        let text = match[2] || '';
+        // Remove all HTML tags but preserve structure
+        text = text
+            .replace(/<[^>]+>/g, ' ') // Replace tags with spaces
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim();
+
+        if (text && text.length > 0) {
+            messages.push({ type, text });
+        }
+    }
+
+    // Pair up user and assistant messages in order
+    // Messages should alternate: user, assistant, user, assistant...
+    let currentPrompt = '';
+    for (const message of messages) {
+        if (message.type === 'user') {
+            // If we already have a prompt waiting, save it with empty response
+            if (currentPrompt) {
+                turns.push({ prompt: currentPrompt, response: '' });
+            }
+            currentPrompt = message.text;
+        } else if (message.type === 'assistant') {
+            // If we have a prompt waiting, pair it with this assistant response
+            if (currentPrompt) {
+                turns.push({ prompt: currentPrompt, response: message.text });
+                currentPrompt = ''; // Reset
+            } else {
+                // Assistant message without preceding user - might be continuation
+                // Add it as a turn with empty prompt
+                turns.push({ prompt: '', response: message.text });
+            }
+        }
+    }
+
+    // If there's a leftover user message without response, add it
+    if (currentPrompt) {
+        turns.push({ prompt: currentPrompt, response: '' });
+    }
+
+    // If we found turns from article tags, return them
+    if (turns.length > 0) {
+        // Filter out turns with empty prompts or responses (unless it's the last one)
+        return turns.filter(turn => turn.prompt || turn.response);
+    }
+
+    // Fallback: Look for role attributes (older format)
+    const roleUserRegex = /<[^>]*role\s*=\s*["']?user["']?[^>]*>([\s\S]*?)<\/[^>]+>/gi;
+    const roleAssistantRegex = /<[^>]*role\s*=\s*["']?assistant["']?[^>]*>([\s\S]*?)<\/[^>]+>/gi;
+
+    const userMessages: string[] = [];
+    const assistantMessages: string[] = [];
+
+    while ((match = roleUserRegex.exec(cleanHtml)) !== null) {
+        const text = match[1].replace(/<[^>]*>/g, '').trim();
+        if (text) userMessages.push(text);
+    }
+
+    while ((match = roleAssistantRegex.exec(cleanHtml)) !== null) {
+        const text = match[1].replace(/<[^>]*>/g, '').trim();
+        if (text) assistantMessages.push(text);
+    }
+
+    // If we found role-based messages, pair them up
+    if (userMessages.length > 0 || assistantMessages.length > 0) {
+        const maxPairs = Math.max(userMessages.length, assistantMessages.length);
+        for (let i = 0; i < maxPairs; i++) {
+            const prompt = userMessages[i] || '';
+            const response = assistantMessages[i] || '';
+            if (prompt || response) {
+                turns.push({ prompt, response });
+            }
+        }
+        if (turns.length > 0) {
+            return turns;
+        }
+    }
+
+    return turns;
+}
+
+/**
  * Parse HTML/text content to extract chat turns
  * Expected format: "You said:" followed by prompt, "ChatGPT said:" followed by response
+ * Also handles HTML structure from ChatGPT copy/paste
  */
 function parseChatContent(content: string): Array<{ prompt: string; response: string }> {
     const turns: Array<{ prompt: string; response: string }> = [];
 
-    // Remove HTML tags if present (simple strip)
-    let text = content.replace(/<[^>]*>/g, "").trim();
+    // Check if content contains HTML
+    const hasHtml = /<[^>]+>/.test(content);
+
+    let text: string;
+    if (hasHtml) {
+        // Try to parse HTML structure first (ChatGPT's HTML copy has specific patterns)
+        // Look for common ChatGPT HTML patterns like role attributes or specific classes
+        const htmlTurns = parseHtmlStructure(content);
+        if (htmlTurns.length > 0) {
+            console.log("[saveChatManually] Successfully parsed HTML structure, found", htmlTurns.length, "turns");
+            return htmlTurns;
+        }
+
+        // Fallback: For HTML content, preserve structure by converting block elements to newlines
+        // This helps maintain the structure of ChatGPT's HTML copy
+        text = content
+            // Replace block-level HTML elements with newlines
+            .replace(/<\/?(div|p|br|h[1-6]|li|ul|ol|blockquote)[^>]*>/gi, '\n')
+            // Remove remaining HTML tags
+            .replace(/<[^>]*>/g, '')
+            // Normalize whitespace but preserve newlines
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n\s*\n\s*\n/g, '\n\n')
+            .trim();
+    } else {
+        // Plain text - use as-is
+        text = content.trim();
+    }
 
     // Split by "You said:" markers
     const youSaidRegex = /You said:\s*/gi;
     const parts = text.split(youSaidRegex);
+
+    // If no "You said:" markers found, try alternative parsing
+    if (parts.length === 1) {
+        // No markers found - try to parse as single message or look for other patterns
+        // Check if it looks like a single AI response (common when copying just the AI's response)
+        const chatGptSaidMatch = text.match(/ChatGPT said:\s*(.*)/is);
+        const aiSaidMatch = text.match(/AI said:\s*(.*)/is);
+
+        if (chatGptSaidMatch || aiSaidMatch) {
+            // Found "ChatGPT said:" or "AI said:" but no "You said:" - treat as single turn with empty prompt
+            const response = (chatGptSaidMatch?.[1] || aiSaidMatch?.[1] || '').trim();
+            if (response) {
+                turns.push({ prompt: '', response });
+                return turns;
+            }
+        }
+
+        // If content is very short and looks like a single message, treat as user prompt with empty response
+        if (text.length < 200 && text.split('\n').length < 5) {
+            // Very short content - might be a single user message
+            // But we need at least some indication it's a conversation
+            // Skip this case - return empty turns
+            console.warn("[saveChatManually] Content appears to be a single message without conversation markers");
+            return turns;
+        }
+
+        // Try to find alternating pattern (user message, then AI response)
+        // Look for patterns like paragraphs separated by blank lines
+        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+        if (paragraphs.length >= 2) {
+            // Assume first paragraph is user, second is AI, and so on
+            for (let i = 0; i < paragraphs.length - 1; i += 2) {
+                const prompt = paragraphs[i].trim();
+                const response = paragraphs[i + 1].trim();
+                if (prompt && response) {
+                    turns.push({ prompt, response });
+                }
+            }
+            if (turns.length > 0) {
+                return turns;
+            }
+        }
+
+        // No recognizable pattern found
+        console.warn("[saveChatManually] No recognizable conversation format found");
+        return turns;
+    }
 
     // Skip the first part (everything before first "You said:")
     for (let i = 1; i < parts.length; i++) {
