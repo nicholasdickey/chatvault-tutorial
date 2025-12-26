@@ -686,11 +686,26 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         // Check for parse_error
         if (result.structuredContent.error === "parse_error") {
           const message = result.structuredContent.message || "Could not parse the chat content";
-          addLog("Parse error", { message });
+          addLog("Parse error", { message, result });
           
           // Show error in modal (keep modal open so user can fix the content)
           setManualSaveError(message);
+          setIsSaving(false);
           return; // Don't throw, just show error in modal
+        }
+        
+        // Check for server_error
+        if (result.structuredContent.error === "server_error") {
+          const message = result.structuredContent.message || "An error occurred while saving the chat";
+          addLog("Server error", { message, result });
+          
+          // Show error in alert area (close modal first)
+          setShowManualSaveModal(false);
+          setManualSaveError(null);
+          setAlertMessage(message);
+          setAlertPortalLink(null);
+          setIsSaving(false);
+          return; // Don't throw, just show error in alert
         }
         
         if (result.structuredContent.error) {
@@ -1794,7 +1809,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                       value={manualSaveContent}
                       onChange={(e) => setManualSaveContent(e.target.value)}
                       placeholder="Paste the copied conversation here..."
-                      rows={6}
+                      rows={2}
                       className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
                         isDarkMode
                           ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
