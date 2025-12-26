@@ -6,6 +6,8 @@ import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq, desc, count } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
+import type { UserContext } from "../server.js";
+import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
@@ -42,6 +44,7 @@ export interface LoadChatsParams {
   page?: number; // 0-indexed, default 0
   size?: number; // default 10
   query?: string; // Optional search query - when provided, uses vector similarity search (same as searchMyChats)
+  userContext?: UserContext; // User context from Findexar headers
 }
 
 export interface LoadChatsResult {
@@ -59,13 +62,41 @@ export interface LoadChatsResult {
     totalPages: number;
     hasMore: boolean;
   };
+  userInfo: {
+    portalLink: string | null;
+    isAnon: boolean;
+    totalChats: number;
+    remainingSlots?: number;
+  };
+}
+
+/**
+ * Filter out expired chats for anonymous users (older than ANON_CHAT_EXPIRY_DAYS)
+ */
+function filterExpiredChats<T extends { timestamp: Date }>(
+  chatList: T[],
+  isAnon: boolean
+): T[] {
+  if (!isAnon) {
+    return chatList; // Normal users see all chats
+  }
+
+  const now = new Date();
+  const expiryDate = new Date(now.getTime() - ANON_CHAT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+  return chatList.filter((chat) => {
+    const chatDate = new Date(chat.timestamp);
+    return chatDate >= expiryDate;
+  });
 }
 
 /**
  * Load paginated chats for a user
  */
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
-  const { userId, page = 0, size = 10, query } = params;
+  const { userId, page = 0, size = 10, query, userContext } = params;
+  const isAnon = userContext?.isAnon ?? false;
+  const portalLink = userContext?.portalLink ?? null;
 
   console.log(
     "[loadMyChats] Loading chats - userId:",
@@ -102,14 +133,39 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         size: sizeNum,
       });
 
+      // Get total chat count for user (before filtering) for userInfo
+      const allChatsForUser = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.userId, userId));
+      const totalChats = allChatsForUser.length;
+
+      // Filter expired chats for anonymous users
+      const filteredChats = filterExpiredChats(searchResult.chats, isAnon);
+      const filteredTotal = isAnon 
+        ? filterExpiredChats(allChatsForUser, isAnon).length 
+        : searchResult.total;
+
+      // Recalculate pagination after filtering
+      const filteredTotalPages = Math.ceil(filteredTotal / sizeNum);
+      const filteredHasMore = pageNum + 1 < filteredTotalPages;
+      const filteredOffset = pageNum * sizeNum;
+      const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
+
       const result: LoadChatsResult = {
-        chats: searchResult.chats,
+        chats: paginatedFilteredChats,
         pagination: {
           page: searchResult.page,
           limit: searchResult.size,
-          total: searchResult.total,
-          totalPages: searchResult.totalPages,
-          hasMore: searchResult.hasMore,
+          total: filteredTotal,
+          totalPages: filteredTotalPages,
+          hasMore: filteredHasMore,
+        },
+        userInfo: {
+          portalLink,
+          isAnon,
+          totalChats,
+          ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
       };
 
@@ -126,14 +182,25 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       .orderBy(desc(chats.timestamp));
 
     console.log("[loadMyChats] Retrieved", allChatResults.length, "chats before deduplication");
+    const totalChats = allChatResults.length;
 
     // Deduplicate chats (keep most recent for each unique title+turns combination)
     const deduplicatedChats = deduplicateChats(allChatResults);
     console.log("[loadMyChats] After deduplication:", deduplicatedChats.length, "unique chats");
 
-    // Apply pagination to deduplicated results
-    const total = deduplicatedChats.length;
-    const paginatedChats = deduplicatedChats.slice(offset, offset + sizeNum);
+    // Filter expired chats for anonymous users
+    const nonExpiredChats = filterExpiredChats(deduplicatedChats, isAnon);
+    const totalBeforeFilter = deduplicatedChats.length;
+    const total = isAnon ? nonExpiredChats.length : totalBeforeFilter;
+    console.log(
+      "[loadMyChats] After expiration filter:",
+      total,
+      "chats",
+      isAnon ? `(filtered from ${totalBeforeFilter})` : ""
+    );
+
+    // Apply pagination to filtered results
+    const paginatedChats = nonExpiredChats.slice(offset, offset + sizeNum);
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / sizeNum);
@@ -156,6 +223,12 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         total,
         totalPages,
         hasMore,
+      },
+      userInfo: {
+        portalLink,
+        isAnon,
+        totalChats,
+        ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
       },
     };
 

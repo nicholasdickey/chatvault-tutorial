@@ -22,8 +22,20 @@ import { saveChatManually } from "./tools/saveChatManually.js";
 import { loadMyChats } from "./tools/loadMyChats.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
+import { deleteChat } from "./tools/deleteChat.js";
 
 dotenv.config();
+
+// User context from Findexar headers
+export type UserContext = {
+    isAnon: boolean;
+    portalLink: string | null;
+    shortAnonId: string | null;
+};
+
+// Anonymous user configuration
+export const ANON_MAX_CHATS = parseInt(process.env.ANON_MAX_CHATS || "3", 10);
+export const ANON_CHAT_EXPIRY_DAYS = parseInt(process.env.ANON_CHAT_EXPIRY_DAYS || "7", 10);
 
 // Session management
 type SessionRecord = {
@@ -178,6 +190,24 @@ const chatVaultTools: Tool[] = [
             required: ["userId"],
         },
     },
+    {
+        name: "deleteChat",
+        description: "Delete a chat by ID",
+        inputSchema: {
+            type: "object",
+            properties: {
+                chatId: {
+                    type: "string",
+                    description: "Chat ID to delete (required)",
+                },
+                userId: {
+                    type: "string",
+                    description: "User ID (required)",
+                },
+            },
+            required: ["chatId", "userId"],
+        },
+    },
 ];
 
 // Handler for tools/list
@@ -190,7 +220,21 @@ async function handleListTools(request: ListToolsRequest) {
 }
 
 // Handler for tools/call
-async function handleCallTool(request: CallToolRequest) {
+function extractUserContext(req: IncomingMessage): UserContext {
+    const isAnonHeader = req.headers["x-findexar-is-anon-user"];
+    const portalLinkHeader = req.headers["x-findexar-portal-link"];
+    const shortAnonIdHeader = req.headers["x-findexar-short-anon-id"];
+
+    const isAnon = isAnonHeader === "true" || isAnonHeader === "1";
+    const portalLink = Array.isArray(portalLinkHeader) ? portalLinkHeader[0] : portalLinkHeader || null;
+    const shortAnonId = Array.isArray(shortAnonIdHeader) ? shortAnonIdHeader[0] : shortAnonIdHeader || null;
+
+    console.log("[MCP] User context extracted:", { isAnon, hasPortalLink: !!portalLink, hasShortAnonId: !!shortAnonId });
+
+    return { isAnon, portalLink, shortAnonId };
+}
+
+async function handleCallTool(request: CallToolRequest, userContext: UserContext) {
     const requestId = (request as unknown as { id?: string | number }).id;
     const toolName = request.params.name;
     const args = request.params.arguments ?? {};
@@ -218,9 +262,12 @@ async function handleCallTool(request: CallToolRequest) {
                 structuredContent: result,
             };
         } else if (toolName === "loadMyChats") {
-            const result = await loadMyChats(args as { userId: string; page?: number; size?: number; query?: string });
+            const result = await loadMyChats({
+                ...(args as { userId: string; page?: number; size?: number; query?: string }),
+                userContext,
+            });
             console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats");
-            // Return in Part 1 compatible format: structuredContent with chats and pagination
+            // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
             return {
                 content: [
                     {
@@ -231,10 +278,12 @@ async function handleCallTool(request: CallToolRequest) {
                 structuredContent: {
                     chats: result.chats,
                     pagination: result.pagination,
+                    userInfo: result.userInfo,
                 },
                 _meta: {
                     chats: result.chats,
                     pagination: result.pagination,
+                    userInfo: result.userInfo,
                 },
             };
         } else if (toolName === "searchMyChats") {
@@ -260,8 +309,29 @@ async function handleCallTool(request: CallToolRequest) {
                 },
             };
         } else if (toolName === "saveChatManually") {
-            const result = await saveChatManually(args as { userId: string; htmlContent: string; title?: string });
+            const result = await saveChatManually({
+                ...(args as { userId: string; htmlContent: string; title?: string }),
+                userContext,
+            });
             console.log("[MCP Handler] handleCallTool - saveChatManually result:", JSON.stringify(result));
+            
+            // If limit reached, return appropriate message
+            if (result.error === "limit_reached") {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: result.message || "Chat limit reached",
+                        },
+                    ],
+                    structuredContent: {
+                        error: result.error,
+                        message: result.message,
+                        portalLink: result.portalLink,
+                    },
+                };
+            }
+            
             return {
                 content: [
                     {
@@ -279,6 +349,18 @@ async function handleCallTool(request: CallToolRequest) {
                     {
                         type: "text",
                         text: result.helpText,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "deleteChat") {
+            const result = await deleteChat(args as { chatId: string; userId: string });
+            console.log("[MCP Handler] handleCallTool - deleteChat result:", JSON.stringify(result));
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: result.message,
                     },
                 ],
                 structuredContent: result,
@@ -392,7 +474,7 @@ export async function handleMcpRequest(
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "content-type, mcp-session-id, authorization"
+        "content-type, mcp-session-id, authorization, x-findexar-is-anon-user, x-findexar-portal-link, x-findexar-short-anon-id"
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -547,13 +629,14 @@ export async function handleMcpRequest(
                     method: "tools/call",
                     params: params || {},
                 } as CallToolRequest;
+                const userContext = extractUserContext(req);
                 console.log(
                     "[MCP] tools/call - id:",
                     id,
                     "params:",
                     JSON.stringify(params)
                 );
-                result = await handleCallTool(request);
+                result = await handleCallTool(request, userContext);
                 console.log("[MCP] tools/call response:", JSON.stringify(result));
             } else {
                 console.error("[MCP] Method not found:", method);
@@ -612,7 +695,7 @@ const server = createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
             "Access-Control-Allow-Headers",
-            "content-type, mcp-session-id, authorization"
+            "content-type, mcp-session-id, authorization, x-findexar-is-anon-user, x-findexar-portal-link, x-findexar-short-anon-id"
         );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.writeHead(204);

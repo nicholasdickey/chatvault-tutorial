@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdAccountCircle, MdDelete } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -45,6 +45,7 @@ function App() {
   const [manualSaveContent, setManualSaveContent] = useState("");
   const [manualSaveError, setManualSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -160,6 +161,11 @@ function App() {
               setPagination(result.structuredContent.pagination);
               setCurrentPage(0);
               setPageInputValue("1");
+              // Extract userInfo if present
+              if (result.structuredContent.userInfo) {
+                setUserInfo(result.structuredContent.userInfo);
+                addLog("User info extracted", result.structuredContent.userInfo);
+              }
             } else if (result?.content?.[0]?.text) {
               addLog("Unexpected result format", result);
             }
@@ -233,6 +239,98 @@ function App() {
     addLog("Back clicked");
     setSelectedChat(null);
     setExpandedTurns(new Set());
+  };
+
+  const handleRefresh = async () => {
+    addLog("Refresh clicked");
+    setLoading(true);
+    setError(null);
+    try {
+      if (window.openai?.callTool) {
+        const result = await window.openai.callTool("loadMyChats", {
+          page: 0,
+          size: 10,
+        });
+        if (result?.structuredContent?.chats) {
+          setChats(deduplicateChats(result.structuredContent.chats));
+          setPagination(result.structuredContent.pagination);
+          setCurrentPage(0);
+          setPageInputValue("1");
+          if (result.structuredContent.userInfo) {
+            setUserInfo(result.structuredContent.userInfo);
+          }
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error refreshing chats", { error: errorMessage });
+      setError(`Failed to refresh: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMyAccountClick = () => {
+    if (userInfo?.portalLink) {
+      addLog("My Account clicked", { portalLink: userInfo.portalLink });
+      window.open(userInfo.portalLink, "_blank");
+    } else {
+      addLog("My Account clicked but no portal link available");
+    }
+  };
+
+  const handleCounterClick = () => {
+    if (userInfo?.isAnon) {
+      const message = `The free version is limited to ${userInfo.totalChats || 10} chats. Upgrade your account to save unlimited chats.`;
+      alert(message);
+      addLog("Counter clicked", { message });
+    }
+  };
+
+  const handleDeleteChat = async (chat) => {
+    addLog("Delete chat clicked", { chatId: chat.id, title: chat.title });
+    
+    // Show confirmation dialog
+    const confirmed = window.confirm(`Are you sure you want to delete "${chat.title}"?`);
+    if (!confirmed) {
+      addLog("Delete cancelled by user");
+      return;
+    }
+
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("deleteChat tool not available");
+      }
+
+      // Get userId from chat object or first chat in list
+      const userId = chat.userId || (chats.length > 0 && chats[0].userId) || "";
+      if (!userId) {
+        throw new Error("User ID not available. Please refresh and try again.");
+      }
+
+      addLog("Calling deleteChat tool", { chatId: chat.id, userId });
+      const result = await window.openai.callTool("deleteChat", {
+        chatId: chat.id,
+        userId: userId,
+      });
+
+      addLog("Delete chat result", result);
+
+      if (result?.structuredContent?.deleted) {
+        // Remove from local state immediately
+        setChats((prev) => prev.filter((c) => c.id !== chat.id));
+        addLog("Chat removed from local state");
+
+        // Refresh the list to update counts
+        await handleRefresh();
+      } else {
+        throw new Error(result?.structuredContent?.message || "Delete failed");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error deleting chat", { error: errorMessage });
+      alert(`Failed to delete chat: ${errorMessage}`);
+    }
   };
 
   const toggleTurnExpansion = (index) => {
@@ -433,6 +531,24 @@ function App() {
 
       // Check structuredContent for error indicators
       if (result?.structuredContent) {
+        // Check for limit_reached error specifically
+        if (result.structuredContent.error === "limit_reached") {
+          const message = result.structuredContent.message || "Chat limit reached";
+          const portalLink = result.structuredContent.portalLink;
+          addLog("Limit reached error", { message, portalLink });
+          
+          // Show error message with portal link option
+          let errorMessage = message;
+          if (portalLink) {
+            const openPortal = window.confirm(`${message}\n\nWould you like to upgrade your account?`);
+            if (openPortal) {
+              window.open(portalLink, "_blank");
+            }
+          }
+          setManualSaveError(message);
+          return; // Don't throw, just show error in modal
+        }
+        
         if (result.structuredContent.error) {
           const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
           addLog("Error found in structuredContent", result.structuredContent.error);
@@ -454,7 +570,7 @@ function App() {
       setManualSaveContent("");
       setManualSaveError(null);
 
-      // Reload chats
+      // Reload chats and update userInfo
       if (window.openai?.callTool) {
         try {
           const loadResult = await window.openai.callTool("loadMyChats", {
@@ -466,6 +582,11 @@ function App() {
             setPagination(loadResult.structuredContent.pagination);
             setCurrentPage(0);
             setPageInputValue("1");
+            // Update userInfo to refresh counter
+            if (loadResult.structuredContent.userInfo) {
+              setUserInfo(loadResult.structuredContent.userInfo);
+              addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
+            }
           }
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
@@ -674,6 +795,53 @@ function App() {
         : "bg-white border-black/10 text-black"
     }`}>
       <div className="max-w-full">
+        {/* Toolbar */}
+        <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${
+          isDarkMode ? "border-gray-700" : "border-black/5"
+        }`}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? "hover:bg-gray-800 text-gray-300" 
+                  : "hover:bg-gray-100 text-gray-600"
+              }`}
+              title="Refresh chats"
+            >
+              <MdRefresh className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleMyAccountClick}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                isDarkMode 
+                  ? "hover:bg-gray-800 text-gray-300" 
+                  : "hover:bg-gray-100 text-gray-700"
+              }`}
+              title="My Account"
+            >
+              <MdAccountCircle className="w-5 h-5" />
+              <span>My Account</span>
+            </button>
+          </div>
+          {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
+            <button
+              onClick={handleCounterClick}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                userInfo.remainingSlots === 0
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : userInfo.remainingSlots === 1
+                  ? "bg-yellow-500 text-white hover:bg-yellow-600"
+                  : "bg-green-500 text-white hover:bg-green-600"
+              }`}
+              title="Click to learn about chat limits"
+            >
+              {userInfo.remainingSlots}/{userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
+                ? userInfo.totalChats + userInfo.remainingSlots 
+                : 10} chats
+            </button>
+          )}
+        </div>
         {/* Header */}
         <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
           isDarkMode ? "border-gray-700" : "border-black/5"
@@ -703,18 +871,38 @@ function App() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowManualSaveModal(true)}
+              onClick={() => {
+                // Check if limit reached for anonymous users
+                if (userInfo?.isAnon && userInfo.remainingSlots === 0) {
+                  const message = userInfo.portalLink
+                    ? `You've reached the limit of ${userInfo.totalChats + userInfo.remainingSlots} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.`
+                    : `You've reached the limit of ${userInfo.totalChats + userInfo.remainingSlots} free chats. Please delete a chat to add more.`;
+                  alert(message);
+                  if (userInfo.portalLink) {
+                    const openPortal = window.confirm("Would you like to upgrade your account?");
+                    if (openPortal) {
+                      window.open(userInfo.portalLink, "_blank");
+                    }
+                  }
+                  return;
+                }
+                setShowManualSaveModal(true);
+              }}
               disabled={paginationLoading || searchLoading}
               className={`p-2 rounded-lg ${
                 paginationLoading || searchLoading
                   ? "opacity-50 cursor-not-allowed"
                   : ""
               } ${
-                isDarkMode
+                userInfo?.isAnon && userInfo.remainingSlots === 0
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
               }`}
-              title="Save chat manually"
+              title={userInfo?.isAnon && userInfo.remainingSlots === 0 
+                ? "Chat limit reached - delete a chat or upgrade" 
+                : "Save chat manually"}
             >
               <MdAdd className="w-5 h-5" />
             </button>
@@ -1027,20 +1215,39 @@ function App() {
                 <>
                   <div className="relative">
                     {chats.map((chat) => (
-                      <button
+                      <div
                         key={chat.timestamp || chat.id}
-                        onClick={() => handleChatClick(chat)}
-                        className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                        className={`w-full flex items-center gap-2 p-4 rounded-lg border transition-colors ${
                           isDarkMode
-                            ? "bg-gray-800 border-gray-700 hover:bg-gray-700"
-                            : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-200"
                         }`}
                       >
-                        <div className="font-medium mb-1">{chat.title}</div>
-                        <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                          {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
-                        </div>
-                      </button>
+                        <button
+                          onClick={() => handleChatClick(chat)}
+                          className="flex-1 text-left"
+                        >
+                          <div className="font-medium mb-1">{chat.title}</div>
+                          <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                            {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
+                          </div>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteChat(chat);
+                          }}
+                          className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                            isDarkMode
+                              ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                              : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
+                          }`}
+                          title="Delete chat"
+                        >
+                          <MdDelete className="w-5 h-5" />
+                        </button>
+                      </div>
                     ))}
                     {/* Loading overlay for pagination/search */}
                     {(paginationLoading || (searchLoading && chats.length > 0)) && (
