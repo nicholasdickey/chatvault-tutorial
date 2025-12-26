@@ -683,6 +683,16 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           return; // Don't throw, just show error in alert
         }
         
+        // Check for parse_error
+        if (result.structuredContent.error === "parse_error") {
+          const message = result.structuredContent.message || "Could not parse the chat content";
+          addLog("Parse error", { message });
+          
+          // Show error in modal (keep modal open so user can fix the content)
+          setManualSaveError(message);
+          return; // Don't throw, just show error in modal
+        }
+        
         if (result.structuredContent.error) {
           const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
           addLog("Error found in structuredContent", result.structuredContent.error);
