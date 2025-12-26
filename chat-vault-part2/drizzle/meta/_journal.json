@@ -8,6 +8,13 @@
       "when": 1764960410861,
       "tag": "0000_faulty_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766757979473,
+      "tag": "0001_cute_harpoon",
+      "breakpoints": true
     }
   ]
 }

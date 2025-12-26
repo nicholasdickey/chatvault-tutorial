@@ -8,17 +8,41 @@ import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { generateEmbedding, combineChatText } from "../utils/embeddings.js";
+import type { UserContext } from "../server.js";
+import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 
 export interface SaveChatManuallyParams {
     userId: string;
     htmlContent: string;
     title?: string;
+    userContext?: UserContext; // User context from Findexar headers
 }
 
 export interface SaveChatManuallyResult {
     chatId: string;
     saved: boolean;
     turnsCount: number;
+    error?: "limit_reached";
+    message?: string;
+    portalLink?: string | null;
+}
+
+/**
+ * Count non-expired chats for anonymous users
+ */
+async function countNonExpiredChats(userId: string): Promise<number> {
+    const allChats = await db
+        .select({ timestamp: chats.timestamp })
+        .from(chats)
+        .where(eq(chats.userId, userId));
+
+    const now = new Date();
+    const expiryDate = new Date(now.getTime() - ANON_CHAT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+    return allChats.filter((chat) => {
+        const chatDate = new Date(chat.timestamp);
+        return chatDate >= expiryDate;
+    }).length;
 }
 
 /**
@@ -175,9 +199,11 @@ function generateDefaultTitle(): string {
 export async function saveChatManually(
     params: SaveChatManuallyParams
 ): Promise<SaveChatManuallyResult> {
-    const { userId, htmlContent, title } = params;
+    const { userId, htmlContent, title, userContext } = params;
+    const isAnon = userContext?.isAnon ?? false;
+    const portalLink = userContext?.portalLink ?? null;
 
-    console.log("[saveChatManually] Saving manual chat - userId:", userId, "hasTitle:", !!title);
+    console.log("[saveChatManually] Saving manual chat - userId:", userId, "hasTitle:", !!title, "isAnon:", isAnon);
 
     try {
         // Validate required parameters
@@ -186,6 +212,25 @@ export async function saveChatManually(
         }
         if (!htmlContent || !htmlContent.trim()) {
             throw new Error("htmlContent is required");
+        }
+
+        // Check chat limit for anonymous users only (normal users are not affected)
+        if (isAnon) {
+            const nonExpiredCount = await countNonExpiredChats(userId);
+            console.log("[saveChatManually] Anonymous user - non-expired chats:", nonExpiredCount, "limit:", ANON_MAX_CHATS);
+            
+            if (nonExpiredCount >= ANON_MAX_CHATS) {
+                const message = `You've reached the limit of ${ANON_MAX_CHATS} free chats. Please delete a chat in the widget to save more, or upgrade your account to save unlimited chats.`;
+                console.log("[saveChatManually] Limit reached for anonymous user");
+                return {
+                    chatId: "",
+                    saved: false,
+                    turnsCount: 0,
+                    error: "limit_reached",
+                    message,
+                    portalLink,
+                };
+            }
         }
 
         // Parse the content to extract turns

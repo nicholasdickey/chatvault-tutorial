@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index } from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
 // Define vector type for pgvector
@@ -29,7 +29,13 @@ export const chats = pgTable("chats", {
     timestamp: timestamp("timestamp").notNull().defaultNow(),
     turns: jsonb("turns").notNull().$type<Array<{ prompt: string; response: string }>>(),
     embedding: vector("embedding"),
-});
+}, (table) => ({
+    // Index on userId for efficient filtering by user
+    userIdIdx: index("chats_user_id_idx").on(table.userId),
+    // Composite index on (userId, timestamp DESC) for efficient user queries ordered by time
+    // This optimizes loadMyChats queries and expiration checks
+    userIdTimestampIdx: index("chats_user_id_timestamp_idx").on(table.userId, table.timestamp),
+}));
 
 export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
