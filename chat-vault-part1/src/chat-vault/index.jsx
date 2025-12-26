@@ -43,6 +43,7 @@ function App() {
   const [showManualSaveModal, setShowManualSaveModal] = useState(false);
   const [manualSaveTitle, setManualSaveTitle] = useState("");
   const [manualSaveContent, setManualSaveContent] = useState("");
+  const [manualSaveHtml, setManualSaveHtml] = useState(""); // Store HTML from clipboard
   const [manualSaveError, setManualSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
@@ -619,7 +620,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
       });
 
       const callToolPromise = window.openai.callTool("saveChatManually", {
-        htmlContent: manualSaveContent,
+        htmlContent: manualSaveHtml || manualSaveContent, // Prefer HTML if available, fallback to text
         title: manualSaveTitle.trim() || undefined,
       });
 
@@ -727,6 +728,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
       setShowManualSaveModal(false);
       setManualSaveTitle("");
       setManualSaveContent("");
+      setManualSaveHtml("");
       setManualSaveError(null);
 
       // Reload chats and update userInfo with inner loading indicator
@@ -781,6 +783,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
     setShowManualSaveModal(false);
     setManualSaveTitle("");
     setManualSaveContent("");
+    setManualSaveHtml("");
     setManualSaveError(null);
   };
 
@@ -1807,7 +1810,32 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                     </label>
                     <textarea
                       value={manualSaveContent}
-                      onChange={(e) => setManualSaveContent(e.target.value)}
+                      onChange={(e) => {
+                        setManualSaveContent(e.target.value);
+                        // Clear HTML when user manually edits
+                        if (manualSaveHtml) {
+                          setManualSaveHtml("");
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const clipboardData = e.clipboardData || window.clipboardData;
+                        
+                        // Try to get HTML content first
+                        const html = clipboardData.getData("text/html");
+                        const plainText = clipboardData.getData("text/plain");
+                        
+                        if (html && html.trim().length > 0) {
+                          // HTML found - store it and display plain text in textarea
+                          setManualSaveHtml(html);
+                          setManualSaveContent(plainText || html.replace(/<[^>]*>/g, "").trim());
+                          addLog("Pasted HTML content", { htmlLength: html.length, textLength: plainText.length });
+                        } else if (plainText) {
+                          // Only plain text available
+                          setManualSaveHtml("");
+                          setManualSaveContent(plainText);
+                        }
+                      }}
                       placeholder="Paste the copied conversation here..."
                       rows={2}
                       className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
@@ -1905,7 +1933,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 px-6 py-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
+          <div className="overflow-y-auto flex-1 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
             {helpText ? (
               <div 
                 className={`text-sm ${
