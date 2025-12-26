@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdAccountCircle, MdDelete } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdAccountCircle, MdDelete, MdHelp } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -49,6 +49,9 @@ function App() {
   const [alertMessage, setAlertMessage] = useState(null);
   const [alertPortalLink, setAlertPortalLink] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [helpText, setHelpText] = useState(null);
+  const [helpLoading, setHelpLoading] = useState(false);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -291,7 +294,10 @@ function App() {
 
   const handleCounterClick = () => {
     if (userInfo?.isAnon && userInfo.remainingSlots !== undefined) {
-      const message = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
+      const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
+      const message = userInfo.remainingSlots <= 1
+        ? `${baseMessage} Delete chats or`
+        : baseMessage;
       
       addLog("Counter clicked - setting alert", { message, portalLink: userInfo.portalLink });
       setAlertMessage(message);
@@ -379,6 +385,75 @@ function App() {
     setAlertMessage(null);
     setAlertPortalLink(null);
     addLog("Delete cancelled by user");
+  };
+
+  const handleHelpClick = async () => {
+    if (showHelp) {
+      setShowHelp(false);
+      return;
+    }
+
+    // If help text is already loaded, just show it
+    if (helpText) {
+      setShowHelp(true);
+      return;
+    }
+
+    setHelpLoading(true);
+    setShowHelp(true);
+    
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("explainHowToUse tool not available");
+      }
+
+      // Get userId from first chat
+      const userId = chats.length > 0 && chats[0].userId 
+        ? chats[0].userId 
+        : "";
+      
+      if (!userId) {
+        // If no userId available, show a default help message
+        setHelpText(`# How to Use ChatVault
+
+ChatVault helps you save, organize, and search your conversations. 
+
+## Saving Conversations
+
+You can save conversations by:
+1. Asking to save the current conversation
+2. Using the '+' button to manually paste and save conversations
+
+## Accessing Your Vault
+
+Ask to browse your chats or search for specific conversations.
+
+Need more help? Try saving a chat first to get full help text.`);
+        setHelpLoading(false);
+        return;
+      }
+
+      addLog("Calling explainHowToUse", { userId });
+      const result = await window.openai.callTool("explainHowToUse", {
+        userId: userId,
+      });
+
+      addLog("explainHowToUse result", result);
+      
+      if (result?.structuredContent?.helpText) {
+        setHelpText(result.structuredContent.helpText);
+      } else if (result?.content?.[0]?.text) {
+        setHelpText(result.content[0].text);
+      } else {
+        throw new Error("No help text received");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error loading help", { error: errorMessage });
+      setHelpText("Unable to load help text. Please try again.");
+    } finally {
+      setHelpLoading(false);
+    }
   };
 
   const toggleTurnExpansion = (index) => {
@@ -470,7 +545,7 @@ function App() {
     
     return chat.turns
       .map((turn) => {
-        return `You said:\n${turn.prompt}\n\nChatGPT said:\n${turn.response}`;
+        return `You said:\n${turn.prompt}\n\nAI said:\n${turn.response}`;
       })
       .join("\n\n");
   };
@@ -511,7 +586,7 @@ function App() {
 
   const handleManualSave = async () => {
     if (!manualSaveContent.trim()) {
-      setManualSaveError("Please paste the ChatGPT conversation");
+      setManualSaveError("Please paste the chat conversation");
       return;
     }
 
@@ -1682,7 +1757,7 @@ function App() {
                   <label className={`block text-sm font-medium mb-2 ${
                     isDarkMode ? "text-gray-300" : "text-gray-700"
                   }`}>
-                    Paste ChatGPT Conversation
+                    Paste Chat Conversation
                   </label>
                   <textarea
                     value={manualSaveContent}
@@ -1740,6 +1815,68 @@ function App() {
           </div>
         )}
       </div>
+      
+      {/* Help Icon - Fixed bottom right */}
+      {!showHelp && (
+        <button
+          onClick={handleHelpClick}
+          className={`fixed bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors z-50 ${
+            isDarkMode
+              ? "bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600"
+              : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
+          }`}
+          title="Help"
+        >
+          <MdHelp className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Help Area - Fixed bottom */}
+      {showHelp && (
+        <div className={`fixed bottom-0 left-0 right-0 max-h-96 overflow-y-auto border-t z-40 ${
+          isDarkMode
+            ? "bg-gray-900 border-gray-700 text-white"
+            : "bg-white border-gray-200 text-black"
+        }`}>
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={`text-lg font-semibold ${
+                isDarkMode ? "text-white" : "text-black"
+              }`}>
+                How to Use ChatVault
+              </h3>
+              <button
+                onClick={() => setShowHelp(false)}
+                className={`p-1 rounded ${
+                  isDarkMode
+                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-800"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                }`}
+                title="Close help"
+              >
+                <MdClose className="w-5 h-5" />
+              </button>
+            </div>
+            {helpLoading ? (
+              <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                Loading help...
+              </div>
+            ) : helpText ? (
+              <div 
+                className={`text-sm whitespace-pre-wrap ${
+                  isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}
+              >
+                {helpText}
+              </div>
+            ) : (
+              <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                No help text available.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
