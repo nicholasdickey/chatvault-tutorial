@@ -1855,7 +1855,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed bottom-4 left-0 right-0 max-h-96 border-t rounded-t-lg z-40 flex flex-col ${
+        <div className={`fixed top-5 bottom-4 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${
           isDarkMode
             ? "bg-gray-800 border-gray-600 text-white"
             : "bg-gray-50 border-gray-300 text-black"
