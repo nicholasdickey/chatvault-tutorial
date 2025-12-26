@@ -281,9 +281,23 @@ function App() {
 
   const handleCounterClick = () => {
     if (userInfo?.isAnon) {
-      const message = `The free version is limited to ${userInfo.totalChats || 10} chats. Upgrade your account to save unlimited chats.`;
-      alert(message);
-      addLog("Counter clicked", { message });
+      const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
+        ? userInfo.totalChats + userInfo.remainingSlots 
+        : 10;
+      const message = `The number of saved chats is limited in the free version to ${maxChats}.`;
+      const fullMessage = userInfo.portalLink
+        ? `${message}\n\nClick here to manage your account.`
+        : message;
+      
+      if (userInfo.portalLink) {
+        const openPortal = window.confirm(fullMessage);
+        if (openPortal) {
+          window.open(userInfo.portalLink, "_blank");
+        }
+      } else {
+        alert(fullMessage);
+      }
+      addLog("Counter clicked", { message: fullMessage });
     }
   };
 
@@ -827,18 +841,20 @@ function App() {
           {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
             <button
               onClick={handleCounterClick}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                isDarkMode
+                  ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
+                  : "bg-white border-gray-300 hover:bg-gray-50"
+              } ${
                 userInfo.remainingSlots === 0
-                  ? "bg-red-500 text-white hover:bg-red-600"
+                  ? "text-red-500"
                   : userInfo.remainingSlots === 1
-                  ? "bg-yellow-500 text-white hover:bg-yellow-600"
-                  : "bg-green-500 text-white hover:bg-green-600"
+                  ? "text-yellow-500"
+                  : "text-green-500"
               }`}
               title="Click to learn about chat limits"
             >
-              {userInfo.remainingSlots}/{userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
-                ? userInfo.totalChats + userInfo.remainingSlots 
-                : 10} chats
+              {userInfo.remainingSlots}
             </button>
           )}
         </div>
