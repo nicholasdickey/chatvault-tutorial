@@ -387,6 +387,33 @@ function App() {
     addLog("Delete cancelled by user");
   };
 
+  // Convert markdown to HTML
+  const markdownToHtml = (markdown) => {
+    if (!markdown) return "";
+    
+    let html = markdown;
+    
+    // Convert headers
+    html = html.replace(/^### (.*$)/gim, '<h5 class="font-semibold mt-4 mb-2">$1</h5>');
+    html = html.replace(/^## (.*$)/gim, '<h4 class="font-semibold mt-4 mb-2">$1</h4>');
+    html = html.replace(/^# (.*$)/gim, '<h3 class="font-semibold mt-4 mb-2">$1</h3>');
+    
+    // Convert bold
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert line breaks to paragraphs (double newline = paragraph, single = br)
+    const paragraphs = html.split(/\n\s*\n/);
+    html = paragraphs.map(p => {
+      const trimmed = p.trim();
+      if (!trimmed) return '';
+      // Replace single newlines with <br> within paragraphs
+      const withBreaks = trimmed.replace(/\n/g, '<br />');
+      return `<p class="mb-3">${withBreaks}</p>`;
+    }).join('');
+    
+    return html;
+  };
+
   const handleHelpClick = async () => {
     if (showHelp) {
       setShowHelp(false);
@@ -1835,8 +1862,8 @@ Need more help? Try saving a chat first to get full help text.`);
       {showHelp && (
         <div className={`fixed bottom-0 left-0 right-0 max-h-96 overflow-y-auto border-t z-40 ${
           isDarkMode
-            ? "bg-gray-900 border-gray-700 text-white"
-            : "bg-white border-gray-200 text-black"
+            ? "bg-gray-800 border-gray-600 text-white"
+            : "bg-gray-50 border-gray-300 text-black"
         }`}>
           <div className="max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
@@ -1849,8 +1876,8 @@ Need more help? Try saving a chat first to get full help text.`);
                 onClick={() => setShowHelp(false)}
                 className={`p-1 rounded ${
                   isDarkMode
-                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-800"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
                 }`}
                 title="Close help"
               >
@@ -1863,12 +1890,11 @@ Need more help? Try saving a chat first to get full help text.`);
               </div>
             ) : helpText ? (
               <div 
-                className={`text-sm whitespace-pre-wrap ${
+                className={`text-sm ${
                   isDarkMode ? "text-gray-300" : "text-gray-700"
                 }`}
-              >
-                {helpText}
-              </div>
+                dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText) }}
+              />
             ) : (
               <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                 No help text available.
