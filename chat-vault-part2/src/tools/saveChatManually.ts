@@ -158,6 +158,15 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
         messages = text.split(/\n+/).map(m => m.trim()).filter(m => m.length > 0);
     }
     
+    // Handle single-line content: treat it as a user prompt with empty response
+    if (messages.length === 1) {
+        const prompt = messages[0].trim();
+        if (prompt) {
+            turns.push({ prompt, response: "" });
+            return turns;
+        }
+    }
+    
     // If we have messages, pair them up (first is user, second is ChatGPT, etc.)
     if (messages.length >= 2) {
         for (let i = 0; i < messages.length - 1; i += 2) {
