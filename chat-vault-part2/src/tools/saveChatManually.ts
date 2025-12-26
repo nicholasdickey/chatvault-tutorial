@@ -82,9 +82,7 @@ async function checkForExistingChat(
 
 /**
  * Parse HTML/text content to extract chat turns
- * Supports two formats:
- * 1. With markers: "You said: ... AI said: ..." (or "ChatGPT said:" for backward compatibility)
- * 2. Plain alternating: user message, AI response, user message, etc.
+ * Expected format: "You said:" followed by prompt, "ChatGPT said:" followed by response
  */
 function parseChatContent(content: string): Array<{ prompt: string; response: string }> {
     const turns: Array<{ prompt: string; response: string }> = [];
@@ -92,102 +90,46 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
     // Remove HTML tags if present (simple strip)
     let text = content.replace(/<[^>]*>/g, "").trim();
 
-    // Try format 1: "You said:" / "AI said:" or "ChatGPT said:" markers
+    // Split by "You said:" markers
     const youSaidRegex = /You said:\s*/gi;
-    const hasMarkers = youSaidRegex.test(text);
+    const parts = text.split(youSaidRegex);
 
-    if (hasMarkers) {
-        // Reset regex (it's global and we already tested)
-        const parts = text.split(/You said:\s*/gi);
+    // Skip the first part (everything before first "You said:")
+    for (let i = 1; i < parts.length; i++) {
+        const part = parts[i].trim();
+        if (!part) continue;
 
-        // Skip the first part (everything before first "You said:")
-        for (let i = 1; i < parts.length; i++) {
-            const part = parts[i].trim();
-            if (!part) continue;
+        // Find "ChatGPT said:" marker
+        const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
 
-            // Find "AI said:" or "ChatGPT said:" marker (prefer "AI said:")
-            const aiSaidIndex = part.search(/AI said:\s*/i);
-            const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
-            const saidIndex = aiSaidIndex !== -1 ? aiSaidIndex : chatGptSaidIndex;
-
-            if (saidIndex === -1) {
-                // No AI response found, skip this turn
-                console.warn("[saveChatManually] No 'AI said:' or 'ChatGPT said:' found for turn", i);
-                continue;
-            }
-
-            const prompt = part.substring(0, saidIndex).trim();
-            const responsePart = part.substring(saidIndex);
-
-            // Extract response (remove "AI said:" or "ChatGPT said:" prefix)
-            const responseMatch = responsePart.match(/(?:AI|ChatGPT) said:\s*(.*)/is);
-            if (!responseMatch) {
-                console.warn("[saveChatManually] Could not extract response for turn", i);
-                continue;
-            }
-
-            let response = responseMatch[1].trim();
-
-            // Remove next "You said:" if it exists in the response
-            const nextYouSaidIndex = response.search(/You said:\s*/i);
-            if (nextYouSaidIndex !== -1) {
-                response = response.substring(0, nextYouSaidIndex).trim();
-            }
-
-            if (prompt && response) {
-                turns.push({ prompt, response });
-            } else {
-                console.warn("[saveChatManually] Empty prompt or response for turn", i);
-            }
+        if (chatGptSaidIndex === -1) {
+            // No ChatGPT response found, skip this turn
+            console.warn("[saveChatManually] No 'ChatGPT said:' found for turn", i);
+            continue;
         }
 
-        if (turns.length > 0) {
-            return turns;
-        }
-    }
+        const prompt = part.substring(0, chatGptSaidIndex).trim();
+        const responsePart = part.substring(chatGptSaidIndex);
 
-    // Format 2: Plain alternating messages (user, ChatGPT, user, ChatGPT, ...)
-    // Split by double newlines (common separator) or single newlines if double doesn't work
-    let messages: string[] = [];
-
-    // Try splitting by double newlines first
-    if (text.includes("\n\n")) {
-        messages = text.split(/\n\n+/).map(m => m.trim()).filter(m => m.length > 0);
-    } else {
-        // Fall back to single newlines
-        messages = text.split(/\n+/).map(m => m.trim()).filter(m => m.length > 0);
-    }
-
-    // Handle single-line content: treat it as a user prompt with empty response
-    // Only accept if it's very short (likely a question/prompt, not random text)
-    if (messages.length === 1) {
-        const prompt = messages[0].trim();
-        // Only accept single-line if it's under 30 characters (likely a short prompt/question)
-        // Longer single-line content without structure is probably unparseable random text
-        // This allows "Explain chat vault usage" (24 chars) but rejects longer unstructured text
-        if (prompt && prompt.length <= 30) {
-            turns.push({ prompt, response: "" });
-            return turns;
-        }
-        // If it's longer than 30 chars and single-line, it's probably unparseable
-    }
-
-    // If we have messages, pair them up (first is user, second is ChatGPT, etc.)
-    if (messages.length >= 2) {
-        for (let i = 0; i < messages.length - 1; i += 2) {
-            const prompt = messages[i].trim();
-            const response = messages[i + 1].trim();
-
-            if (prompt && response) {
-                turns.push({ prompt, response });
-            }
+        // Extract response (remove "ChatGPT said:" prefix)
+        const responseMatch = responsePart.match(/ChatGPT said:\s*(.*)/is);
+        if (!responseMatch) {
+            console.warn("[saveChatManually] Could not extract response for turn", i);
+            continue;
         }
 
-        // If we have an odd number of messages, the last one might be incomplete
-        // We could either skip it or pair it with an empty response
-        // For now, we'll skip it to avoid incomplete turns
-        if (messages.length % 2 === 1 && messages.length > 2) {
-            console.warn("[saveChatManually] Odd number of messages, last message may be incomplete");
+        let response = responseMatch[1].trim();
+
+        // Remove next "You said:" if it exists in the response
+        const nextYouSaidIndex = response.search(/You said:\s*/i);
+        if (nextYouSaidIndex !== -1) {
+            response = response.substring(0, nextYouSaidIndex).trim();
+        }
+
+        if (prompt && response) {
+            turns.push({ prompt, response });
+        } else {
+            console.warn("[saveChatManually] Empty prompt or response for turn", i);
         }
     }
 
