@@ -206,6 +206,22 @@ function App() {
     }
   }, [alertMessage, alertPortalLink, deleteConfirmation]);
 
+  // Handle ESC key to close help
+  useEffect(() => {
+    if (!showHelp) return;
+
+    const handleEscKey = (e) => {
+      if (e.key === "Escape") {
+        setShowHelp(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscKey);
+    return () => {
+      window.removeEventListener("keydown", handleEscKey);
+    };
+  }, [showHelp]);
+
   // Deduplicate chats based on title and content
   // Keeps the most recent chat (by timestamp) when duplicates are found
   const deduplicateChats = (chatList) => {
@@ -1839,12 +1855,12 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed bottom-0 left-0 right-0 max-h-96 border-t rounded-t-lg z-40 ${
+        <div className={`fixed bottom-0 left-0 right-0 max-h-96 border-t rounded-t-lg z-40 flex flex-col ${
           isDarkMode
             ? "bg-gray-800 border-gray-600 text-white"
             : "bg-gray-50 border-gray-300 text-black"
         }`}>
-          <div className={`flex items-center justify-between px-4 py-3 border-b ${
+          <div className={`flex items-center justify-between px-6 py-4 border-b flex-shrink-0 ${
             isDarkMode ? "border-gray-700" : "border-gray-200"
           }`}>
             <h3 className={`text-lg font-semibold ${
@@ -1864,7 +1880,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="overflow-y-auto max-h-[calc(24rem-4rem)] px-6 py-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
+          <div className="overflow-y-auto flex-1 px-6 pb-8 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
             {helpText ? (
               <div 
                 className={`text-sm ${
