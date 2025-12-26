@@ -1958,8 +1958,11 @@ You can download Python from python.org.`;
             htmlContent: "Some content",
         });
 
-        expect(response.error).toBeDefined();
-        expect(response.error?.code).toBeDefined();
+        // Validation errors now return structured errors, not JSON-RPC errors
+        expect(response.result).toBeDefined();
+        expect(response.result.structuredContent).toBeDefined();
+        expect(response.result.structuredContent.error).toBe("server_error");
+        expect(response.result.structuredContent.message).toBeDefined();
     });
 
     test("should error on missing htmlContent for saveChatManually", async () => {
@@ -1967,8 +1970,11 @@ You can download Python from python.org.`;
             userId: "test-user",
         });
 
-        expect(response.error).toBeDefined();
-        expect(response.error?.code).toBeDefined();
+        // Validation errors now return structured errors, not JSON-RPC errors
+        expect(response.result).toBeDefined();
+        expect(response.result.structuredContent).toBeDefined();
+        expect(response.result.structuredContent.error).toBe("server_error");
+        expect(response.result.structuredContent.message).toBeDefined();
     });
 
     test("should error on empty htmlContent for saveChatManually", async () => {
@@ -1977,8 +1983,11 @@ You can download Python from python.org.`;
             htmlContent: "",
         });
 
-        expect(response.error).toBeDefined();
-        expect(response.error?.code).toBeDefined();
+        // Validation errors now return structured errors, not JSON-RPC errors
+        expect(response.result).toBeDefined();
+        expect(response.result.structuredContent).toBeDefined();
+        expect(response.result.structuredContent.error).toBe("server_error");
+        expect(response.result.structuredContent.message).toBeDefined();
     });
 
     test("should error on unparseable htmlContent for saveChatManually", async () => {
