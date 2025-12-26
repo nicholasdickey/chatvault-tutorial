@@ -65,7 +65,8 @@ function createMcpServer(): Server {
 
     // Register handlers
     server.setRequestHandler(ListToolsRequestSchema, handleListTools);
-    server.setRequestHandler(CallToolRequestSchema, handleCallTool);
+    // Note: handleCallTool is called manually in handleMcpRequest with userContext
+    // so we don't register it here to avoid TypeScript signature mismatch
 
     return server;
 }
@@ -314,7 +315,7 @@ async function handleCallTool(request: CallToolRequest, userContext: UserContext
                 userContext,
             });
             console.log("[MCP Handler] handleCallTool - saveChatManually result:", JSON.stringify(result));
-            
+
             // If limit reached, return appropriate message
             if (result.error === "limit_reached") {
                 return {
@@ -331,7 +332,7 @@ async function handleCallTool(request: CallToolRequest, userContext: UserContext
                     },
                 };
             }
-            
+
             // If parse error, return appropriate message
             if (result.error === "parse_error") {
                 return {
@@ -347,7 +348,23 @@ async function handleCallTool(request: CallToolRequest, userContext: UserContext
                     },
                 };
             }
-            
+
+            // If server error, return appropriate message
+            if (result.error === "server_error") {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: result.message || "An error occurred while saving the chat",
+                        },
+                    ],
+                    structuredContent: {
+                        error: result.error,
+                        message: result.message,
+                    },
+                };
+            }
+
             return {
                 content: [
                     {

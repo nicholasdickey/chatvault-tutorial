@@ -22,7 +22,7 @@ export interface SaveChatManuallyResult {
     chatId: string;
     saved: boolean;
     turnsCount: number;
-    error?: "limit_reached" | "parse_error";
+    error?: "limit_reached" | "parse_error" | "server_error";
     message?: string;
     portalLink?: string | null;
 }
@@ -99,20 +99,36 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
         const part = parts[i].trim();
         if (!part) continue;
 
-        // Find "ChatGPT said:" marker
+        // Find "ChatGPT said:" or "AI said:" marker (ChatGPT copy uses "ChatGPT said:", widget copy uses "AI said:")
         const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
+        const aiSaidIndex = part.search(/AI said:\s*/i);
 
-        if (chatGptSaidIndex === -1) {
-            // No ChatGPT response found, skip this turn
-            console.warn("[saveChatManually] No 'ChatGPT said:' found for turn", i);
+        let saidIndex = -1;
+        let saidPattern = "";
+
+        if (chatGptSaidIndex !== -1 && aiSaidIndex !== -1) {
+            // Both found, use whichever comes first
+            saidIndex = chatGptSaidIndex < aiSaidIndex ? chatGptSaidIndex : aiSaidIndex;
+            saidPattern = chatGptSaidIndex < aiSaidIndex ? "ChatGPT said:" : "AI said:";
+        } else if (chatGptSaidIndex !== -1) {
+            saidIndex = chatGptSaidIndex;
+            saidPattern = "ChatGPT said:";
+        } else if (aiSaidIndex !== -1) {
+            saidIndex = aiSaidIndex;
+            saidPattern = "AI said:";
+        }
+
+        if (saidIndex === -1) {
+            // No response marker found, skip this turn
+            console.warn("[saveChatManually] No 'ChatGPT said:' or 'AI said:' found for turn", i, "part preview:", part.substring(0, 200));
             continue;
         }
 
-        const prompt = part.substring(0, chatGptSaidIndex).trim();
-        const responsePart = part.substring(chatGptSaidIndex);
+        const prompt = part.substring(0, saidIndex).trim();
+        const responsePart = part.substring(saidIndex);
 
-        // Extract response (remove "ChatGPT said:" prefix)
-        const responseMatch = responsePart.match(/ChatGPT said:\s*(.*)/is);
+        // Extract response (remove "ChatGPT said:" or "AI said:" prefix)
+        const responseMatch = responsePart.match(new RegExp(`${saidPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.*)`, 'is'));
         if (!responseMatch) {
             console.warn("[saveChatManually] Could not extract response for turn", i);
             continue;
@@ -193,10 +209,18 @@ export async function saveChatManually(
 
         // Parse the content to extract turns
         console.log("[saveChatManually] Parsing content...");
+        console.log("[saveChatManually] Content preview (first 500 chars):", htmlContent.substring(0, 500));
         const turns = parseChatContent(htmlContent);
+        console.log("[saveChatManually] Parsed turns count:", turns.length);
+        if (turns.length > 0) {
+            console.log("[saveChatManually] First turn preview:", {
+                prompt: turns[0].prompt.substring(0, 100),
+                response: turns[0].response.substring(0, 100)
+            });
+        }
 
         if (turns.length === 0) {
-            const message = "Could not parse any chat turns from the content. Please ensure the content is in one of these formats:\n1. With markers: 'You said: ... AI said: ...'\n2. Plain alternating: user message, AI response, user message, etc.";
+            const message = "Can't parse the chat";
             console.log("[saveChatManually] Failed to parse content, returning error response");
             return {
                 chatId: "",
@@ -262,7 +286,16 @@ export async function saveChatManually(
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("[saveChatManually] Error saving chat:", errorMessage);
-        throw error;
+        console.error("[saveChatManually] Error stack:", error instanceof Error ? error.stack : "N/A");
+        // Return structured error instead of throwing
+        return {
+            chatId: "",
+            saved: false,
+            turnsCount: 0,
+            error: "server_error",
+            message: "An error occurred while saving the chat. Please try again.",
+            portalLink: null,
+        };
     }
 }
 
