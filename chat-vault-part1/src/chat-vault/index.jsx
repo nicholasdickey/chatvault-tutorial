@@ -450,9 +450,7 @@ Use the '+' button in the ChatVault widget to manually add conversations:
 
 ## Accessing Your Vault
 
-Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
-
-Need help? Ask ChatGPT or check the widget interface for more options!`);
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`);
     setShowHelp(true);
   };
 
@@ -1828,43 +1826,45 @@ Need help? Ask ChatGPT or check the widget interface for more options!`);
       {!showHelp && (
         <button
           onClick={handleHelpClick}
-          className={`fixed bottom-4 right-4 w-7 h-7 rounded-full flex items-center justify-center transition-colors z-50 ${
+          className={`fixed bottom-4 right-4 w-6 h-6 flex items-center justify-center transition-colors z-50 ${
             isDarkMode
-              ? "text-gray-400 hover:text-gray-300 border border-gray-500 hover:border-gray-400"
-              : "text-gray-500 hover:text-gray-700 border border-gray-400 hover:border-gray-500"
+              ? "text-gray-400 hover:text-gray-300"
+              : "text-gray-500 hover:text-gray-700"
           }`}
           title="Help"
         >
-          <MdHelp className="w-4 h-4" />
+          <MdHelp className="w-5 h-5" />
         </button>
       )}
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed bottom-0 left-0 right-0 max-h-96 overflow-y-auto border-t rounded-t-lg z-40 ${
+        <div className={`fixed bottom-0 left-0 right-0 max-h-96 border-t rounded-t-lg z-40 ${
           isDarkMode
             ? "bg-gray-800 border-gray-600 text-white"
             : "bg-gray-50 border-gray-300 text-black"
         }`}>
-          <div className="max-w-4xl mx-auto px-4 py-4 pr-6">
-            <div className="flex items-center justify-between mb-3 sticky top-0 bg-inherit pb-2 z-10">
-              <h3 className={`text-lg font-semibold ${
-                isDarkMode ? "text-white" : "text-black"
-              }`}>
-                How to Use ChatVault
-              </h3>
-              <button
-                onClick={() => setShowHelp(false)}
-                className={`p-1.5 rounded flex-shrink-0 ${
-                  isDarkMode
-                    ? "text-gray-300 hover:text-white hover:bg-gray-700"
-                    : "text-gray-600 hover:text-black hover:bg-gray-200"
-                }`}
-                title="Close help"
-              >
-                <MdClose className="w-5 h-5" />
-              </button>
-            </div>
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${
+            isDarkMode ? "border-gray-700" : "border-gray-200"
+          }`}>
+            <h3 className={`text-lg font-semibold ${
+              isDarkMode ? "text-white" : "text-black"
+            }`}>
+              How to Use ChatVault
+            </h3>
+            <button
+              onClick={() => setShowHelp(false)}
+              className={`p-1.5 rounded flex-shrink-0 ${
+                isDarkMode
+                  ? "text-white hover:bg-gray-700"
+                  : "text-black hover:bg-gray-200"
+              }`}
+              title="Close help"
+            >
+              <MdClose className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="overflow-y-auto max-h-[calc(24rem-4rem)] px-6 py-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
             {helpText ? (
               <div 
                 className={`text-sm ${
