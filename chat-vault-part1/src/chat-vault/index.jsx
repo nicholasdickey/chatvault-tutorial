@@ -700,8 +700,8 @@ Need help? Ask ChatGPT or check the widget interface for more options!`);
       setManualSaveContent("");
       setManualSaveError(null);
 
-      // Reload chats and update userInfo with loading indicator
-      setLoading(true);
+      // Reload chats and update userInfo with inner loading indicator
+      setPaginationLoading(true);
       if (window.openai?.callTool) {
         try {
           const loadResult = await window.openai.callTool("loadMyChats", {
@@ -723,10 +723,10 @@ Need help? Ask ChatGPT or check the widget interface for more options!`);
           addLog("Error reloading chats after manual save", { error: err.message });
           setError(`Failed to reload chats: ${err.message}`);
         } finally {
-          setLoading(false);
+          setPaginationLoading(false);
         }
       } else {
-        setLoading(false);
+        setPaginationLoading(false);
       }
     } catch (err) {
       let errorMessage = "Unknown error occurred";
@@ -1749,56 +1749,58 @@ Need help? Ask ChatGPT or check the widget interface for more options!`);
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto space-y-4">
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${
-                    isDarkMode ? "text-gray-300" : "text-gray-700"
-                  }`}>
-                    Title (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={manualSaveTitle}
-                    onChange={(e) => setManualSaveTitle(e.target.value)}
-                    placeholder="manual"
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      isDarkMode
-                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                        : "bg-white border-gray-300 text-black placeholder-gray-500"
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${
-                    isDarkMode ? "text-gray-300" : "text-gray-700"
-                  }`}>
-                    Paste Chat Conversation
-                  </label>
-                  <textarea
-                    value={manualSaveContent}
-                    onChange={(e) => setManualSaveContent(e.target.value)}
-                    placeholder="Paste the copied conversation here..."
-                    rows={12}
-                    className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
-                      isDarkMode
-                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                        : "bg-white border-gray-300 text-black placeholder-gray-500"
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
-                  />
-                </div>
-
-                {manualSaveError && (
-                  <div className={`p-3 rounded-lg ${
-                    isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
-                  }`}>
-                    <p className={`text-sm ${
-                      isDarkMode ? "text-red-300" : "text-red-700"
+              <div className="flex-1 overflow-y-auto pr-2">
+                <div className="space-y-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDarkMode ? "text-gray-300" : "text-gray-700"
                     }`}>
-                      {manualSaveError}
-                    </p>
+                      Title (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSaveTitle}
+                      onChange={(e) => setManualSaveTitle(e.target.value)}
+                      placeholder="manual"
+                      className={`w-full px-3 py-2 rounded-lg border ${
+                        isDarkMode
+                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                          : "bg-white border-gray-300 text-black placeholder-gray-500"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
                   </div>
-                )}
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDarkMode ? "text-gray-300" : "text-gray-700"
+                    }`}>
+                      Paste Chat Conversation
+                    </label>
+                    <textarea
+                      value={manualSaveContent}
+                      onChange={(e) => setManualSaveContent(e.target.value)}
+                      placeholder="Paste the copied conversation here..."
+                      rows={2}
+                      className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
+                        isDarkMode
+                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                          : "bg-white border-gray-300 text-black placeholder-gray-500"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                    />
+                  </div>
+
+                  {manualSaveError && (
+                    <div className={`p-3 rounded-lg ${
+                      isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
+                    }`}>
+                      <p className={`text-sm ${
+                        isDarkMode ? "text-red-300" : "text-red-700"
+                      }`}>
+                        {manualSaveError}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -1836,14 +1838,14 @@ Need help? Ask ChatGPT or check the widget interface for more options!`);
       {!showHelp && (
         <button
           onClick={handleHelpClick}
-          className={`fixed bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors z-50 ${
+          className={`fixed bottom-4 right-4 w-7 h-7 rounded-full flex items-center justify-center transition-colors z-50 ${
             isDarkMode
-              ? "bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600"
-              : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
+              ? "text-gray-400 hover:text-gray-300 border border-gray-500 hover:border-gray-400"
+              : "text-gray-500 hover:text-gray-700 border border-gray-400 hover:border-gray-500"
           }`}
           title="Help"
         >
-          <MdHelp className="w-6 h-6" />
+          <MdHelp className="w-4 h-4" />
         </button>
       )}
 
