@@ -290,19 +290,13 @@ function App() {
   };
 
   const handleCounterClick = () => {
-    if (userInfo?.isAnon) {
-      const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
-        ? userInfo.totalChats + userInfo.remainingSlots 
-        : 10;
-      const message = `The number of saved chats is limited in the free version to ${maxChats}.`;
-      const fullMessage = userInfo.portalLink
-        ? `${message} Click here to manage your account.`
-        : message;
+    if (userInfo?.isAnon && userInfo.remainingSlots !== undefined) {
+      const message = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
       
-      addLog("Counter clicked - setting alert", { message: fullMessage, portalLink: userInfo.portalLink });
-      setAlertMessage(fullMessage);
+      addLog("Counter clicked - setting alert", { message, portalLink: userInfo.portalLink });
+      setAlertMessage(message);
       setAlertPortalLink(userInfo.portalLink || null);
-      addLog("Counter clicked - alert state set", { message: fullMessage });
+      addLog("Counter clicked - alert state set", { message });
     } else {
       addLog("Counter clicked but user is not anonymous", { isAnon: userInfo?.isAnon });
     }
@@ -914,36 +908,20 @@ function App() {
               : "border-gray-300"
           }`}>
             <div className={`flex-1 text-sm ${
-              deleteConfirmation
-                ? "text-red-500"
-                : userInfo?.isAnon && userInfo.remainingSlots !== undefined
-                ? userInfo.remainingSlots === 0
-                  ? "text-red-500"
-                  : userInfo.remainingSlots === 1
-                  ? "text-yellow-500"
-                  : "text-green-500"
-                : isDarkMode
-                ? "text-gray-300"
-                : "text-gray-700"
+              isDarkMode ? "text-gray-300" : "text-gray-700"
             }`}>
-              <div className="whitespace-pre-wrap">{alertMessage}</div>
+              {alertMessage}
               {alertPortalLink && !deleteConfirmation && (
-                <button
+                <> Click <button
                   onClick={handleAlertPortalClick}
-                  className={`ml-2 underline font-medium ${
-                    userInfo?.isAnon && userInfo.remainingSlots !== undefined
-                      ? userInfo.remainingSlots === 0
-                        ? "text-red-600 hover:text-red-700"
-                        : userInfo.remainingSlots === 1
-                        ? "text-yellow-600 hover:text-yellow-700"
-                        : "text-green-600 hover:text-green-700"
-                      : isDarkMode
+                  className={`underline font-medium ${
+                    isDarkMode
                       ? "text-blue-400 hover:text-blue-300"
                       : "text-blue-600 hover:text-blue-700"
                   }`}
                 >
-                  Click here to manage your account.
-                </button>
+                  here
+                </button> to manage your account settings.</>
               )}
               {deleteConfirmation && (
                 <div className="flex gap-2 mt-2">
