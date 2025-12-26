@@ -51,7 +51,6 @@ function App() {
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpText, setHelpText] = useState(null);
-  const [helpLoading, setHelpLoading] = useState(false);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -414,7 +413,7 @@ function App() {
     return html;
   };
 
-  const handleHelpClick = async () => {
+  const handleHelpClick = () => {
     if (showHelp) {
       setShowHelp(false);
       return;
@@ -426,61 +425,45 @@ function App() {
       return;
     }
 
-    setHelpLoading(true);
-    setShowHelp(true);
-    
-    try {
-      if (!window.openai?.callTool) {
-        throw new Error("explainHowToUse tool not available");
-      }
+    // Set help text directly (static content, no backend call needed)
+    setHelpText(`# How to Use ChatVault
 
-      // Get userId from first chat
-      const userId = chats.length > 0 && chats[0].userId 
-        ? chats[0].userId 
-        : "";
-      
-      if (!userId) {
-        // If no userId available, show a default help message
-        setHelpText(`# How to Use ChatVault
-
-ChatVault helps you save, organize, and search your conversations. 
+ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
 
 ## Saving Conversations
 
-You can save conversations by:
-1. Asking to save the current conversation
-2. Using the '+' button to manually paste and save conversations
+You have three flexible ways to save conversations to your vault:
+
+### 1. Ask ChatGPT to Save
+Simply ask ChatGPT to save the current conversation to your vault. You can specify:
+- **By subject**: "Save this conversation about [topic] to my ChatVault"
+- **By number of turns**: "Save the last 5 turns to my ChatVault"
+- **The entire conversation**: "Add this entire chat to my ChatVault"
+
+### 2. Manual Save via Widget
+Use the '+' button in the ChatVault widget to manually add conversations:
+1. Copy a conversation from ChatGPT (or anywhere)
+2. Click the '+' button in the ChatVault widget header
+3. Paste the conversation into the text area
+4. Optionally add a custom title
+5. Click "Save"
 
 ## Accessing Your Vault
 
-Ask to browse your chats or search for specific conversations.
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
 
-Need more help? Try saving a chat first to get full help text.`);
-        setHelpLoading(false);
-        return;
-      }
+## Subscription Management
 
-      addLog("Calling explainHowToUse", { userId });
-      const result = await window.openai.callTool("explainHowToUse", {
-        userId: userId,
-      });
+To see your current subscription or to upgrade, ask ChatGPT to "manage my subscription".
 
-      addLog("explainHowToUse result", result);
-      
-      if (result?.structuredContent?.helpText) {
-        setHelpText(result.structuredContent.helpText);
-      } else if (result?.content?.[0]?.text) {
-        setHelpText(result.content[0].text);
-      } else {
-        throw new Error("No help text received");
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      addLog("Error loading help", { error: errorMessage });
-      setHelpText("Unable to load help text. Please try again.");
-    } finally {
-      setHelpLoading(false);
-    }
+## Getting Started
+
+The easiest way to start is to simply ask ChatGPT: "Save this conversation to my ChatVault" or "Add this chat about [topic] to my vault". ChatGPT will handle the rest!
+
+For manual saves, use the '+' button in the widget and paste your conversation. The widget will automatically format and save it.
+
+Need help? Ask ChatGPT or check the widget interface for more options!`);
+    setShowHelp(true);
   };
 
   const toggleTurnExpansion = (index) => {
@@ -717,7 +700,8 @@ Need more help? Try saving a chat first to get full help text.`);
       setManualSaveContent("");
       setManualSaveError(null);
 
-      // Reload chats and update userInfo
+      // Reload chats and update userInfo with loading indicator
+      setLoading(true);
       if (window.openai?.callTool) {
         try {
           const loadResult = await window.openai.callTool("loadMyChats", {
@@ -737,7 +721,12 @@ Need more help? Try saving a chat first to get full help text.`);
           }
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
+          setError(`Failed to reload chats: ${err.message}`);
+        } finally {
+          setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
     } catch (err) {
       let errorMessage = "Unknown error occurred";
@@ -1884,11 +1873,7 @@ Need more help? Try saving a chat first to get full help text.`);
                 <MdClose className="w-5 h-5" />
               </button>
             </div>
-            {helpLoading ? (
-              <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                Loading help...
-              </div>
-            ) : helpText ? (
+            {helpText ? (
               <div 
                 className={`text-sm ${
                   isDarkMode ? "text-gray-300" : "text-gray-700"
