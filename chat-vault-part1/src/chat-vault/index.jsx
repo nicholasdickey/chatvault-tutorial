@@ -1862,7 +1862,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         }`}>
           <div className={`flex items-center justify-between px-6 py-4 border-b flex-shrink-0 ${
             isDarkMode ? "border-gray-700" : "border-gray-200"
-          }`}>
+          }`} style={{ minHeight: '3.5rem' }}>
             <h3 className={`text-lg font-semibold ${
               isDarkMode ? "text-white" : "text-black"
             }`}>
@@ -1870,14 +1870,14 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </h3>
             <button
               onClick={() => setShowHelp(false)}
-              className={`p-1.5 rounded flex-shrink-0 ${
+              className={`p-2 rounded flex-shrink-0 ml-4 ${
                 isDarkMode
                   ? "text-white hover:bg-gray-700"
                   : "text-black hover:bg-gray-200"
               }`}
               title="Close help"
             >
-              <MdClose className="w-5 h-5" />
+              <MdClose className="w-6 h-6" />
             </button>
           </div>
           <div className="overflow-y-auto flex-1 px-6 pb-8 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
