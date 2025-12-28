@@ -65,7 +65,15 @@ export async function deleteChat(params: DeleteChatParams): Promise<DeleteChatRe
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("[deleteChat] Error deleting chat:", errorMessage);
+
+        // Handle UUID validation errors - convert to "Chat not found"
+        if (errorMessage.includes("invalid input syntax for type uuid")) {
+            throw new Error("Chat not found or does not belong to user");
+        }
+
         throw error;
     }
 }
+
+
 

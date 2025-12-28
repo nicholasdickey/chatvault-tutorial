@@ -207,6 +207,21 @@ function App() {
     }
   }, [alertMessage, alertPortalLink, deleteConfirmation]);
 
+  // Update alert message dynamically when userInfo changes (if counter alert is showing)
+  useEffect(() => {
+    if (alertMessage && !deleteConfirmation && userInfo?.isAnon && userInfo.remainingSlots !== undefined) {
+      // Check if this is a counter alert (starts with "You have X chat")
+      if (alertMessage.includes("You have") && alertMessage.includes("to save remaining")) {
+        const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
+        const message = userInfo.remainingSlots <= 1
+          ? `${baseMessage} Delete chats or`
+          : baseMessage;
+        setAlertMessage(message);
+        setAlertPortalLink(userInfo.portalLink || null);
+      }
+    }
+  }, [userInfo?.remainingSlots, userInfo?.portalLink, userInfo?.isAnon]);
+
   // Handle ESC key to close help
   useEffect(() => {
     if (!showHelp) return;
@@ -1129,6 +1144,9 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   setAlertPortalLink(userInfo.portalLink || null);
                   return;
                 }
+                // Clear alert when opening save modal
+                setAlertMessage(null);
+                setAlertPortalLink(null);
                 setShowManualSaveModal(true);
               }}
               disabled={paginationLoading || searchLoading}

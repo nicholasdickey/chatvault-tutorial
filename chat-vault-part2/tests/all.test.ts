@@ -134,7 +134,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(response.error?.message).toContain("Session not found");
     });
 
-    test("should return all three ChatVault tools in tools list", async () => {
+    test("should return all ChatVault tools in tools list", async () => {
         const newClient = new McpTestClient(serverUrl);
         await newClient.initialize();
 
@@ -146,10 +146,11 @@ describe("chat-vault-part2 (all)", () => {
 
         const result = response.result as { tools: unknown[] };
         expect(Array.isArray(result.tools)).toBe(true);
-        expect(result.tools.length).toBeGreaterThanOrEqual(3); // All three ChatVault tools should be present
+        expect(result.tools.length).toBeGreaterThanOrEqual(6); // All ChatVault tools should be present
 
         // Verify all tools are in the list
         const toolNames = (result.tools as Array<{ name: string }>).map((t) => t.name);
+        expect(toolNames).toContain("deleteChat");
         expect(toolNames).toContain("saveChat");
         expect(toolNames).toContain("loadMyChats");
         expect(toolNames).toContain("searchMyChats");
@@ -157,12 +158,23 @@ describe("chat-vault-part2 (all)", () => {
         expect(toolNames).toContain("explainHowToUse");
 
         // Verify tool schemas
-        const tools = result.tools as Array<{ name: string; description: string; inputSchema: unknown }>;
+        const tools = result.tools as Array<{ 
+            name: string; 
+            description: string; 
+            inputSchema: unknown;
+            annotations?: { destructiveHint?: boolean };
+        }>;
+        const deleteChatTool = tools.find((t) => t.name === "deleteChat");
         const saveChatTool = tools.find((t) => t.name === "saveChat");
         const loadChatsTool = tools.find((t) => t.name === "loadMyChats");
         const searchChatsTool = tools.find((t) => t.name === "searchMyChats");
         const saveChatManuallyTool = tools.find((t) => t.name === "saveChatManually");
         const explainHowToUseTool = tools.find((t) => t.name === "explainHowToUse");
+
+        expect(deleteChatTool).toBeDefined();
+        expect(deleteChatTool?.description).toBeDefined();
+        expect(deleteChatTool?.inputSchema).toBeDefined();
+        expect(deleteChatTool?.annotations?.destructiveHint).toBe(true);
 
         expect(saveChatTool).toBeDefined();
         expect(saveChatTool?.description).toBeDefined();
@@ -2040,6 +2052,297 @@ You can download Python from python.org.`;
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
+    });
+
+    // -------------------------------------------------------------------------
+    // New tests for deleteChat tool
+    // -------------------------------------------------------------------------
+
+    test("should delete a chat successfully", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-delete-1";
+
+        // Save a chat first
+        const saveResponse = await client.callTool("saveChat", {
+            userId,
+            title: "Chat to Delete",
+            turns: [{ prompt: "Q", response: "A" }],
+        });
+
+        expect(saveResponse.error).toBeUndefined();
+        const saveResult = saveResponse.result as {
+            structuredContent: { chatId: string };
+        };
+        const chatId = saveResult.structuredContent.chatId;
+
+        // Verify chat exists in database
+        const db = getTestDrizzle();
+        const beforeDelete = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.id, chatId));
+        expect(beforeDelete.length).toBe(1);
+
+        // Delete the chat
+        const deleteResponse = await client.callTool("deleteChat", {
+            userId,
+            chatId,
+        });
+
+        expect(deleteResponse.jsonrpc).toBe("2.0");
+        expect(deleteResponse.error).toBeUndefined();
+        expect(deleteResponse.result).toBeDefined();
+
+        const deleteResult = deleteResponse.result as {
+            content: Array<{ type: string; text: string }>;
+            structuredContent: { deleted: boolean; chatId: string; message: string };
+        };
+
+        expect(deleteResult.structuredContent).toBeDefined();
+        expect(deleteResult.structuredContent.deleted).toBe(true);
+        expect(deleteResult.structuredContent.chatId).toBe(chatId);
+        expect(deleteResult.structuredContent.message).toBe("Chat deleted successfully");
+
+        // Verify chat is deleted from database
+        const afterDelete = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.id, chatId));
+        expect(afterDelete.length).toBe(0);
+    });
+
+    test("should error on missing userId for deleteChat", async () => {
+        const response = await client.callTool("deleteChat", {
+            chatId: "some-chat-id",
+        });
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+    });
+
+    test("should error on missing chatId for deleteChat", async () => {
+        const response = await client.callTool("deleteChat", {
+            userId: "test-user",
+        });
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+    });
+
+    test("should error when chat not found", async () => {
+        const response = await client.callTool("deleteChat", {
+            userId: "test-user",
+            chatId: "non-existent-chat-id",
+        });
+
+        expect(response.error).toBeDefined();
+        expect(response.error?.code).toBeDefined();
+        expect(response.error?.message).toBeDefined();
+        expect(response.error?.message).toContain("Chat not found");
+    });
+
+    test("should error when chat belongs to different user", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId1 = "test-user-delete-2";
+        const userId2 = "test-user-delete-3";
+
+        // Save a chat for user1
+        const saveResponse = await client.callTool("saveChat", {
+            userId: userId1,
+            title: "User1 Chat",
+            turns: [{ prompt: "Q", response: "A" }],
+        });
+
+        expect(saveResponse.error).toBeUndefined();
+        const saveResult = saveResponse.result as {
+            structuredContent: { chatId: string };
+        };
+        const chatId = saveResult.structuredContent.chatId;
+
+        // Try to delete it as user2 (should fail)
+        const deleteResponse = await client.callTool("deleteChat", {
+            userId: userId2,
+            chatId,
+        });
+
+        expect(deleteResponse.error).toBeDefined();
+        expect(deleteResponse.error?.code).toBeDefined();
+        expect(deleteResponse.error?.message).toBeDefined();
+        expect(deleteResponse.error?.message).toContain("Chat not found or does not belong to user");
+
+        // Verify chat still exists in database (should not be deleted)
+        const db = getTestDrizzle();
+        const stillExists = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.id, chatId));
+        expect(stillExists.length).toBe(1);
+        expect(stillExists[0].userId).toBe(userId1);
+    });
+
+    test("should handle delete workflow: save → delete → verify deleted → load shows empty", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-delete-4";
+
+        // Step 1: Save a chat
+        const saveResponse = await client.callTool("saveChat", {
+            userId,
+            title: "Workflow Test Chat",
+            turns: [{ prompt: "Q", response: "A" }],
+        });
+
+        expect(saveResponse.error).toBeUndefined();
+        const saveResult = saveResponse.result as {
+            structuredContent: { chatId: string };
+        };
+        const chatId = saveResult.structuredContent.chatId;
+
+        // Step 2: Verify it exists in loadMyChats
+        const loadBeforeDelete = await client.callTool("loadMyChats", {
+            userId,
+        });
+
+        expect(loadBeforeDelete.error).toBeUndefined();
+        const loadBeforeResult = loadBeforeDelete.result as {
+            structuredContent: {
+                chats: Array<{ id: string }>;
+                pagination: { total: number };
+            };
+        };
+        expect(loadBeforeResult.structuredContent.pagination.total).toBe(1);
+        expect(loadBeforeResult.structuredContent.chats[0].id).toBe(chatId);
+
+        // Step 3: Delete the chat
+        const deleteResponse = await client.callTool("deleteChat", {
+            userId,
+            chatId,
+        });
+
+        expect(deleteResponse.error).toBeUndefined();
+        const deleteResult = deleteResponse.result as {
+            structuredContent: { deleted: boolean };
+        };
+        expect(deleteResult.structuredContent.deleted).toBe(true);
+
+        // Step 4: Verify it's deleted from database
+        const db = getTestDrizzle();
+        const dbCheck = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.id, chatId));
+        expect(dbCheck.length).toBe(0);
+
+        // Step 5: Verify loadMyChats shows empty
+        const loadAfterDelete = await client.callTool("loadMyChats", {
+            userId,
+        });
+
+        expect(loadAfterDelete.error).toBeUndefined();
+        const loadAfterResult = loadAfterDelete.result as {
+            structuredContent: {
+                chats: unknown[];
+                pagination: { total: number };
+            };
+        };
+        expect(loadAfterResult.structuredContent.pagination.total).toBe(0);
+        expect(loadAfterResult.structuredContent.chats).toHaveLength(0);
+    });
+
+    test("should delete one chat without affecting others", async () => {
+        // Skip if no OpenAI API key
+        if (!process.env.OPENAI_API_KEY) {
+            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            return;
+        }
+
+        const userId = "test-user-delete-5";
+
+        // Save multiple chats
+        const saveResponse1 = await client.callTool("saveChat", {
+            userId,
+            title: "Chat 1",
+            turns: [{ prompt: "Q1", response: "A1" }],
+        });
+
+        const saveResponse2 = await client.callTool("saveChat", {
+            userId,
+            title: "Chat 2",
+            turns: [{ prompt: "Q2", response: "A2" }],
+        });
+
+        expect(saveResponse1.error).toBeUndefined();
+        expect(saveResponse2.error).toBeUndefined();
+
+        const saveResult1 = saveResponse1.result as {
+            structuredContent: { chatId: string };
+        };
+        const saveResult2 = saveResponse2.result as {
+            structuredContent: { chatId: string };
+        };
+        const chatId1 = saveResult1.structuredContent.chatId;
+        const chatId2 = saveResult2.structuredContent.chatId;
+
+        // Verify both exist
+        const loadBefore = await client.callTool("loadMyChats", {
+            userId,
+        });
+        const loadBeforeResult = loadBefore.result as {
+            structuredContent: {
+                chats: Array<{ id: string }>;
+                pagination: { total: number };
+            };
+        };
+        expect(loadBeforeResult.structuredContent.pagination.total).toBe(2);
+
+        // Delete only chat1
+        const deleteResponse = await client.callTool("deleteChat", {
+            userId,
+            chatId: chatId1,
+        });
+
+        expect(deleteResponse.error).toBeUndefined();
+
+        // Verify chat1 is deleted but chat2 still exists
+        const db = getTestDrizzle();
+        const dbCheck1 = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.id, chatId1));
+        const dbCheck2 = await db
+            .select()
+            .from(chats)
+            .where(eq(chats.id, chatId2));
+
+        expect(dbCheck1.length).toBe(0);
+        expect(dbCheck2.length).toBe(1);
+
+        // Verify loadMyChats shows only chat2
+        const loadAfter = await client.callTool("loadMyChats", {
+            userId,
+        });
+        const loadAfterResult = loadAfter.result as {
+            structuredContent: {
+                chats: Array<{ id: string }>;
+                pagination: { total: number };
+            };
+        };
+        expect(loadAfterResult.structuredContent.pagination.total).toBe(1);
+        expect(loadAfterResult.structuredContent.chats[0].id).toBe(chatId2);
     });
 
     // -------------------------------------------------------------------------
