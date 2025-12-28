@@ -333,8 +333,7 @@ async function handleCallTool(request: CallToolRequest) {
                 ],
                 structuredContent: result,
             };
-        }
-        else if (toolName === "deleteChat") {
+        } else if (toolName === "deleteChat") {
             const result = await deleteChat(args as { userId: string; chatId: string });
             console.log("[MCP Handler] handleCallTool - deleteChat result:", JSON.stringify(result));
             return {
@@ -346,9 +345,7 @@ async function handleCallTool(request: CallToolRequest) {
                 ],
                 structuredContent: result,
             };
-        }
-
-        else {
+        } else {
             throw new Error(`Unknown tool: ${toolName}`);
         }
     } catch (error) {
