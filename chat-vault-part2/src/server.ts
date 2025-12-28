@@ -26,6 +26,16 @@ import { deleteChat } from "./tools/deleteChat.js";
 
 dotenv.config();
 
+// Anonymous user limits (for tutorial purposes)
+export const ANON_CHAT_EXPIRY_DAYS = 30; // Chats older than 30 days are considered expired
+export const ANON_MAX_CHATS = 10; // Maximum number of chats for anonymous users
+
+// User context type (from Findexar headers)
+export interface UserContext {
+    isAnon?: boolean;
+    portalLink?: string | null;
+}
+
 // Session management
 type SessionRecord = {
     server: Server;
@@ -640,10 +650,18 @@ export async function handleMcpRequest(
                 "[MCP] Error stack:",
                 error instanceof Error ? error.stack : "N/A"
             );
+            // Preserve error messages for user-facing errors (validation, not found, etc.)
+            // Use the actual error message if it's meaningful, otherwise use "Internal error"
+            const isUserFacingError =
+                errorMessage.includes("not found") ||
+                errorMessage.includes("required") ||
+                errorMessage.includes("invalid") ||
+                errorMessage.includes("does not belong");
+
             writeJsonRpcResponse(res, id, undefined, {
                 code: -32603,
-                message: "Internal error",
-                data: errorMessage,
+                message: isUserFacingError ? errorMessage : "Internal error",
+                data: isUserFacingError ? undefined : errorMessage,
             });
             res.end();
         }
