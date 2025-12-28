@@ -28,6 +28,7 @@ import { z } from "zod";
 
 type ChatVaultWidget = {
   id: string;
+  description: string;
   title: string;
   templateUri: string;
   invoking: string;
@@ -156,6 +157,7 @@ function widgetDescriptorMeta(widget: ChatVaultWidget) {
     "openai/toolInvocation/invoked": widget.invoked,
     "openai/widgetAccessible": true,
     "openai/resultCanProduceWidget": true,
+    "openai/widgetDescription": widget.description,
   } as const;
 }
 
@@ -186,6 +188,7 @@ const widgets: ChatVaultWidget[] = [
     invoked: "ChatVault opened",
     html: "", // Will be loaded lazily
     responseText: "Opened ChatVault!",
+    description: "Browse, display, search, and and delete my saved chats in the ChatVault widget. Liited in scope to user's explicitely saved chats only",
   },
 ];
 
