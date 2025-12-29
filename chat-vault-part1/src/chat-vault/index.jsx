@@ -524,7 +524,7 @@ function App() {
     setHelpText(`# How to Use ChatVault
 
 ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
-
+Note: chats are stored for 7 days in the free version of the app.
 ## Saving Conversations
 
 You have three flexible ways to save conversations to your vault:
@@ -1059,35 +1059,6 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             >
               <MdRefresh className="w-5 h-5" />
             </button>
-            <button
-              onClick={handleOpenWebsite}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode 
-                  ? "hover:bg-gray-800 text-gray-300" 
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
-              title="Open on the website"
-            >
-              <MdOpenInNew className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleFullscreen}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode
-                  ? "hover:bg-gray-800 text-gray-300"
-                  : "hover:bg-gray-100 text-gray-600"
-              } ${
-                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
-              disabled={!window.openai?.requestDisplayMode}
-            >
-              {displayMode === "fullscreen" ? (
-                <MdFullscreenExit className="w-5 h-5" />
-              ) : (
-                <MdFullscreen className="w-5 h-5" />
-              )}
-            </button>
           </div>
           {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
             <button
@@ -1286,6 +1257,35 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 <MdArrowBack className="w-5 h-5" />
               </button>
             )}
+            <button
+              onClick={handleOpenWebsite}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? "hover:bg-gray-800 text-gray-300" 
+                  : "hover:bg-gray-100 text-gray-600"
+              }`}
+              title="Open on the website"
+            >
+              <MdOpenInNew className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleFullscreen}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              } ${
+                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
+              disabled={!window.openai?.requestDisplayMode}
+            >
+              {displayMode === "fullscreen" ? (
+                <MdFullscreenExit className="w-5 h-5" />
+              ) : (
+                <MdFullscreen className="w-5 h-5" />
+              )}
+            </button>
           </div>
         </div>
 
