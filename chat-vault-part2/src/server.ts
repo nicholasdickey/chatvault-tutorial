@@ -267,6 +267,16 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
         "userContext:",
         JSON.stringify(userContext)
     );
+    // Debug: Check if portalLink is in arguments (maybe nested or with different casing)
+    if (toolName === "loadMyChats") {
+        console.log("[MCP Handler] Debug - checking for portalLink in args:", {
+            hasPortalLink: !!(args as any).portalLink,
+            hasPortal_link: !!(args as any).portal_link,
+            hasPortalLinkLower: !!(args as any).portallink,
+            allArgKeys: Object.keys(args),
+            argsFull: JSON.stringify(args),
+        });
+    }
 
     try {
         if (toolName === "saveChat") {
@@ -503,6 +513,14 @@ export async function handleMcpRequest(
         // Extract user context from Findexar headers
         const isAnonHeader = req.headers["x-findexar-is-anon-user"];
         const portalLinkHeader = req.headers["x-findexar-portal-link"];
+        // Log all Findexar headers for debugging
+        const findexarHeaders = Object.keys(req.headers)
+            .filter(key => key.toLowerCase().startsWith("x-findexar"))
+            .reduce((acc, key) => {
+                acc[key] = req.headers[key];
+                return acc;
+            }, {} as Record<string, string | string[] | undefined>);
+        console.log("[MCP] All Findexar headers:", JSON.stringify(findexarHeaders));
         const userContext: UserContext = {
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
