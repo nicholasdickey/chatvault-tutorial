@@ -64,7 +64,9 @@ function createMcpServer(): Server {
 
     // Register handlers
     server.setRequestHandler(ListToolsRequestSchema, handleListTools);
-    server.setRequestHandler(CallToolRequestSchema, handleCallTool);
+    // Note: handleCallTool is called directly from handleMcpRequest with userContext
+    // This registration is for SDK compatibility but may not be used
+    server.setRequestHandler(CallToolRequestSchema, (request) => handleCallTool(request));
 
     return server;
 }
@@ -250,7 +252,7 @@ async function handleListTools(request: ListToolsRequest) {
 }
 
 // Handler for tools/call
-async function handleCallTool(request: CallToolRequest) {
+async function handleCallTool(request: CallToolRequest, userContext?: UserContext) {
     const requestId = (request as unknown as { id?: string | number }).id;
     const toolName = request.params.name;
     const args = request.params.arguments ?? {};
@@ -261,7 +263,9 @@ async function handleCallTool(request: CallToolRequest) {
         "tool:",
         toolName,
         "arguments:",
-        JSON.stringify(args)
+        JSON.stringify(args),
+        "userContext:",
+        JSON.stringify(userContext)
     );
 
     try {
@@ -278,9 +282,12 @@ async function handleCallTool(request: CallToolRequest) {
                 structuredContent: result,
             };
         } else if (toolName === "loadMyChats") {
-            const result = await loadMyChats(args as { userId: string; page?: number; size?: number; query?: string });
-            console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats");
-            // Return in Part 1 compatible format: structuredContent with chats and pagination
+            const result = await loadMyChats({
+                ...(args as { userId: string; page?: number; size?: number; query?: string }),
+                userContext,
+            });
+            console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats", "userInfo:", result.userInfo);
+            // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
             return {
                 content: [
                     {
@@ -291,10 +298,12 @@ async function handleCallTool(request: CallToolRequest) {
                 structuredContent: {
                     chats: result.chats,
                     pagination: result.pagination,
+                    userInfo: result.userInfo,
                 },
                 _meta: {
                     chats: result.chats,
                     pagination: result.pagination,
+                    userInfo: result.userInfo,
                 },
             };
         } else if (toolName === "searchMyChats") {
@@ -484,6 +493,15 @@ export async function handleMcpRequest(
             return;
         }
 
+        // Extract user context from Findexar headers
+        const isAnonHeader = req.headers["x-findexar-is-anon-user"];
+        const portalLinkHeader = req.headers["x-findexar-portal-link"];
+        const userContext: UserContext = {
+            isAnon: isAnonHeader === "true" || isAnonHeader === "True",
+            portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
+        };
+        console.log("[MCP] User context extracted:", userContext);
+
         const body = await readRequestBody(req);
         console.log("[MCP] Incoming request body:", body);
         const requestData = JSON.parse(body);
@@ -625,7 +643,7 @@ export async function handleMcpRequest(
                     "params:",
                     JSON.stringify(params)
                 );
-                result = await handleCallTool(request);
+                result = await handleCallTool(request, userContext);
                 console.log("[MCP] tools/call response:", JSON.stringify(result));
             } else {
                 console.error("[MCP] Method not found:", method);
