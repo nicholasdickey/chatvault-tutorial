@@ -1060,25 +1060,56 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               <MdRefresh className="w-5 h-5" />
             </button>
           </div>
-          {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
+          <div className="flex items-center gap-2">
+            {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
+              <button
+                onClick={handleCounterClick}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
+                    : "bg-white border-gray-300 hover:bg-gray-50"
+                } ${
+                  userInfo.remainingSlots === 0
+                    ? "text-red-500"
+                    : userInfo.remainingSlots === 1
+                    ? "text-yellow-500"
+                    : "text-green-500"
+                }`}
+                title="Click to learn about chat limits"
+              >
+                {userInfo.remainingSlots}
+              </button>
+            )}
             <button
-              onClick={handleCounterClick}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                isDarkMode
-                  ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
-                  : "bg-white border-gray-300 hover:bg-gray-50"
-              } ${
-                userInfo.remainingSlots === 0
-                  ? "text-red-500"
-                  : userInfo.remainingSlots === 1
-                  ? "text-yellow-500"
-                  : "text-green-500"
+              onClick={handleOpenWebsite}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? "hover:bg-gray-800 text-gray-300" 
+                  : "hover:bg-gray-100 text-gray-600"
               }`}
-              title="Click to learn about chat limits"
+              title="Open on the website"
             >
-              {userInfo.remainingSlots}
+              <MdOpenInNew className="w-5 h-5" />
             </button>
-          )}
+            <button
+              onClick={handleFullscreen}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              } ${
+                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
+              disabled={!window.openai?.requestDisplayMode}
+            >
+              {displayMode === "fullscreen" ? (
+                <MdFullscreenExit className="w-5 h-5" />
+              ) : (
+                <MdFullscreen className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
         {/* Alert Area */}
         {alertMessage && (() => {
@@ -1257,35 +1288,6 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 <MdArrowBack className="w-5 h-5" />
               </button>
             )}
-            <button
-              onClick={handleOpenWebsite}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode 
-                  ? "hover:bg-gray-800 text-gray-300" 
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
-              title="Open on the website"
-            >
-              <MdOpenInNew className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleFullscreen}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode
-                  ? "hover:bg-gray-800 text-gray-300"
-                  : "hover:bg-gray-100 text-gray-600"
-              } ${
-                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
-              disabled={!window.openai?.requestDisplayMode}
-            >
-              {displayMode === "fullscreen" ? (
-                <MdFullscreenExit className="w-5 h-5" />
-              ) : (
-                <MdFullscreen className="w-5 h-5" />
-              )}
-            </button>
           </div>
         </div>
 
