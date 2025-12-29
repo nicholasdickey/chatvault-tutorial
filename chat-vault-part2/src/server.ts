@@ -282,9 +282,16 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 structuredContent: result,
             };
         } else if (toolName === "loadMyChats") {
+            // Findexar may inject portalLink and isAnon into arguments as well
+            // Use arguments as fallback if not in headers
+            const finalUserContext: UserContext = {
+                isAnon: userContext?.isAnon ?? (args as any).isAnon ?? false,
+                portalLink: userContext?.portalLink ?? (args as any).portalLink ?? null,
+            };
+            console.log("[MCP Handler] Final userContext (headers + args fallback):", finalUserContext);
             const result = await loadMyChats({
                 ...(args as { userId: string; page?: number; size?: number; query?: string }),
-                userContext,
+                userContext: finalUserContext,
             });
             console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats", "userInfo:", result.userInfo);
             // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
@@ -500,7 +507,7 @@ export async function handleMcpRequest(
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
         };
-        console.log("[MCP] User context extracted:", userContext);
+        console.log("[MCP] User context extracted from headers:", userContext);
 
         const body = await readRequestBody(req);
         console.log("[MCP] Incoming request body:", body);
