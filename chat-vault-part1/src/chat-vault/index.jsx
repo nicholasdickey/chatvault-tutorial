@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdAccountCircle, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -371,12 +371,12 @@ function App() {
     }
   };
 
-  const handleMyAccountClick = () => {
+  const handleOpenWebsite = () => {
     if (userInfo?.portalLink) {
-      addLog("My Account clicked", { portalLink: userInfo.portalLink });
+      addLog("Open on website clicked", { portalLink: userInfo.portalLink });
       window.open(userInfo.portalLink, "_blank");
     } else {
-      addLog("My Account clicked but no portal link available");
+      addLog("Open on website clicked but no portal link available");
     }
   };
 
@@ -1060,16 +1060,33 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               <MdRefresh className="w-5 h-5" />
             </button>
             <button
-              onClick={handleMyAccountClick}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              onClick={handleOpenWebsite}
+              className={`p-2 rounded-lg transition-colors ${
                 isDarkMode 
                   ? "hover:bg-gray-800 text-gray-300" 
-                  : "hover:bg-gray-100 text-gray-700"
+                  : "hover:bg-gray-100 text-gray-600"
               }`}
-              title="My Account"
+              title="Open on the website"
             >
-              <MdAccountCircle className="w-5 h-5" />
-              <span>My Account</span>
+              <MdOpenInNew className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleFullscreen}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              } ${
+                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
+              disabled={!window.openai?.requestDisplayMode}
+            >
+              {displayMode === "fullscreen" ? (
+                <MdFullscreenExit className="w-5 h-5" />
+              ) : (
+                <MdFullscreen className="w-5 h-5" />
+              )}
             </button>
           </div>
           {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
@@ -1195,28 +1212,8 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </div>
           </div>
           <div className="flex gap-2">
-            {/* Fullscreen button */}
-            <button
-              onClick={handleFullscreen}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode
-                  ? "bg-gray-800 text-white hover:bg-gray-700"
-                  : "bg-gray-100 text-black hover:bg-gray-200"
-              } ${
-                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
-              disabled={!window.openai?.requestDisplayMode}
-            >
-              {displayMode === "fullscreen" ? (
-                <MdFullscreenExit className="w-5 h-5" />
-              ) : (
-                <MdFullscreen className="w-5 h-5" />
-              )}
-            </button>
-
-            {/* PiP button */}
-            <button
+            {/* PiP button - commented out until PiP mode is working */}
+            {/* <button
               onClick={handlePipMode}
               className={`p-2 rounded-lg transition-colors ${
                 displayMode === "pip"
@@ -1233,7 +1230,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               disabled={!window.openai?.requestDisplayMode}
             >
               <MdPictureInPicture className="w-5 h-5" />
-            </button>
+            </button> */}
 
             <button
               onClick={() => {
