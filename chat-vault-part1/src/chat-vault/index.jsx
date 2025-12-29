@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdAccountCircle, MdDelete, MdHelp } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdAccountCircle, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -52,6 +52,7 @@ function App() {
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpText, setHelpText] = useState(null);
+  const [displayMode, setDisplayMode] = useState("normal"); // "normal" | "fullscreen" | "pip"
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -285,6 +286,62 @@ function App() {
     setExpandedTurns(new Set());
   };
 
+  const handleFullscreen = async () => {
+    try {
+      if (!window.openai?.requestDisplayMode) {
+        addLog("requestDisplayMode not available");
+        setAlertMessage("Fullscreen mode not available in this environment");
+        setAlertPortalLink(null);
+        return;
+      }
+
+      if (displayMode === "fullscreen") {
+        // Exit fullscreen - return to normal
+        const response = await window.openai.requestDisplayMode({ mode: "normal" });
+        setDisplayMode(response.mode || "normal");
+        addLog("Exited fullscreen", response);
+      } else {
+        // Enter fullscreen
+        const response = await window.openai.requestDisplayMode({ mode: "fullscreen" });
+        setDisplayMode(response.mode || "fullscreen");
+        addLog("Entered fullscreen", response);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog("Fullscreen error", { error: errorMessage });
+      setAlertMessage(`Failed to change display mode: ${errorMessage}`);
+      setAlertPortalLink(null);
+    }
+  };
+
+  const handlePipMode = async () => {
+    try {
+      if (!window.openai?.requestDisplayMode) {
+        addLog("requestDisplayMode not available");
+        setAlertMessage("Picture-in-Picture mode not available in this environment");
+        setAlertPortalLink(null);
+        return;
+      }
+
+      if (displayMode === "pip") {
+        // Exit PiP - return to normal
+        const response = await window.openai.requestDisplayMode({ mode: "normal" });
+        setDisplayMode(response.mode || "normal");
+        addLog("Exited PiP mode", response);
+      } else {
+        // Enter PiP
+        const response = await window.openai.requestDisplayMode({ mode: "pip" });
+        setDisplayMode(response.mode || "pip");
+        addLog("Entered PiP mode", response);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog("PiP mode error", { error: errorMessage });
+      setAlertMessage(`Failed to enter PiP mode: ${errorMessage}`);
+      setAlertPortalLink(null);
+    }
+  };
+
   const handleRefresh = async () => {
     addLog("Refresh clicked");
     setLoading(true);
@@ -375,6 +432,9 @@ function App() {
     setDeleteConfirmation(null);
     setAlertMessage(null);
     setAlertPortalLink(null);
+    
+    // Show loading indicator during delete operation
+    setPaginationLoading(true);
 
     try {
       if (!window.openai?.callTool) {
@@ -408,6 +468,9 @@ function App() {
       addLog("Error deleting chat", { error: errorMessage });
       setAlertMessage(`Failed to delete chat: ${errorMessage}`);
       setAlertPortalLink(null);
+    } finally {
+      // Hide loading indicator when done
+      setPaginationLoading(false);
     }
   };
 
@@ -745,9 +808,11 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
       setManualSaveContent("");
       setManualSaveHtml("");
       setManualSaveError(null);
-
-      // Reload chats and update userInfo with inner loading indicator
+      
+      // Show loading indicator immediately after modal closes (same as pagination)
       setPaginationLoading(true);
+
+      // Reload chats and update userInfo with loading indicator
       if (window.openai?.callTool) {
         try {
           const loadResult = await window.openai.callTool("loadMyChats", {
@@ -1130,6 +1195,46 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </div>
           </div>
           <div className="flex gap-2">
+            {/* Fullscreen button */}
+            <button
+              onClick={handleFullscreen}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "bg-gray-800 text-white hover:bg-gray-700"
+                  : "bg-gray-100 text-black hover:bg-gray-200"
+              } ${
+                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
+              disabled={!window.openai?.requestDisplayMode}
+            >
+              {displayMode === "fullscreen" ? (
+                <MdFullscreenExit className="w-5 h-5" />
+              ) : (
+                <MdFullscreen className="w-5 h-5" />
+              )}
+            </button>
+
+            {/* PiP button */}
+            <button
+              onClick={handlePipMode}
+              className={`p-2 rounded-lg transition-colors ${
+                displayMode === "pip"
+                  ? isDarkMode
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-blue-500 text-white hover:bg-blue-600"
+                  : isDarkMode
+                  ? "bg-gray-800 text-white hover:bg-gray-700"
+                  : "bg-gray-100 text-black hover:bg-gray-200"
+              } ${
+                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              title={displayMode === "pip" ? "Exit picture-in-picture" : "Enter picture-in-picture"}
+              disabled={!window.openai?.requestDisplayMode}
+            >
+              <MdPictureInPicture className="w-5 h-5" />
+            </button>
+
             <button
               onClick={() => {
                 // Check if limit reached for anonymous users
