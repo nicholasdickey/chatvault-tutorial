@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -47,6 +47,7 @@ function App() {
   const [manualSaveError, setManualSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [contentMetadata, setContentMetadata] = useState(null);
   const [alertMessage, setAlertMessage] = useState(null);
   const [alertPortalLink, setAlertPortalLink] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -173,6 +174,11 @@ function App() {
                 setUserInfo(result.structuredContent.userInfo);
                 addLog("User info extracted", result.structuredContent.userInfo);
               }
+              // Extract content metadata if present
+              if (result.structuredContent.content) {
+                setContentMetadata(result.structuredContent.content);
+                addLog("Content metadata extracted", result.structuredContent.content);
+              }
             } else if (result?.content?.[0]?.text) {
               addLog("Unexpected result format", result);
             }
@@ -246,9 +252,16 @@ function App() {
     const deduplicated = [];
     
     for (const chat of chatList) {
-      // Create a signature based on title and first turn content
-      const firstTurn = chat.turns?.[0];
-      const signature = `${chat.title || ""}|${firstTurn?.prompt || ""}|${firstTurn?.response || ""}`;
+      // Create a signature based on title and content (different for notes vs chats)
+      let signature;
+      if (chat.type === "note") {
+        // For notes, use title and content
+        signature = `${chat.title || ""}|${chat.content || ""}`;
+      } else {
+        // For chats, use title and first turn content
+        const firstTurn = chat.turns?.[0];
+        signature = `${chat.title || ""}|${firstTurn?.prompt || ""}|${firstTurn?.response || ""}`;
+      }
       
       if (!seen.has(signature)) {
         seen.set(signature, chat);
@@ -520,11 +533,12 @@ function App() {
       return;
     }
 
-    // Set help text directly (static content, no backend call needed)
-    setHelpText(`# How to Use ChatVault
+    // Get help text from metadata with fallback to default
+    const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
+    const defaultHelpText = `# How to Use ChatVault
 
 ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
-Note: chats are stored for 7 days in the free version of the app.
+Note: chats are stored for {expirationDays} days in the free version of the app.
 ## Saving Conversations
 
 You have three flexible ways to save conversations to your vault:
@@ -545,7 +559,12 @@ Use the '+' button in the ChatVault widget to manually add conversations:
 
 ## Accessing Your Vault
 
-Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`);
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`;
+    
+    const rawHelpText = contentMetadata?.helpText ?? defaultHelpText;
+    // Replace placeholders in help text
+    const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
+    setHelpText(processedHelpText);
     setShowHelp(true);
   };
 
@@ -632,7 +651,17 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
   };
 
   const formatChatForCopy = (chat) => {
-    if (!chat || !chat.turns || chat.turns.length === 0) {
+    if (!chat) {
+      return "";
+    }
+    
+    // Handle notes differently
+    if (chat.type === "note") {
+      return chat.content || "";
+    }
+    
+    // Handle chats with turns
+    if (!chat.turns || chat.turns.length === 0) {
       return "";
     }
     
@@ -762,16 +791,8 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           return; // Don't throw, just show error in alert
         }
         
-        // Check for parse_error
-        if (result.structuredContent.error === "parse_error") {
-          const message = result.structuredContent.message || "Could not parse the chat content";
-          addLog("Parse error", { message, result });
-          
-          // Show error in modal (keep modal open so user can fix the content)
-          setManualSaveError(message);
-          setIsSaving(false);
-          return; // Don't throw, just show error in modal
-        }
+        // Parse errors are now handled by backend - content is saved as note instead of erroring
+        // No need to handle parse_error here anymore
         
         // Check for server_error
         if (result.structuredContent.error === "server_error") {
@@ -828,6 +849,10 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             if (loadResult.structuredContent.userInfo) {
               setUserInfo(loadResult.structuredContent.userInfo);
               addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
+            }
+            // Update content metadata if present
+            if (loadResult.structuredContent.content) {
+              setContentMetadata(loadResult.structuredContent.content);
             }
           }
         } catch (err) {
@@ -1075,7 +1100,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                     ? "text-yellow-500"
                     : "text-green-500"
                 }`}
-                title="Click to learn about chat limits"
+                title={contentMetadata?.limits?.counterTooltip ?? "Click to learn about chat limits"}
               >
                 {userInfo.remainingSlots}
               </button>
@@ -1240,10 +1265,11 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 if (userInfo?.isAnon && userInfo.remainingSlots === 0) {
                   const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
                     ? userInfo.totalChats + userInfo.remainingSlots 
-                    : 10;
-                  const message = userInfo.portalLink
-                    ? `You've reached the limit of ${maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.`
-                    : `You've reached the limit of ${maxChats} free chats. Please delete a chat to add more.`;
+                    : (contentMetadata?.config?.freeChatLimit ?? 10);
+                  const messageTemplate = userInfo.portalLink
+                    ? (contentMetadata?.limits?.limitReachedMessageWithPortal ?? "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.")
+                    : (contentMetadata?.limits?.limitReachedMessageWithoutPortal ?? "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.");
+                  const message = messageTemplate.replace(/{maxChats}/g, String(maxChats));
                   setAlertMessage(message);
                   setAlertPortalLink(userInfo.portalLink || null);
                   return;
@@ -1266,7 +1292,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   : "bg-gray-100 text-black hover:bg-gray-200"
               }`}
               title={userInfo?.isAnon && userInfo.remainingSlots === 0 
-                ? "Chat limit reached - delete a chat or upgrade" 
+                ? (contentMetadata?.limits?.limitReachedTooltip ?? "Chat limit reached - delete a chat or upgrade")
                 : "Save chat manually"}
             >
               <MdAdd className={`w-5 h-5 ${
@@ -1417,142 +1443,168 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 </div>
               </div>
               
-              {selectedChat.turns.map((turn, index) => {
-                const isExpanded = expandedTurns.has(index);
-                const promptId = `prompt-${selectedChat.timestamp}-${index}`;
-                const responseId = `response-${selectedChat.timestamp}-${index}`;
-                const promptCopied = !!copiedItems[promptId];
-                const responseCopied = !!copiedItems[responseId];
-                
-                // Check if either prompt or response needs truncation (longer than 150 chars)
-                const maxLength = 150;
-                const promptNeedsTruncation = turn.prompt.length > maxLength;
-                const responseNeedsTruncation = turn.response.length > maxLength;
-                const needsExpansion = promptNeedsTruncation || responseNeedsTruncation;
-                
-                return (
-                  <div key={index} className={`space-y-2 p-4 rounded-lg border ${
-                    isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+              {selectedChat.type === "note" ? (
+                // Note rendering - single card with content
+                <div className={`p-4 rounded-lg border ${
+                  isDarkMode ? "bg-purple-900/30 border-purple-700/50" : "bg-purple-50 border-purple-200"
+                }`}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <MdNote className={`w-4 h-4 ${
+                        isDarkMode ? "text-purple-400" : "text-purple-600"
+                      }`} />
+                      <div className={`text-xs font-medium ${
+                        isDarkMode ? "text-purple-400" : "text-purple-600"
+                      }`}>
+                        Note
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`text-sm whitespace-pre-wrap ${
+                    isDarkMode ? "text-gray-200" : "text-gray-800"
                   }`}>
-                    {/* Prompt */}
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className={`text-xs font-medium ${
-                          isDarkMode ? "text-blue-400" : "text-blue-600"
-                        }`}>
-                          Prompt
+                    {selectedChat.content || ""}
+                  </div>
+                </div>
+              ) : (
+                // Chat rendering - turns with prompt/response
+                selectedChat.turns?.map((turn, index) => {
+                  const isExpanded = expandedTurns.has(index);
+                  const promptId = `prompt-${selectedChat.timestamp}-${index}`;
+                  const responseId = `response-${selectedChat.timestamp}-${index}`;
+                  const promptCopied = !!copiedItems[promptId];
+                  const responseCopied = !!copiedItems[responseId];
+                  
+                  // Check if either prompt or response needs truncation (longer than 150 chars)
+                  const maxLength = 150;
+                  const promptNeedsTruncation = turn.prompt.length > maxLength;
+                  const responseNeedsTruncation = turn.response.length > maxLength;
+                  const needsExpansion = promptNeedsTruncation || responseNeedsTruncation;
+                  
+                  return (
+                    <div key={index} className={`space-y-2 p-4 rounded-lg border ${
+                      isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+                    }`}>
+                      {/* Prompt */}
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className={`text-xs font-medium ${
+                            isDarkMode ? "text-blue-400" : "text-blue-600"
+                          }`}>
+                            Prompt
+                          </div>
+                          {needsExpansion && (
+                            <button
+                              onClick={() => toggleTurnExpansion(index)}
+                              className={`p-1.5 rounded ${
+                                isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              }`}
+                              title={isExpanded ? "Collapse" : "Expand"}
+                            >
+                              {isExpanded ? (
+                                <MdExpandLess className="w-4 h-4" />
+                              ) : (
+                                <MdExpandMore className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
                         </div>
-                        {needsExpansion && (
+                        <div className={`text-sm flex items-start justify-between gap-2 ${
+                          isDarkMode ? "text-gray-200" : "text-gray-800"
+                        }`}>
+                          <span 
+                            className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                            onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                            onMouseDown={(e) => {
+                              // If expanded, allow text selection by not preventing default
+                              if (isExpanded) {
+                                return; // Allow normal text selection
+                              }
+                              // If not expanded and clickable, prevent text selection on click
+                              if (needsExpansion) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            {isExpanded ? turn.prompt : truncateText(turn.prompt)}
+                          </span>
                           <button
-                            onClick={() => toggleTurnExpansion(index)}
-                            className={`p-1.5 rounded ${
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              copyToClipboard(turn.prompt, promptId);
+                            }}
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
                               isDarkMode
                                 ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                             }`}
-                            title={isExpanded ? "Collapse" : "Expand"}
+                            title="Copy prompt"
                           >
-                            {isExpanded ? (
-                              <MdExpandLess className="w-4 h-4" />
+                            {promptCopied ? (
+                              <MdCheck className="w-3.5 h-3.5 text-green-500" />
                             ) : (
-                              <MdExpandMore className="w-4 h-4" />
+                              <MdContentCopy className="w-3.5 h-3.5" />
                             )}
                           </button>
-                        )}
-                      </div>
-                      <div className={`text-sm flex items-start justify-between gap-2 ${
-                        isDarkMode ? "text-gray-200" : "text-gray-800"
-                      }`}>
-                        <span 
-                          className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                          onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                          onMouseDown={(e) => {
-                            // If expanded, allow text selection by not preventing default
-                            if (isExpanded) {
-                              return; // Allow normal text selection
-                            }
-                            // If not expanded and clickable, prevent text selection on click
-                            if (needsExpansion) {
-                              e.preventDefault();
-                            }
-                          }}
-                        >
-                          {isExpanded ? turn.prompt : truncateText(turn.prompt)}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            copyToClipboard(turn.prompt, promptId);
-                          }}
-                          className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            isDarkMode
-                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          }`}
-                          title="Copy prompt"
-                        >
-                          {promptCopied ? (
-                            <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                          ) : (
-                            <MdContentCopy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Response */}
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className={`text-xs font-medium ${
-                          isDarkMode ? "text-green-400" : "text-green-600"
-                        }`}>
-                          Response
                         </div>
                       </div>
-                      <div className={`text-sm flex items-start justify-between gap-2 ${
-                        isDarkMode ? "text-gray-200" : "text-gray-800"
-                      }`}>
-                        <span 
-                          className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                          onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                          onMouseDown={(e) => {
-                            // If expanded, allow text selection by not preventing default
-                            if (isExpanded) {
-                              return; // Allow normal text selection
-                            }
-                            // If not expanded and clickable, prevent text selection on click
-                            if (needsExpansion) {
+                      
+                      {/* Response */}
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className={`text-xs font-medium ${
+                            isDarkMode ? "text-green-400" : "text-green-600"
+                          }`}>
+                            Response
+                          </div>
+                        </div>
+                        <div className={`text-sm flex items-start justify-between gap-2 ${
+                          isDarkMode ? "text-gray-200" : "text-gray-800"
+                        }`}>
+                          <span 
+                            className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                            onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                            onMouseDown={(e) => {
+                              // If expanded, allow text selection by not preventing default
+                              if (isExpanded) {
+                                return; // Allow normal text selection
+                              }
+                              // If not expanded and clickable, prevent text selection on click
+                              if (needsExpansion) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            {isExpanded ? turn.response : truncateText(turn.response)}
+                          </span>
+                          <button
+                            onClick={(e) => {
                               e.preventDefault();
-                            }
-                          }}
-                        >
-                          {isExpanded ? turn.response : truncateText(turn.response)}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            copyToClipboard(turn.response, responseId);
-                          }}
-                          className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            isDarkMode
-                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          }`}
-                          title="Copy response"
-                        >
-                          {responseCopied ? (
-                            <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                          ) : (
-                            <MdContentCopy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                              e.stopPropagation();
+                              copyToClipboard(turn.response, responseId);
+                            }}
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
+                              isDarkMode
+                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
+                            title="Copy response"
+                          >
+                            {responseCopied ? (
+                              <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                            ) : (
+                              <MdContentCopy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           ) : (
             // Chat list view
@@ -1596,9 +1648,21 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                           onClick={() => handleChatClick(chat)}
                           className="flex-1 text-left"
                         >
-                          <div className="font-medium mb-1">{chat.title}</div>
+                          <div className="flex items-center gap-2 font-medium mb-1">
+                            {chat.type === "note" && (
+                              <MdNote className={`w-4 h-4 flex-shrink-0 ${
+                                isDarkMode ? "text-purple-400" : "text-purple-600"
+                              }`} />
+                            )}
+                            {chat.title}
+                          </div>
                           <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {formatDate(chat.timestamp)} • {chat.turns.length} turn{chat.turns.length !== 1 ? "s" : ""}
+                            {formatDate(chat.timestamp)}
+                            {chat.type === "note" ? (
+                              " • Note"
+                            ) : (
+                              ` • ${chat.turns?.length || 0} turn${(chat.turns?.length || 0) !== 1 ? "s" : ""}`
+                            )}
                           </div>
                         </button>
                         <button

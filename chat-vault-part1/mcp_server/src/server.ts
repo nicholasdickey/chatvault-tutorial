@@ -209,7 +209,9 @@ widgets.forEach((widget) => {
 interface Chat {
   title: string;
   timestamp: number;
-  turns: Array<{
+  type?: "note" | "chat"; // Optional: "note" for unparseable content, "chat" for regular chats (default)
+  content?: string; // For notes: the raw text content
+  turns?: Array<{
     prompt: string;
     response: string;
   }>;
@@ -328,6 +330,22 @@ const searchChatSchema = {
   additionalProperties: false,
 } as const;
 
+const saveChatManuallySchema = {
+  type: "object",
+  properties: {
+    htmlContent: {
+      type: "string",
+      description: "HTML or text content to parse and save",
+    },
+    title: {
+      type: "string",
+      description: "Optional title for the chat/note",
+    },
+  },
+  required: ["htmlContent"],
+  additionalProperties: false,
+} as const;
+
 // Define all ChatVault tools
 const chatVaultTools: Tool[] = [
   {
@@ -373,6 +391,17 @@ const chatVaultTools: Tool[] = [
       destructiveHint: false,
       openWorldHint: false,
       readOnlyHint: true,
+    },
+  },
+  {
+    name: "saveChatManually",
+    description: "Save a chat conversation by parsing HTML/text content. If parsing fails, saves as a note.",
+    inputSchema: saveChatManuallySchema,
+    title: "Save Chat Manually",
+    annotations: {
+      destructiveHint: false,
+      openWorldHint: false,
+      readOnlyHint: false,
     },
   },
 ];
@@ -440,6 +469,47 @@ async function handleCallTool(request: CallToolRequest) {
       const end = start + pageSize;
       const paginatedChats = exampleChats.slice(start, end);
 
+      // Default content metadata (can be overridden by backend/env in real implementation)
+      const defaultHelpText = `# How to Use ChatVault
+
+ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
+Note: chats are stored for {expirationDays} days in the free version of the app.
+## Saving Conversations
+
+You have three flexible ways to save conversations to your vault:
+
+### 1. Ask ChatGPT to Save
+Simply ask ChatGPT to save the current conversation to your vault. You can specify:
+- **By subject**: "Save this conversation about [topic] to my ChatVault"
+- **By number of turns**: "Save the last 5 turns to my ChatVault"
+- **The entire conversation**: "Add this entire chat to my ChatVault"
+
+### 2. Manual Save via Widget
+Use the '+' button in the ChatVault widget to manually add conversations:
+1. Copy a conversation from ChatGPT (or anywhere)
+2. Click the '+' button in the ChatVault widget header
+3. Paste the conversation into the text area
+4. Optionally add a custom title
+5. Click "Save"
+
+## Accessing Your Vault
+
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`;
+
+      const contentMetadata = {
+        helpText: defaultHelpText,
+        limits: {
+          counterTooltip: "Click to learn about chat limits",
+          limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
+          limitReachedMessageWithPortal: "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.",
+          limitReachedMessageWithoutPortal: "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.",
+        },
+        config: {
+          freeChatLimit: 10,
+          chatExpirationDays: 7,
+        },
+      };
+
       const result = {
         content: [
           {
@@ -453,6 +523,7 @@ async function handleCallTool(request: CallToolRequest) {
           pageSize,
           total: exampleChats.length,
           hasMore: end < exampleChats.length,
+          content: contentMetadata,
         },
       };
       console.log("[MCP Handler] handleCallTool - loadMyChats returning", paginatedChats.length, "chats");
@@ -492,6 +563,111 @@ async function handleCallTool(request: CallToolRequest) {
         },
       };
       console.log("[MCP Handler] handleCallTool - searchChat (dummy)");
+      return result;
+    }
+
+    case "saveChatManually": {
+      const htmlContent = (args.htmlContent as string) ?? "";
+      const title = (args.title as string)?.trim() || "Untitled";
+
+      // Try to parse the content as a chat with turns
+      // Simple parsing: look for patterns like "You said:", "AI said:", "User:", "Assistant:", etc.
+      const parseChat = (content: string): { turns?: Array<{ prompt: string; response: string }>; success: boolean } => {
+        // Remove HTML tags for text extraction
+        const textOnly = content.replace(/<[^>]*>/g, "\n").replace(/\n+/g, "\n").trim();
+
+        // Try to find patterns indicating prompts and responses
+        // Common patterns: "You said:", "AI said:", "User:", "Assistant:", "Prompt:", "Response:"
+        const promptPatterns = [
+          /(?:^|\n)\s*(?:You said|User|Prompt|Human)[:\-]\s*\n?(.+?)(?=\n\s*(?:AI said|Assistant|Response|Bot)[:\-]|$)/gis,
+          /(?:^|\n)\s*(?:AI said|Assistant|Response|Bot)[:\-]\s*\n?(.+?)(?=\n\s*(?:You said|User|Prompt|Human)[:\-]|$)/gis,
+        ];
+
+        const turns: Array<{ prompt: string; response: string }> = [];
+        let hasPattern = false;
+
+        // Try pattern matching for structured content
+        const userMatches = Array.from(textOnly.matchAll(/(?:^|\n)\s*(?:You said|User|Prompt|Human)[:\-]\s*\n?(.+?)(?=\n\s*(?:AI said|Assistant|Response|Bot)[:\-]|$)/gis));
+        const aiMatches = Array.from(textOnly.matchAll(/(?:^|\n)\s*(?:AI said|Assistant|Response|Bot)[:\-]\s*\n?(.+?)(?=\n\s*(?:You said|User|Prompt|Human)[:\-]|$)/gis));
+
+        if (userMatches.length > 0 || aiMatches.length > 0) {
+          hasPattern = true;
+          // Try to pair prompts and responses
+          const allMatches = [
+            ...userMatches.map((m, i) => ({ type: "prompt" as const, text: m[1].trim(), index: i * 2 })),
+            ...aiMatches.map((m, i) => ({ type: "response" as const, text: m[1].trim(), index: i * 2 + 1 })),
+          ].sort((a, b) => {
+            // Sort by position in original text
+            const aPos = textOnly.indexOf(a.text);
+            const bPos = textOnly.indexOf(b.text);
+            return aPos - bPos;
+          });
+
+          // Group into pairs
+          for (let i = 0; i < allMatches.length - 1; i += 2) {
+            if (allMatches[i].type === "prompt" && allMatches[i + 1]?.type === "response") {
+              turns.push({
+                prompt: allMatches[i].text,
+                response: allMatches[i + 1].text,
+              });
+            }
+          }
+        }
+
+        // If we found structured turns, return them
+        if (turns.length > 0) {
+          return { turns, success: true };
+        }
+
+        // If we detected patterns but couldn't extract turns, or if content is too short, treat as unparseable
+        return { success: false };
+      };
+
+      const parseResult = parseChat(htmlContent);
+      const timestamp = Date.now();
+
+      let savedChat: Chat;
+
+      if (parseResult.success && parseResult.turns && parseResult.turns.length > 0) {
+        // Save as regular chat
+        savedChat = {
+          title,
+          timestamp,
+          type: "chat",
+          turns: parseResult.turns,
+        };
+        console.log("[MCP Handler] handleCallTool - saveChatManually: parsed as chat with", parseResult.turns.length, "turns");
+      } else {
+        // Save as note
+        // Extract plain text from HTML for note content
+        const plainText = htmlContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        savedChat = {
+          title,
+          timestamp,
+          type: "note",
+          content: plainText || htmlContent,
+        };
+        console.log("[MCP Handler] handleCallTool - saveChatManually: saved as note (could not parse as chat)");
+      }
+
+      // Add to exampleChats array (prepend to show most recent first)
+      exampleChats.unshift(savedChat);
+
+      const result = {
+        content: [
+          {
+            type: "text",
+            text: savedChat.type === "note" 
+              ? "Note saved successfully" 
+              : `Chat saved successfully with ${savedChat.turns?.length || 0} turns`,
+          },
+        ],
+        structuredContent: {
+          saved: true,
+          chat: savedChat,
+        },
+      };
+      console.log("[MCP Handler] handleCallTool - saveChatManually: saved", savedChat.type || "chat");
       return result;
     }
 
