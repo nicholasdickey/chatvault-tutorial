@@ -47,6 +47,7 @@ function App() {
   const [manualSaveError, setManualSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [contentMetadata, setContentMetadata] = useState(null);
   const [alertMessage, setAlertMessage] = useState(null);
   const [alertPortalLink, setAlertPortalLink] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -172,6 +173,11 @@ function App() {
               if (result.structuredContent.userInfo) {
                 setUserInfo(result.structuredContent.userInfo);
                 addLog("User info extracted", result.structuredContent.userInfo);
+              }
+              // Extract content metadata if present
+              if (result.structuredContent.content) {
+                setContentMetadata(result.structuredContent.content);
+                addLog("Content metadata extracted", result.structuredContent.content);
               }
             } else if (result?.content?.[0]?.text) {
               addLog("Unexpected result format", result);
@@ -527,11 +533,12 @@ function App() {
       return;
     }
 
-    // Set help text directly (static content, no backend call needed)
-    setHelpText(`# How to Use ChatVault
+    // Get help text from metadata with fallback to default
+    const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
+    const defaultHelpText = `# How to Use ChatVault
 
 ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
-Note: chats are stored for 7 days in the free version of the app.
+Note: chats are stored for {expirationDays} days in the free version of the app.
 ## Saving Conversations
 
 You have three flexible ways to save conversations to your vault:
@@ -552,7 +559,12 @@ Use the '+' button in the ChatVault widget to manually add conversations:
 
 ## Accessing Your Vault
 
-Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`);
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`;
+    
+    const rawHelpText = contentMetadata?.helpText ?? defaultHelpText;
+    // Replace placeholders in help text
+    const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
+    setHelpText(processedHelpText);
     setShowHelp(true);
   };
 
@@ -838,6 +850,10 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               setUserInfo(loadResult.structuredContent.userInfo);
               addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
             }
+            // Update content metadata if present
+            if (loadResult.structuredContent.content) {
+              setContentMetadata(loadResult.structuredContent.content);
+            }
           }
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
@@ -1084,7 +1100,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                     ? "text-yellow-500"
                     : "text-green-500"
                 }`}
-                title="Click to learn about chat limits"
+                title={contentMetadata?.limits?.counterTooltip ?? "Click to learn about chat limits"}
               >
                 {userInfo.remainingSlots}
               </button>
@@ -1249,10 +1265,11 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 if (userInfo?.isAnon && userInfo.remainingSlots === 0) {
                   const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
                     ? userInfo.totalChats + userInfo.remainingSlots 
-                    : 10;
-                  const message = userInfo.portalLink
-                    ? `You've reached the limit of ${maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.`
-                    : `You've reached the limit of ${maxChats} free chats. Please delete a chat to add more.`;
+                    : (contentMetadata?.config?.freeChatLimit ?? 10);
+                  const messageTemplate = userInfo.portalLink
+                    ? (contentMetadata?.limits?.limitReachedMessageWithPortal ?? "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.")
+                    : (contentMetadata?.limits?.limitReachedMessageWithoutPortal ?? "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.");
+                  const message = messageTemplate.replace(/{maxChats}/g, String(maxChats));
                   setAlertMessage(message);
                   setAlertPortalLink(userInfo.portalLink || null);
                   return;
@@ -1275,7 +1292,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   : "bg-gray-100 text-black hover:bg-gray-200"
               }`}
               title={userInfo?.isAnon && userInfo.remainingSlots === 0 
-                ? "Chat limit reached - delete a chat or upgrade" 
+                ? (contentMetadata?.limits?.limitReachedTooltip ?? "Chat limit reached - delete a chat or upgrade")
                 : "Save chat manually"}
             >
               <MdAdd className={`w-5 h-5 ${

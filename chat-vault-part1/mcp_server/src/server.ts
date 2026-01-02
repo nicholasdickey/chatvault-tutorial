@@ -469,6 +469,47 @@ async function handleCallTool(request: CallToolRequest) {
       const end = start + pageSize;
       const paginatedChats = exampleChats.slice(start, end);
 
+      // Default content metadata (can be overridden by backend/env in real implementation)
+      const defaultHelpText = `# How to Use ChatVault
+
+ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
+Note: chats are stored for {expirationDays} days in the free version of the app.
+## Saving Conversations
+
+You have three flexible ways to save conversations to your vault:
+
+### 1. Ask ChatGPT to Save
+Simply ask ChatGPT to save the current conversation to your vault. You can specify:
+- **By subject**: "Save this conversation about [topic] to my ChatVault"
+- **By number of turns**: "Save the last 5 turns to my ChatVault"
+- **The entire conversation**: "Add this entire chat to my ChatVault"
+
+### 2. Manual Save via Widget
+Use the '+' button in the ChatVault widget to manually add conversations:
+1. Copy a conversation from ChatGPT (or anywhere)
+2. Click the '+' button in the ChatVault widget header
+3. Paste the conversation into the text area
+4. Optionally add a custom title
+5. Click "Save"
+
+## Accessing Your Vault
+
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`;
+
+      const contentMetadata = {
+        helpText: defaultHelpText,
+        limits: {
+          counterTooltip: "Click to learn about chat limits",
+          limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
+          limitReachedMessageWithPortal: "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.",
+          limitReachedMessageWithoutPortal: "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.",
+        },
+        config: {
+          freeChatLimit: 10,
+          chatExpirationDays: 7,
+        },
+      };
+
       const result = {
         content: [
           {
@@ -482,6 +523,7 @@ async function handleCallTool(request: CallToolRequest) {
           pageSize,
           total: exampleChats.length,
           hasMore: end < exampleChats.length,
+          content: contentMetadata,
         },
       };
       console.log("[MCP Handler] handleCallTool - loadMyChats returning", paginatedChats.length, "chats");
