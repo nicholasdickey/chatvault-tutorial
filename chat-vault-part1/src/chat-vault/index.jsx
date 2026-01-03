@@ -1067,7 +1067,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         ? "bg-gray-900 border-gray-700 text-white" 
         : "bg-white border-black/10 text-black"
     }`}>
-      <div className="max-w-full">
+      <div className="max-w-full relative">
         {/* Toolbar */}
         <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${
           isDarkMode ? "border-gray-700" : "border-black/5"
@@ -2075,22 +2075,22 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </div>
           </div>
         )}
+
+        {/* Help Icon - Absolute bottom right on main panel */}
+        {!showHelp && (
+          <button
+            onClick={handleHelpClick}
+            className={`absolute bottom-4 right-4 w-6 h-6 flex items-center justify-center transition-colors z-50 ${
+              isDarkMode
+                ? "text-gray-400 hover:text-gray-300"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            title="Help"
+          >
+            <MdHelp className="w-5 h-5" />
+          </button>
+        )}
       </div>
-      
-      {/* Help Icon - Fixed bottom right */}
-      {!showHelp && (
-        <button
-          onClick={handleHelpClick}
-          className={`fixed bottom-4 right-4 w-6 h-6 flex items-center justify-center transition-colors z-50 ${
-            isDarkMode
-              ? "text-gray-400 hover:text-gray-300"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-          title="Help"
-        >
-          <MdHelp className="w-5 h-5" />
-        </button>
-      )}
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
