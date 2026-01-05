@@ -710,10 +710,10 @@ async function handleReadResource(request: ReadResourceRequest) {
         _meta: {
           ...widgetDescriptorMeta(widget),
           "openai/widgetPrefersBorder": true,
-          "openai/widgetDomain": "https://findexar.com",
+          "openai/widgetDomain": "https://agentsyx.com",
           "openai/widgetCSP": {
-            connect_domains: ["https://findexar.com"],
-            resource_domains: ["https://*.findexar.com"],
+            connect_domains: ["https://agentsyx.com"],
+            resource_domains: ["https://*.agentsyx.com"],
           },
         },
       },
