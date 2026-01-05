@@ -94,7 +94,11 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: false,
             openWorldHint: false,
             destructiveHint: true,
-        }
+        },
+        securitySchemes: [
+            { type: "noauth" },
+            { type: "oauth2" }
+        ]
     },
     {
         name: "saveChat",
@@ -129,7 +133,11 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: false,
             openWorldHint: false,
             destructiveHint: false,
-        }
+        },
+        securitySchemes: [
+            { type: "noauth" },
+            { type: "oauth2" }
+        ]
     },
     {
         name: "loadMyChats",
@@ -161,7 +169,11 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: true,
             openWorldHint: false,
             destructiveHint: false,
-        }
+        },
+        securitySchemes: [
+            { type: "noauth" },
+            { type: "oauth2" }
+        ]
     },
     {
         name: "searchMyChats",
@@ -192,7 +204,11 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: true,
             openWorldHint: false,
             destructiveHint: false,
-        }
+        },
+        securitySchemes: [
+            { type: "noauth" },
+            { type: "oauth2" }
+        ]
     },
     {
         name: "saveChatManually",
@@ -219,7 +235,11 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: false,
             openWorldHint: false,
             destructiveHint: false,
-        }
+        },
+        securitySchemes: [
+            { type: "noauth" },
+            { type: "oauth2" }
+        ]
     },
     {
         name: "explainHowToUse",
