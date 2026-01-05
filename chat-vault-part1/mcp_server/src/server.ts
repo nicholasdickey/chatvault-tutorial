@@ -359,6 +359,10 @@ const chatVaultTools: Tool[] = [
       openWorldHint: false,
       readOnlyHint: true,
     },
+    securitySchemes: [
+      { type: "noauth" },
+      { type: "oauth2" }
+    ]
   },
   {
     name: "loadMyChats",
@@ -657,8 +661,8 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         content: [
           {
             type: "text",
-            text: savedChat.type === "note" 
-              ? "Note saved successfully" 
+            text: savedChat.type === "note"
+              ? "Note saved successfully"
               : `Chat saved successfully with ${savedChat.turns?.length || 0} turns`,
           },
         ],
