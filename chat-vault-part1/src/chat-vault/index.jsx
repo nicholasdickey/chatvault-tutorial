@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -390,6 +390,16 @@ function App() {
       window.open(userInfo.portalLink, "_blank");
     } else {
       addLog("Open on website clicked but no portal link available");
+    }
+  };
+
+  const handleSignIn = () => {
+    if (userInfo?.portalLink) {
+      const signInUrl = `${userInfo.portalLink}/sign-in`;
+      addLog("Sign in clicked", { signInUrl });
+      window.open(signInUrl, "_blank");
+    } else {
+      addLog("Sign in clicked but no portal link available");
     }
   };
 
@@ -1103,6 +1113,20 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 title={contentMetadata?.limits?.counterTooltip ?? "Click to learn about chat limits"}
               >
                 {userInfo.remainingSlots}
+              </button>
+            )}
+            {userInfo?.isAnon && userInfo?.portalLink && (
+              <button
+                onClick={handleSignIn}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
+                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+                title="Sign in for long-term persistence"
+              >
+                <MdLogin className="w-4 h-4" />
+                <span>Sign In</span>
               </button>
             )}
             <button
