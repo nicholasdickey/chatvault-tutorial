@@ -144,8 +144,8 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
 
       // Filter expired chats for anonymous users
       const filteredChats = filterExpiredChats(searchResult.chats, isAnon);
-      const filteredTotal = isAnon 
-        ? filterExpiredChats(allChatsForUser, isAnon).length 
+      const filteredTotal = isAnon
+        ? filterExpiredChats(allChatsForUser, isAnon).length
         : searchResult.total;
 
       // Recalculate pagination after filtering
@@ -229,6 +229,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       },
       userInfo: {
         portalLink,
+        loginLink,
         isAnon,
         totalChats,
         ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
