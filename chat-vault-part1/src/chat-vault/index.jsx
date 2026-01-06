@@ -1046,7 +1046,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
     </svg>
   );
 
-  if (loading) {
+  if (loading && chats.length === 0) {
     return (
       <div className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${
         isDarkMode 
@@ -1054,18 +1054,6 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           : "bg-white border-black/10 text-black"
       }`}>
         <div className="text-center text-sm opacity-60">Loading chats...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${
-        isDarkMode 
-          ? "bg-gray-900 border-gray-700 text-white" 
-          : "bg-white border-black/10 text-black"
-      }`}>
-        <div className="text-center text-sm text-red-500">Error: {error}</div>
       </div>
     );
   }
@@ -2095,6 +2083,33 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   {isSaving ? "Saving..." : "Save"}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error message at bottom */}
+        {error && (
+          <div className={`mt-4 p-3 rounded-lg border ${
+            isDarkMode
+              ? "bg-red-900/30 border-red-700/50 text-red-300"
+              : "bg-red-50 border-red-200 text-red-700"
+          }`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 text-sm">
+                <div className="font-medium mb-1">Error</div>
+                <div>{error}</div>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className={`p-1 rounded flex-shrink-0 ${
+                  isDarkMode
+                    ? "text-red-300 hover:text-red-200 hover:bg-red-800/50"
+                    : "text-red-700 hover:text-red-800 hover:bg-red-100"
+                }`}
+                title="Dismiss error"
+              >
+                <MdClose className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
