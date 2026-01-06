@@ -1096,6 +1096,20 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </button>
           </div>
           <div className="flex items-center gap-2">
+            {userInfo?.isAnon && userInfo?.portalLink && (
+              <button
+                onClick={handleSignIn}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
+                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+                title="Sign in for long-term persistence"
+              >
+                <MdLogin className="w-4 h-4" />
+                <span>Sign In</span>
+              </button>
+            )}
             {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
               <button
                 onClick={handleCounterClick}
@@ -1113,20 +1127,6 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 title={contentMetadata?.limits?.counterTooltip ?? "Click to learn about chat limits"}
               >
                 {userInfo.remainingSlots}
-              </button>
-            )}
-            {userInfo?.isAnon && userInfo?.portalLink && (
-              <button
-                onClick={handleSignIn}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                  isDarkMode
-                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
-                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
-                }`}
-                title="Sign in for long-term persistence"
-              >
-                <MdLogin className="w-4 h-4" />
-                <span>Sign In</span>
               </button>
             )}
             <button
