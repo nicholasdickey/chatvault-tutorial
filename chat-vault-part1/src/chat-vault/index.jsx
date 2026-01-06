@@ -394,12 +394,11 @@ function App() {
   };
 
   const handleSignIn = () => {
-    if (userInfo?.portalLink) {
-      const signInUrl = `${userInfo.portalLink}/sign-in`;
-      addLog("Sign in clicked", { signInUrl });
-      window.open(signInUrl, "_blank");
+    if (userInfo?.loginLink) {
+      addLog("Sign in clicked", { loginLink: userInfo.loginLink });
+      window.open(userInfo.loginLink, "_blank");
     } else {
-      addLog("Sign in clicked but no portal link available");
+      addLog("Sign in clicked but no login link available");
     }
   };
 
@@ -1096,7 +1095,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </button>
           </div>
           <div className="flex items-center gap-2">
-            {userInfo?.isAnon && userInfo?.portalLink && (
+            {userInfo?.isAnon && userInfo?.loginLink && (
               <button
                 onClick={handleSignIn}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${

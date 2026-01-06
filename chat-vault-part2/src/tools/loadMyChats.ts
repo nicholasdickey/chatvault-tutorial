@@ -64,6 +64,7 @@ export interface LoadChatsResult {
   };
   userInfo: {
     portalLink: string | null;
+    loginLink: string | null;
     isAnon: boolean;
     totalChats: number;
     remainingSlots?: number;
@@ -97,6 +98,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
   const { userId, page = 0, size = 10, query, userContext } = params;
   const isAnon = userContext?.isAnon ?? false;
   const portalLink = userContext?.portalLink ?? null;
+  const loginLink = userContext?.loginLink ?? null;
 
   console.log(
     "[loadMyChats] Loading chats - userId:",
@@ -163,6 +165,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         },
         userInfo: {
           portalLink,
+          loginLink,
           isAnon,
           totalChats,
           ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),

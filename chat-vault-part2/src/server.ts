@@ -34,6 +34,7 @@ export const ANON_MAX_CHATS = 10; // Maximum number of chats for anonymous users
 export interface UserContext {
     isAnon?: boolean;
     portalLink?: string | null;
+    loginLink?: string | null;
 }
 
 // Session management
@@ -317,6 +318,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             const finalUserContext: UserContext = {
                 isAnon: userContext?.isAnon ?? (args as any).isAnon ?? false,
                 portalLink: userContext?.portalLink ?? (args as any).portalLink ?? null,
+                loginLink: userContext?.loginLink ?? (args as any).loginLink ?? null,
             };
             console.log("[MCP Handler] Final userContext (headers + args fallback):", finalUserContext);
             const result = await loadMyChats({
@@ -533,6 +535,7 @@ export async function handleMcpRequest(
         // Extract user context from Findexar headers
         const isAnonHeader = req.headers["x-findexar-is-anon-user"];
         const portalLinkHeader = req.headers["x-findexar-portal-link"];
+        const loginLinkHeader = req.headers["x-findexar-login-link"];
         // Log all Findexar headers for debugging
         const findexarHeaders = Object.keys(req.headers)
             .filter(key => key.toLowerCase().startsWith("x-findexar"))
@@ -544,6 +547,7 @@ export async function handleMcpRequest(
         const userContext: UserContext = {
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
+            loginLink: loginLinkHeader ? String(loginLinkHeader) : null,
         };
         console.log("[MCP] User context extracted from headers:", userContext);
 
