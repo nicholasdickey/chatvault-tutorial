@@ -368,13 +368,37 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 },
             };
         } else if (toolName === "saveChatManually") {
-            const result = await saveChatManually(args as { userId: string; htmlContent: string; title?: string });
-            console.log("[MCP Handler] handleCallTool - saveChatManually result:", JSON.stringify(result));
+            console.log("[MCP Handler] 📥 saveChatManually request received:", {
+                requestId: requestId,
+                userId: (args as any)?.userId?.substring(0, 20) + "...",
+                htmlContentLength: (args as any)?.htmlContent?.length || 0,
+                htmlContentPreview: (args as any)?.htmlContent?.substring(0, 200) || "(empty)",
+                hasTitle: !!(args as any)?.title,
+                title: (args as any)?.title || "(none)",
+                userContext: userContext ? {
+                    isAnon: userContext.isAnon,
+                    hasPortalLink: !!userContext.portalLink,
+                    hasLoginLink: !!userContext.loginLink,
+                } : "none",
+            });
+            const result = await saveChatManually({
+                ...(args as { userId: string; htmlContent: string; title?: string }),
+                userContext,
+            });
+            console.log("[MCP Handler] 📤 saveChatManually result:", {
+                chatId: result.chatId || "(empty)",
+                saved: result.saved,
+                turnsCount: result.turnsCount,
+                error: result.error || "(none)",
+                message: result.message || "(none)",
+            });
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Chat saved successfully with ID: ${result.chatId} (${result.turnsCount} turns)`,
+                        text: result.error
+                            ? `Error: ${result.message}`
+                            : `Chat saved successfully with ID: ${result.chatId} (${result.turnsCount} turns)`,
                     },
                 ],
                 structuredContent: result,

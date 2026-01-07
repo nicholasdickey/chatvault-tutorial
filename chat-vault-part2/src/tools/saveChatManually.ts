@@ -324,6 +324,16 @@ export async function saveChatManually(
     const isAnon = userContext?.isAnon ?? false;
     const portalLink = userContext?.portalLink ?? null;
 
+    console.log("[saveChatManually] ===== ENTRY =====");
+    console.log("[saveChatManually] Received params:", {
+        userId: userId?.substring(0, 20) + "...",
+        htmlContentLength: htmlContent?.length || 0,
+        htmlContentPreview: htmlContent?.substring(0, 200) || "(empty)",
+        title: title || "(none)",
+        isAnon,
+        hasPortalLink: !!portalLink,
+        hasLoginLink: !!userContext?.loginLink,
+    });
     console.log("[saveChatManually] Saving manual chat - userId:", userId, "hasTitle:", !!title, "isAnon:", isAnon);
 
     try {
@@ -345,15 +355,22 @@ export async function saveChatManually(
             const message = isAnon
                 ? `Content exceeds the ${limitType} limit for users without an account. Please shorten your content or sign in to save longer notes (up to 100,000 characters).`
                 : `Content exceeds the ${limitType} limit. Please shorten your content.`;
-            console.log("[saveChatManually] Content size limit exceeded:", contentLength, "max:", maxLength, "isAnon:", isAnon);
-            return {
+            console.log("[saveChatManually] ❌ Content size limit exceeded:", {
+                contentLength,
+                maxLength,
+                isAnon,
+                limitType,
+            });
+            const errorResult = {
                 chatId: "",
                 saved: false,
                 turnsCount: 0,
-                error: "limit_reached",
+                error: "limit_reached" as const,
                 message,
                 portalLink: isAnon ? portalLink : null,
             };
+            console.log("[saveChatManually] ===== EXIT (size limit) =====", errorResult);
+            return errorResult;
         }
 
         // Check chat limit for anonymous users only (normal users are not affected)
@@ -363,15 +380,20 @@ export async function saveChatManually(
 
             if (nonExpiredCount >= ANON_MAX_CHATS) {
                 const message = `You've reached the limit of ${ANON_MAX_CHATS} free chats. Please delete a chat in the widget to save more, or upgrade your account to save unlimited chats.`;
-                console.log("[saveChatManually] Limit reached for anonymous user");
-                return {
+                console.log("[saveChatManually] ❌ Chat count limit reached for anonymous user:", {
+                    nonExpiredCount,
+                    limit: ANON_MAX_CHATS,
+                });
+                const errorResult = {
                     chatId: "",
                     saved: false,
                     turnsCount: 0,
-                    error: "limit_reached",
+                    error: "limit_reached" as const,
                     message,
                     portalLink,
                 };
+                console.log("[saveChatManually] ===== EXIT (chat limit) =====", errorResult);
+                return errorResult;
             }
         }
 
@@ -392,48 +414,68 @@ export async function saveChatManually(
         // Only check for empty content (not parse errors)
         if (turns.length === 0) {
             // This should not happen with the new logic, but handle it as a safety check
-            console.warn("[saveChatManually] Unexpected: no turns after parsing, content may be empty");
-            return {
+            console.warn("[saveChatManually] ❌ Unexpected: no turns after parsing, content may be empty");
+            const errorResult = {
                 chatId: "",
                 saved: false,
                 turnsCount: 0,
-                error: "parse_error",
+                error: "parse_error" as const,
                 message: "Content is empty or could not be processed",
                 portalLink: null,
             };
+            console.log("[saveChatManually] ===== EXIT (empty content) =====", errorResult);
+            return errorResult;
         }
 
-        console.log("[saveChatManually] Parsed", turns.length, "turns");
+        console.log("[saveChatManually] ✅ Parsed", turns.length, "turns successfully");
+        console.log("[saveChatManually] Turn summary:", {
+            totalTurns: turns.length,
+            firstTurnPromptLength: turns[0]?.prompt?.length || 0,
+            firstTurnResponseLength: turns[0]?.response?.length || 0,
+            isNote: turns.length === 1 && !turns[0].response,
+        });
 
         // Use provided title or generate default
         const finalTitle = title?.trim() || generateDefaultTitle();
         console.log("[saveChatManually] Using title:", finalTitle);
 
         // Use shared core logic to save the chat
+        console.log("[saveChatManually] Calling saveChatCore...");
         const coreResult = await saveChatCore({
             userId,
             title: finalTitle,
             turns,
         });
+        console.log("[saveChatManually] ✅ saveChatCore result:", {
+            chatId: coreResult.chatId,
+            saved: coreResult.saved,
+        });
 
-        return {
+        const successResult = {
             chatId: coreResult.chatId,
             saved: coreResult.saved,
             turnsCount: turns.length,
         };
+        console.log("[saveChatManually] ===== EXIT (success) =====", successResult);
+        return successResult;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("[saveChatManually] Error saving chat:", errorMessage);
-        console.error("[saveChatManually] Error stack:", error instanceof Error ? error.stack : "N/A");
+        console.error("[saveChatManually] ❌ EXCEPTION:", {
+            error: errorMessage,
+            errorType: error instanceof Error ? error.constructor.name : typeof error,
+            stack: error instanceof Error ? error.stack : "N/A",
+        });
         // Return structured error instead of throwing
-        return {
+        const errorResult = {
             chatId: "",
             saved: false,
             turnsCount: 0,
-            error: "server_error",
+            error: "server_error" as const,
             message: "An error occurred while saving the chat. Please try again.",
             portalLink: null,
         };
+        console.log("[saveChatManually] ===== EXIT (exception) =====", errorResult);
+        return errorResult;
     }
 }
 
