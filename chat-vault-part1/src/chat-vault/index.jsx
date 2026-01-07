@@ -723,51 +723,91 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
 
     setIsSaving(true);
     setManualSaveError(null);
-    addLog("Starting manual save", { hasTitle: !!manualSaveTitle, contentLength: manualSaveContent.length });
+    
+    const contentToSend = manualSaveHtml || manualSaveContent;
+    const titleToSend = manualSaveTitle.trim() || undefined;
+    
+    addLog("🚀 [WIDGET] Starting manual save", { 
+      hasTitle: !!titleToSend, 
+      title: titleToSend || "(none)",
+      contentLength: contentToSend.length,
+      contentPreview: contentToSend.substring(0, 200),
+      hasHtml: !!manualSaveHtml,
+      htmlLength: manualSaveHtml?.length || 0,
+      textLength: manualSaveContent?.length || 0,
+    });
 
     try {
       if (!window.openai?.callTool) {
         throw new Error("saveChatManually tool not available");
       }
 
+      const toolArgs = {
+        htmlContent: contentToSend,
+        title: titleToSend,
+      };
+      
+      addLog("📤 [WIDGET] Calling saveChatManually tool", {
+        toolName: "saveChatManually",
+        args: {
+          htmlContentLength: toolArgs.htmlContent.length,
+          htmlContentPreview: toolArgs.htmlContent.substring(0, 200),
+          title: toolArgs.title || "(none)",
+        },
+      });
+
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
       });
 
-      const callToolPromise = window.openai.callTool("saveChatManually", {
-        htmlContent: manualSaveHtml || manualSaveContent, // Prefer HTML if available, fallback to text
-        title: manualSaveTitle.trim() || undefined,
-      });
+      const callToolPromise = window.openai.callTool("saveChatManually", toolArgs);
 
+      addLog("⏳ [WIDGET] Waiting for response...");
       const result = await Promise.race([callToolPromise, timeoutPromise]);
+      addLog("✅ [WIDGET] Response received");
       
-      addLog("Manual save result received", { 
-        result, 
-        resultType: typeof result, 
+      addLog("📥 [WIDGET] Manual save result received", { 
+        resultType: typeof result,
         isNull: result === null,
         isUndefined: result === undefined,
         hasError: !!result?.error,
+        hasStructuredContent: !!result?.structuredContent,
+        hasContent: !!result?.content,
         keys: result ? Object.keys(result) : [],
-        stringified: JSON.stringify(result).substring(0, 500)
+        structuredContentKeys: result?.structuredContent ? Object.keys(result.structuredContent) : [],
+        structuredContentError: result?.structuredContent?.error || "(none)",
+        structuredContentMessage: result?.structuredContent?.message || "(none)",
+        structuredContentChatId: result?.structuredContent?.chatId || "(none)",
+        structuredContentSaved: result?.structuredContent?.saved,
+        structuredContentTurnsCount: result?.structuredContent?.turnsCount,
+        contentText: result?.content?.[0]?.text?.substring(0, 200) || "(none)",
+        fullResultPreview: JSON.stringify(result).substring(0, 1000),
       });
 
       // If result is null/undefined, that's an error
       if (result == null) {
+        addLog("❌ [WIDGET] No response received from server");
         throw new Error("No response received from server");
       }
 
       // Check for errors in the response (multiple possible formats)
       if (result?.error) {
         const errorMessage = result.error.message || result.error?.data || result.error || "Unknown error occurred";
-        addLog("Error found in result.error", result.error);
+        addLog("❌ [WIDGET] Error found in result.error", {
+          error: result.error,
+          errorMessage,
+        });
         throw new Error(errorMessage);
       }
 
       // Check for JSON-RPC error format
       if (result?.jsonrpc === "2.0" && result?.error) {
         const errorMessage = result.error.message || result.error.data || "Unknown error occurred";
-        addLog("JSON-RPC error found", result.error);
+        addLog("❌ [WIDGET] JSON-RPC error found", {
+          error: result.error,
+          errorMessage,
+        });
         throw new Error(errorMessage);
       }
 
@@ -776,9 +816,9 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         const firstContent = result.content[0];
         if (firstContent?.text) {
           const text = firstContent.text;
-          addLog("Content text found", { text: text.substring(0, 200) });
+          addLog("📄 [WIDGET] Content text found", { text: text.substring(0, 200) });
           if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed") || text.toLowerCase().includes("could not parse")) {
-            addLog("Error text found in content", text);
+            addLog("❌ [WIDGET] Error text found in content", { text });
             throw new Error(text);
           }
         }
@@ -786,11 +826,19 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
 
       // Check structuredContent for error indicators
       if (result?.structuredContent) {
+        addLog("📋 [WIDGET] Checking structuredContent", {
+          error: result.structuredContent.error || "(none)",
+          saved: result.structuredContent.saved,
+          chatId: result.structuredContent.chatId || "(none)",
+          turnsCount: result.structuredContent.turnsCount,
+          message: result.structuredContent.message || "(none)",
+        });
+        
         // Check for limit_reached error specifically
         if (result.structuredContent.error === "limit_reached") {
           const message = result.structuredContent.message || "Chat limit reached";
           const portalLink = result.structuredContent.portalLink;
-          addLog("Limit reached error", { message, portalLink });
+          addLog("❌ [WIDGET] Limit reached error", { message, portalLink });
           
           // Show error in alert area (close modal first)
           setShowManualSaveModal(false);
@@ -806,7 +854,11 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         // Check for server_error
         if (result.structuredContent.error === "server_error") {
           const message = result.structuredContent.message || "An error occurred while saving the chat";
-          addLog("Server error", { message, result });
+          addLog("❌ [WIDGET] Server error in structuredContent", { 
+            message, 
+            error: result.structuredContent.error,
+            fullResult: result,
+          });
           
           // Show error in alert area (close modal first)
           setShowManualSaveModal(false);
@@ -819,18 +871,32 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         
         if (result.structuredContent.error) {
           const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
-          addLog("Error found in structuredContent", result.structuredContent.error);
+          addLog("❌ [WIDGET] Error found in structuredContent.error", {
+            error: result.structuredContent.error,
+            errorMessage,
+            fullStructuredContent: result.structuredContent,
+          });
           throw new Error(errorMessage);
         }
         // Also check if structuredContent has an error-like structure
         if (result.structuredContent.saved === false || result.structuredContent.success === false) {
           const errorMessage = result.structuredContent.message || result.structuredContent.error || "Save operation failed";
-          addLog("Save failed indicated in structuredContent", result.structuredContent);
+          addLog("❌ [WIDGET] Save failed indicated in structuredContent", {
+            saved: result.structuredContent.saved,
+            success: result.structuredContent.success,
+            errorMessage,
+            fullStructuredContent: result.structuredContent,
+          });
           throw new Error(errorMessage);
         }
       }
       
-      addLog("Manual save successful", result);
+      addLog("✅ [WIDGET] Manual save successful", {
+        chatId: result?.structuredContent?.chatId || "(none)",
+        saved: result?.structuredContent?.saved,
+        turnsCount: result?.structuredContent?.turnsCount,
+        fullResult: result,
+      });
       
       // Close modal and reset form on success
       setShowManualSaveModal(false);
@@ -885,7 +951,15 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         errorMessage = err.message || err.error?.message || err.error || JSON.stringify(err);
       }
       
-      addLog("Manual save failed", { error: errorMessage, err, errType: typeof err, errString: String(err) });
+      addLog("❌ [WIDGET] Manual save failed", { 
+        error: errorMessage,
+        errorType: typeof err,
+        errorString: String(err),
+        errorName: err?.name || "(none)",
+        errorStack: err?.stack || "(none)",
+        errorMessage: err?.message || "(none)",
+        fullError: err,
+      });
       setManualSaveError(errorMessage || "Failed to save chat. Please check the debug panel for details.");
     } finally {
       setIsSaving(false);
