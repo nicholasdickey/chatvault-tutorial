@@ -45,6 +45,7 @@ export interface LoadChatsParams {
   size?: number; // default 10
   query?: string; // Optional search query - when provided, uses vector similarity search (same as searchMyChats)
   userContext?: UserContext; // User context from Findexar headers
+  headers?: Record<string, string | string[] | undefined>; // All request headers for logging
 }
 
 export interface LoadChatsResult {
@@ -95,10 +96,15 @@ function filterExpiredChats<T extends { timestamp: Date }>(
  * Load paginated chats for a user
  */
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
-  const { userId, page = 0, size = 10, query, userContext } = params;
+  const { userId, page = 0, size = 10, query, userContext, headers } = params;
   const isAnon = userContext?.isAnon ?? false;
   const portalLink = userContext?.portalLink ?? null;
   const loginLink = userContext?.loginLink ?? null;
+
+  // Dump all headers to log
+  if (headers) {
+    console.log("[loadMyChats] All request headers:", JSON.stringify(headers, null, 2));
+  }
 
   console.log(
     "[loadMyChats] Loading chats - userId:",
