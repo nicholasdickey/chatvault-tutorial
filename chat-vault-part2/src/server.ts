@@ -96,10 +96,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: true,
         },
-        securitySchemes: [
-            { type: "noauth" },
-            { type: "oauth2" }
-        ]
+
     },
     {
         name: "saveChat",
@@ -134,11 +131,7 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: false,
             openWorldHint: false,
             destructiveHint: false,
-        },
-        securitySchemes: [
-            { type: "noauth" },
-            { type: "oauth2" }
-        ]
+        }
     },
     {
         name: "loadMyChats",
@@ -170,11 +163,7 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: true,
             openWorldHint: false,
             destructiveHint: false,
-        },
-        securitySchemes: [
-            { type: "noauth" },
-            { type: "oauth2" }
-        ]
+        }
     },
     {
         name: "searchMyChats",
@@ -205,11 +194,7 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: true,
             openWorldHint: false,
             destructiveHint: false,
-        },
-        securitySchemes: [
-            { type: "noauth" },
-            { type: "oauth2" }
-        ]
+        }
     },
     {
         name: "saveChatManually",
@@ -236,11 +221,7 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: false,
             openWorldHint: false,
             destructiveHint: false,
-        },
-        securitySchemes: [
-            { type: "noauth" },
-            { type: "oauth2" }
-        ]
+        }
     },
     {
         name: "explainHowToUse",
@@ -273,7 +254,7 @@ async function handleListTools(request: ListToolsRequest) {
 }
 
 // Handler for tools/call
-async function handleCallTool(request: CallToolRequest, userContext?: UserContext) {
+async function handleCallTool(request: CallToolRequest, userContext?: UserContext, headers?: Record<string, string | string[] | undefined>) {
     const requestId = (request as unknown as { id?: string | number }).id;
     const toolName = request.params.name;
     const args = request.params.arguments ?? {};
@@ -324,6 +305,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             const result = await loadMyChats({
                 ...(args as { userId: string; page?: number; size?: number; query?: string }),
                 userContext: finalUserContext,
+                headers: headers, // Pass all headers for logging
             });
             console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats", "userInfo:", result.userInfo);
             // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
@@ -716,7 +698,7 @@ export async function handleMcpRequest(
                     "params:",
                     JSON.stringify(params)
                 );
-                result = await handleCallTool(request, userContext);
+                result = await handleCallTool(request, userContext, req.headers);
                 console.log("[MCP] tools/call response:", JSON.stringify(result));
             } else {
                 console.error("[MCP] Method not found:", method);
