@@ -208,7 +208,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
         // If content is plain text without conversation markers, treat it as a simple note
         // Save it as a single turn with the text as the prompt and empty response
         // This allows users to save unstructured notes without needing conversation format
-        if (text.length < 2000 && text.split('\n').length < 20 && !hasHtml) {
+        if (!hasHtml && text.split('\n').length < 20) {
             // Plain text without HTML and no conversation markers - treat as a note
             console.log("[saveChatManually] Content appears to be a simple note, saving as single turn");
             turns.push({ prompt: text, response: '' });
@@ -232,8 +232,12 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
             }
         }
 
-        // No recognizable pattern found
-        console.warn("[saveChatManually] No recognizable conversation format found");
+        // No recognizable pattern found - treat as a note
+        // Save the entire content as a single turn with text as prompt and empty response
+        console.log("[saveChatManually] No recognizable conversation format found, treating as a note");
+        if (text.trim().length > 0) {
+            turns.push({ prompt: text.trim(), response: '' });
+        }
         return turns;
     }
 
@@ -331,6 +335,27 @@ export async function saveChatManually(
             throw new Error("htmlContent is required");
         }
 
+        // Check content size limits before parsing
+        // Anonymous users: 2k limit, authenticated users: 100k limit
+        const contentLength = htmlContent.length;
+        const maxLength = isAnon ? 2000 : 100000;
+        
+        if (contentLength > maxLength) {
+            const limitType = isAnon ? "2,000 characters" : "100,000 characters";
+            const message = isAnon
+                ? `Content exceeds the ${limitType} limit for users without an account. Please shorten your content or sign in to save longer notes (up to 100,000 characters).`
+                : `Content exceeds the ${limitType} limit. Please shorten your content.`;
+            console.log("[saveChatManually] Content size limit exceeded:", contentLength, "max:", maxLength, "isAnon:", isAnon);
+            return {
+                chatId: "",
+                saved: false,
+                turnsCount: 0,
+                error: "limit_reached",
+                message,
+                portalLink: isAnon ? portalLink : null,
+            };
+        }
+
         // Check chat limit for anonymous users only (normal users are not affected)
         if (isAnon) {
             const nonExpiredCount = await countNonExpiredChats(userId);
@@ -351,6 +376,7 @@ export async function saveChatManually(
         }
 
         // Parse the content to extract turns
+        // If parsing fails, it will be saved as a note (single turn with text as prompt)
         console.log("[saveChatManually] Parsing content...");
         console.log("[saveChatManually] Content preview (first 500 chars):", htmlContent.substring(0, 500));
         const turns = parseChatContent(htmlContent);
@@ -362,15 +388,17 @@ export async function saveChatManually(
             });
         }
 
+        // All unparseable content is now saved as a note, so we should always have at least one turn
+        // Only check for empty content (not parse errors)
         if (turns.length === 0) {
-            const message = "Can't parse the chat";
-            console.log("[saveChatManually] Failed to parse content, returning error response");
+            // This should not happen with the new logic, but handle it as a safety check
+            console.warn("[saveChatManually] Unexpected: no turns after parsing, content may be empty");
             return {
                 chatId: "",
                 saved: false,
                 turnsCount: 0,
                 error: "parse_error",
-                message,
+                message: "Content is empty or could not be processed",
                 portalLink: null,
             };
         }
