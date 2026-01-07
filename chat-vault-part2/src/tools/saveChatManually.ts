@@ -5,9 +5,8 @@
 
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
-import { sql } from "drizzle-orm";
-import { generateEmbedding, combineChatText } from "../utils/embeddings.js";
+import { eq } from "drizzle-orm";
+import { saveChatCore, checkForExistingChat } from "../utils/saveChatCore.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 
@@ -43,41 +42,6 @@ async function countNonExpiredChats(userId: string): Promise<number> {
         const chatDate = new Date(chat.timestamp);
         return chatDate >= expiryDate;
     }).length;
-}
-
-/**
- * Check if an identical chat already exists for idempotency
- * If the same save operation is called multiple times (retries, double-clicks, etc.),
- * we return the existing chat ID instead of creating a duplicate
- * This check happens BEFORE generating embeddings to save API costs
- */
-async function checkForExistingChat(
-    userId: string,
-    title: string,
-    turns: Array<{ prompt: string; response: string }>
-): Promise<string | null> {
-    // Query for chats with same userId, title, and turns (JSON comparison)
-    // This ensures idempotency: same inputs = same result
-    const existingChats = await db
-        .select({ id: chats.id, timestamp: chats.timestamp })
-        .from(chats)
-        .where(
-            and(
-                eq(chats.userId, userId),
-                eq(chats.title, title),
-                sql`turns = ${JSON.stringify(turns)}::jsonb`
-            )
-        )
-        .orderBy(sql`timestamp DESC`)
-        .limit(1);
-
-    if (existingChats.length > 0) {
-        const existing = existingChats[0];
-        console.log("[saveChatManually] Idempotency check: found existing chat:", existing.id, "at", existing.timestamp);
-        return existing.id;
-    }
-
-    return null;
 }
 
 /**
@@ -241,12 +205,13 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
             }
         }
 
-        // If content is very short and looks like a single message, treat as user prompt with empty response
-        if (text.length < 200 && text.split('\n').length < 5) {
-            // Very short content - might be a single user message
-            // But we need at least some indication it's a conversation
-            // Skip this case - return empty turns
-            console.warn("[saveChatManually] Content appears to be a single message without conversation markers");
+        // If content is plain text without conversation markers, treat it as a simple note
+        // Save it as a single turn with the text as the prompt and empty response
+        // This allows users to save unstructured notes without needing conversation format
+        if (text.length < 2000 && text.split('\n').length < 20 && !hasHtml) {
+            // Plain text without HTML and no conversation markers - treat as a note
+            console.log("[saveChatManually] Content appears to be a simple note, saving as single turn");
+            turns.push({ prompt: text, response: '' });
             return turns;
         }
 
@@ -416,49 +381,16 @@ export async function saveChatManually(
         const finalTitle = title?.trim() || generateDefaultTitle();
         console.log("[saveChatManually] Using title:", finalTitle);
 
-        // Idempotency check: if same chat already exists, return existing ID
-        // This prevents duplicates from retries, double-clicks, etc.
-        console.log("[saveChatManually] Checking for existing chat (idempotency)...");
-        const existingId = await checkForExistingChat(userId, finalTitle, turns);
-        if (existingId) {
-            console.log("[saveChatManually] Existing chat found, returning existing chat ID:", existingId);
-            return {
-                chatId: existingId,
-                saved: false, // Not newly saved, but operation is idempotent
-                turnsCount: turns.length,
-            };
-        }
-
-        // Combine all prompts and responses into a single text
-        const chatText = combineChatText(turns);
-        console.log("[saveChatManually] Combined chat text length:", chatText.length, "chars");
-
-        // Generate embedding for the entire chat
-        console.log("[saveChatManually] Generating embedding...");
-        const embedding = await generateEmbedding(chatText);
-        console.log("[saveChatManually] Embedding generated, dimensions:", embedding.length);
-
-        // Save to database
-        console.log("[saveChatManually] Inserting chat into database...");
-        const [savedChat] = await db
-            .insert(chats)
-            .values({
-                userId,
-                title: finalTitle,
-                turns,
-                embedding,
-            })
-            .returning({ id: chats.id });
-
-        if (!savedChat) {
-            throw new Error("Failed to save chat - no ID returned");
-        }
-
-        console.log("[saveChatManually] Chat saved successfully - id:", savedChat.id);
+        // Use shared core logic to save the chat
+        const coreResult = await saveChatCore({
+            userId,
+            title: finalTitle,
+            turns,
+        });
 
         return {
-            chatId: savedChat.id,
-            saved: true,
+            chatId: coreResult.chatId,
+            saved: coreResult.saved,
             turnsCount: turns.length,
         };
     } catch (error) {
