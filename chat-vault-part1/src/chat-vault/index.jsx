@@ -1157,7 +1157,15 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </button>
           </div>
           <div className="flex items-center gap-2">
-            {userInfo?.isAnon && userInfo?.loginLink && (
+            {userInfo?.userName && !userInfo?.isAnon ? (
+              <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                isDarkMode
+                  ? "text-gray-300"
+                  : "text-gray-700"
+              }`}>
+                {userInfo.userName}
+              </div>
+            ) : userInfo?.isAnon && userInfo?.loginLink ? (
               <button
                 onClick={handleSignIn}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
@@ -1170,7 +1178,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 <MdLogin className="w-4 h-4" />
                 <span>Sign In</span>
               </button>
-            )}
+            ) : null}
             {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
               <button
                 onClick={handleCounterClick}

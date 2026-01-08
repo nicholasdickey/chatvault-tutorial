@@ -69,6 +69,7 @@ export interface LoadChatsResult {
     isAnon: boolean;
     totalChats: number;
     remainingSlots?: number;
+    userName?: string | null;
   };
 }
 
@@ -101,8 +102,14 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
   const portalLink = userContext?.portalLink ?? null;
   const loginLink = userContext?.loginLink ?? null;
 
-  // Dump all headers to log
+  // Extract userName from x-a6-username header
+  let userName: string | null = null;
   if (headers) {
+    const userNameHeader = headers['x-a6-username'];
+    if (userNameHeader) {
+      userName = Array.isArray(userNameHeader) ? userNameHeader[0] : userNameHeader;
+    }
+    // Dump all headers to log
     console.log("[loadMyChats] All request headers:", JSON.stringify(headers, null, 2));
   }
 
@@ -174,6 +181,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           loginLink,
           isAnon,
           totalChats,
+          userName,
           ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
       };
@@ -238,6 +246,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         loginLink,
         isAnon,
         totalChats,
+        userName,
         ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
       },
     };
