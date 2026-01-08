@@ -538,18 +538,18 @@ export async function handleMcpRequest(
             return;
         }
 
-        // Extract user context from Findexar headers
-        const isAnonHeader = req.headers["x-findexar-is-anon-user"];
-        const portalLinkHeader = req.headers["x-findexar-portal-link"];
-        const loginLinkHeader = req.headers["x-findexar-login-link"];
-        // Log all Findexar headers for debugging
-        const findexarHeaders = Object.keys(req.headers)
-            .filter(key => key.toLowerCase().startsWith("x-findexar"))
+        // Extract user context from A6 headers
+        const isAnonHeader = req.headers["x-a6-is-anon-user"];
+        const portalLinkHeader = req.headers["x-a6-portal-link"];
+        const loginLinkHeader = req.headers["x-a6-login-link"];
+        // Log all A6 headers for debugging
+        const a6Headers = Object.keys(req.headers)
+            .filter(key => key.toLowerCase().startsWith("x-a6"))
             .reduce((acc, key) => {
                 acc[key] = req.headers[key];
                 return acc;
             }, {} as Record<string, string | string[] | undefined>);
-        console.log("[MCP] All Findexar headers:", JSON.stringify(findexarHeaders));
+        console.log("[MCP] All A6 headers:", JSON.stringify(a6Headers));
         const userContext: UserContext = {
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
