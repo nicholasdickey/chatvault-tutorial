@@ -33,6 +33,7 @@ export const ANON_MAX_CHATS = 10; // Maximum number of chats for anonymous users
 // User context type (from Findexar headers)
 export interface UserContext {
     isAnon?: boolean;
+    isAnonymousPlan?: boolean; // True if user is on an anonymous (free/limited) subscription plan
     portalLink?: string | null;
     loginLink?: string | null;
 }
@@ -298,6 +299,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             // Use arguments as fallback if not in headers
             const finalUserContext: UserContext = {
                 isAnon: userContext?.isAnon ?? (args as any).isAnon ?? false,
+                isAnonymousPlan: userContext?.isAnonymousPlan ?? (args as any).isAnonymousPlan,
                 portalLink: userContext?.portalLink ?? (args as any).portalLink ?? null,
                 loginLink: userContext?.loginLink ?? (args as any).loginLink ?? null,
             };
@@ -540,6 +542,7 @@ export async function handleMcpRequest(
 
         // Extract user context from A6 headers
         const isAnonHeader = req.headers["x-a6-is-anon-user"];
+        const isAnonymousPlanHeader = req.headers["x-a6-anonymous-subscription"];
         const portalLinkHeader = req.headers["x-a6-portal-link"];
         const loginLinkHeader = req.headers["x-a6-login-link"];
         // Log all A6 headers for debugging
@@ -552,6 +555,7 @@ export async function handleMcpRequest(
         console.log("[MCP] All A6 headers:", JSON.stringify(a6Headers));
         const userContext: UserContext = {
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
+            isAnonymousPlan: isAnonymousPlanHeader === "true" || isAnonymousPlanHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
             loginLink: loginLinkHeader ? String(loginLinkHeader) : null,
         };

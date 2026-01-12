@@ -216,7 +216,7 @@ function App() {
 
   // Update alert message dynamically when userInfo changes (if counter alert is showing)
   useEffect(() => {
-    if (alertMessage && !deleteConfirmation && userInfo?.isAnon && userInfo.remainingSlots !== undefined) {
+    if (alertMessage && !deleteConfirmation && userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined) {
       // Check if this is a counter alert (starts with "You have X chat")
       if (alertMessage.includes("You have") && alertMessage.includes("to save remaining")) {
         const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
@@ -227,7 +227,7 @@ function App() {
         setAlertPortalLink(userInfo.portalLink || null);
       }
     }
-  }, [userInfo?.remainingSlots, userInfo?.portalLink, userInfo?.isAnon]);
+  }, [userInfo?.remainingSlots, userInfo?.portalLink, userInfo?.isAnonymousPlan]);
 
   // Handle ESC key to close help
   useEffect(() => {
@@ -403,7 +403,7 @@ function App() {
   };
 
   const handleCounterClick = () => {
-    if (userInfo?.isAnon && userInfo.remainingSlots !== undefined) {
+    if (userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined) {
       const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
       const message = userInfo.remainingSlots <= 1
         ? `${baseMessage} Delete chats or`
@@ -414,7 +414,7 @@ function App() {
       setAlertPortalLink(userInfo.portalLink || null);
       addLog("Counter clicked - alert state set", { message });
     } else {
-      addLog("Counter clicked but user is not anonymous", { isAnon: userInfo?.isAnon });
+      addLog("Counter clicked but user is not on anonymous plan", { isAnonymousPlan: userInfo?.isAnonymousPlan });
     }
   };
 
@@ -1179,7 +1179,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 <span>Sign In</span>
               </button>
             ) : null}
-            {userInfo?.isAnon && userInfo.remainingSlots !== undefined && (
+            {userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined && (
               <button
                 onClick={handleCounterClick}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -1239,7 +1239,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           } ${
             deleteConfirmation
               ? "border-red-500"
-              : userInfo?.isAnon && userInfo.remainingSlots !== undefined
+              : userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined
               ? userInfo.remainingSlots === 0
                 ? "border-red-500"
                 : userInfo.remainingSlots === 1
@@ -1354,8 +1354,8 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
 
             <button
               onClick={() => {
-                // Check if limit reached for anonymous users
-                if (userInfo?.isAnon && userInfo.remainingSlots === 0) {
+                // Check if limit reached for users on anonymous plan
+                if (userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0) {
                   const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
                     ? userInfo.totalChats + userInfo.remainingSlots 
                     : (contentMetadata?.config?.freeChatLimit ?? 10);
@@ -1378,18 +1378,18 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   ? "opacity-50 cursor-not-allowed"
                   : ""
               } ${
-                userInfo?.isAnon && userInfo.remainingSlots === 0
+                userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
                   ? "hover:bg-gray-100"
                   : isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
               }`}
-              title={userInfo?.isAnon && userInfo.remainingSlots === 0 
+              title={userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0 
                 ? (contentMetadata?.limits?.limitReachedTooltip ?? "Chat limit reached - delete a chat or upgrade")
                 : "Save chat manually"}
             >
               <MdAdd className={`w-5 h-5 ${
-                userInfo?.isAnon && userInfo.remainingSlots === 0 
+                userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0 
                   ? "text-red-500" 
                   : ""
               }`} />
