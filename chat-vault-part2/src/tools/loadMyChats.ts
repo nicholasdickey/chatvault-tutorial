@@ -67,6 +67,7 @@ export interface LoadChatsResult {
     portalLink: string | null;
     loginLink: string | null;
     isAnon: boolean;
+    isAnonymousPlan?: boolean; // True if user is on an anonymous (free/limited) subscription plan
     totalChats: number;
     remainingSlots?: number;
     userName?: string | null;
@@ -99,6 +100,7 @@ function filterExpiredChats<T extends { timestamp: Date }>(
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
   const { userId, page = 0, size = 10, query, userContext, headers } = params;
   const isAnon = userContext?.isAnon ?? false;
+  const isAnonymousPlan = userContext?.isAnonymousPlan;
   const portalLink = userContext?.portalLink ?? null;
   const loginLink = userContext?.loginLink ?? null;
 
@@ -180,6 +182,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           portalLink,
           loginLink,
           isAnon,
+          ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
           totalChats,
           userName,
           ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
@@ -245,6 +248,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         portalLink,
         loginLink,
         isAnon,
+        ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
         totalChats,
         userName,
         ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
