@@ -201,32 +201,40 @@ if (!window.__vite_plugin_react_preamble_installed__) {
 
 const inputs = buildInputs();
 
-export default defineConfig(({}) => ({
-  plugins: [
-    tailwindcss(),
-    react(),
-    multiEntryDevEndpoints({ entries: inputs }),
-  ],
-  cacheDir: "node_modules/.vite-react",
-  server: {
-    port: 4444,
-    strictPort: true,
-    cors: true,
-  },
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "react",
-    target: "es2022",
-  },
-  build: {
-    target: "es2022",
-    sourcemap: true,
-    minify: "esbuild",
-    outDir: "assets",
-    assetsDir: ".",
-    rollupOptions: {
-      input: inputs,
-      preserveEntrySignatures: "strict",
+export default defineConfig(({}) => {
+  // Get WIDGET_VERSION from environment, default to 1.0.1
+  const widgetVersion = process.env.WIDGET_VERSION || "1.0.1";
+  
+  return {
+    plugins: [
+      tailwindcss(),
+      react(),
+      multiEntryDevEndpoints({ entries: inputs }),
+    ],
+    cacheDir: "node_modules/.vite-react",
+    server: {
+      port: 4444,
+      strictPort: true,
+      cors: true,
     },
-  },
-}));
+    define: {
+      "import.meta.env.WIDGET_VERSION": JSON.stringify(widgetVersion),
+    },
+    esbuild: {
+      jsx: "automatic",
+      jsxImportSource: "react",
+      target: "es2022",
+    },
+    build: {
+      target: "es2022",
+      sourcemap: true,
+      minify: "esbuild",
+      outDir: "assets",
+      assetsDir: ".",
+      rollupOptions: {
+        input: inputs,
+        preserveEntrySignatures: "strict",
+      },
+    },
+  };
+});

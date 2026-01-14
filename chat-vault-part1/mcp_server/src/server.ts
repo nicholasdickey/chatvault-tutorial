@@ -179,11 +179,14 @@ function getWidgetHtml(componentName: string): string {
   }
 }
 
+// Widget version from environment variable, default to v1.0.1
+const WIDGET_VERSION = process.env.WIDGET_VERSION || "1.0.1";
+
 const widgets: ChatVaultWidget[] = [
   {
     id: "browseMySavedChats",
     title: "ChatVault",
-    templateUri: "ui://widget/chat-vault-v1.0.1.html",
+    templateUri: `ui://widget/chat-vault-v${WIDGET_VERSION}.html`,
     invoking: "Browsing saved chats",
     invoked: "ChatVault opened",
     html: "", // Will be loaded lazily
