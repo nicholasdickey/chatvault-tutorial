@@ -1981,6 +1981,15 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                       }
                     </div>
                   )}
+                  {userInfo?.message && (
+                    <div className={`mt-4 p-3 rounded-lg border ${
+                      isDarkMode 
+                        ? "bg-gray-800/50 border-gray-700 text-gray-300" 
+                        : "bg-gray-50 border-gray-200 text-gray-700"
+                    }`}>
+                      <div className="text-sm">{userInfo.message}</div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

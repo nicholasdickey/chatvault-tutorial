@@ -71,6 +71,7 @@ export interface LoadChatsResult {
     totalChats: number;
     remainingSlots?: number;
     userName?: string | null;
+    message?: string | null; // Optional message to display at bottom of widget
   };
 }
 
@@ -186,6 +187,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           totalChats,
           userName,
           ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+          message: "This is a test message from the backend", // TODO: Replace with dynamic message logic
         },
       };
 
