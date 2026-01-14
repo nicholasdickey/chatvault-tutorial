@@ -255,6 +255,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         userName,
         ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         message: "This is a **test message** with markdown. Check out [OpenAI](https://openai.com) and [ChatGPT](https://chat.openai.com) for more info.", // TODO: Replace with dynamic message logic
+        messageType: "success",
       },
     };
 

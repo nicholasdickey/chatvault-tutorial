@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -1232,17 +1232,52 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </button>
           </div>
         </div>
-        {/* Alert Area */}
-        {alertMessage && (() => {
-          console.log("[ChatVault] Rendering alert", { alertMessage, alertPortalLink, deleteConfirmation });
+        {/* Delete Confirmation Modal - Centered Overlay */}
+        {deleteConfirmation && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`w-full max-w-md rounded-lg ${
+              isDarkMode ? "bg-gray-800" : "bg-white"
+            } p-6 shadow-xl`}>
+              <div className={`text-sm mb-4 ${
+                isDarkMode ? "text-gray-300" : "text-gray-700"
+              }`}>
+                {alertMessage}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={handleCancelDelete}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-red-500 text-white hover:bg-red-600"
+                  }`}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Alert Area - Regular alerts (not delete confirmation) */}
+        {alertMessage && !deleteConfirmation && (() => {
+          console.log("[ChatVault] Rendering alert", { alertMessage, alertPortalLink });
           return (
           <div 
             className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
             isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
           } ${
-            deleteConfirmation
-              ? "border-red-500"
-              : userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined
+            userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined
               ? userInfo.remainingSlots === 0
                 ? "border-red-500"
                 : userInfo.remainingSlots === 1
@@ -1254,7 +1289,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               isDarkMode ? "text-gray-300" : "text-gray-700"
             }`}>
               {alertMessage}
-              {alertPortalLink && !deleteConfirmation && (
+              {alertPortalLink && (
                 <> Click <button
                   onClick={handleAlertPortalClick}
                   className={`underline font-medium ${
@@ -1266,44 +1301,18 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   here
                 </button> to manage your account settings.</>
               )}
-              {deleteConfirmation && (
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={handleConfirmDelete}
-                    className={`px-3 py-1.5 rounded text-sm font-medium ${
-                      isDarkMode
-                        ? "bg-red-600 text-white hover:bg-red-700"
-                        : "bg-red-500 text-white hover:bg-red-600"
-                    }`}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={handleCancelDelete}
-                    className={`px-3 py-1.5 rounded text-sm font-medium ${
-                      isDarkMode
-                        ? "bg-gray-700 text-white hover:bg-gray-600"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
             </div>
-            {!deleteConfirmation && (
-              <button
-                onClick={handleCloseAlert}
-                className={`p-1 rounded ${
-                  isDarkMode
-                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-                }`}
-                title="Close"
-              >
-                <MdClose className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={handleCloseAlert}
+              className={`p-1 rounded ${
+                isDarkMode
+                  ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+              }`}
+              title="Close"
+            >
+              <MdClose className="w-4 h-4" />
+            </button>
           </div>
           );
         })()}
@@ -1752,7 +1761,12 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                             )}
                             {chat.title}
                           </div>
-                          <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                          <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                            {chat.type === "note" ? (
+                              <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
+                            ) : (
+                              <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
+                            )}
                             {formatDate(chat.timestamp)}
                             {chat.type === "note" ? (
                               " • Note"

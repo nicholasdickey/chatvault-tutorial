@@ -183,7 +183,7 @@ const widgets: ChatVaultWidget[] = [
   {
     id: "browseMySavedChats",
     title: "ChatVault",
-    templateUri: "ui://widget/chat-vault-v1.0.0.html",
+    templateUri: "ui://widget/chat-vault-v1.0.1.html",
     invoking: "Browsing saved chats",
     invoked: "ChatVault opened",
     html: "", // Will be loaded lazily
