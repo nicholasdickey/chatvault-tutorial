@@ -1144,6 +1144,11 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           isDarkMode ? "border-gray-700" : "border-black/5"
         }`}>
           <div className="flex items-center gap-2">
+            <div className={`px-2 py-1 text-xs font-medium ${
+              isDarkMode ? "text-green-400" : "text-green-600"
+            }`}>
+              test
+            </div>
             <button
               onClick={handleRefresh}
               className={`p-2 rounded-lg transition-colors ${
