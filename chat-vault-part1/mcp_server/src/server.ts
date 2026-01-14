@@ -30,7 +30,9 @@ type ChatVaultWidget = {
   id: string;
   description: string;
   title: string;
-  templateUri: string;
+  templateVersions: string[]; // Array of supported template versions (e.g., ["1.0.0", "1.0.1"])
+  activeTemplateVersion: string; // Which version to expose in tools/list
+  templateUri: string; // Computed: active version's template URI (for backward compatibility)
   invoking: string;
   invoked: string;
   html: string;
@@ -150,9 +152,10 @@ function localizeWidgetAssets(html: string, assetsDir: string): string {
   return processedHtml;
 }
 
-function widgetDescriptorMeta(widget: ChatVaultWidget) {
+function widgetDescriptorMeta(widget: ChatVaultWidget, templateUri?: string) {
+  const uri = templateUri || widget.templateUri;
   return {
-    "openai/outputTemplate": widget.templateUri,
+    "openai/outputTemplate": uri,
     "openai/toolInvocation/invoking": widget.invoking,
     "openai/toolInvocation/invoked": widget.invoked,
     "openai/widgetAccessible": true,
@@ -179,14 +182,25 @@ function getWidgetHtml(componentName: string): string {
   }
 }
 
-// Widget version from environment variable, default to v1.0.1
-const WIDGET_VERSION = process.env.WIDGET_VERSION || "1.0.1";
+// Widget version configuration
+// WIDGET_VERSIONS: comma-separated list of supported versions (e.g., "1.0.0,1.0.1")
+// ACTIVE_WIDGET_VERSION: which version to expose in tools/list (defaults to latest)
+const WIDGET_VERSIONS_STR = process.env.WIDGET_VERSIONS || process.env.WIDGET_VERSION || "1.0.0,1.0.1";
+const WIDGET_VERSIONS = WIDGET_VERSIONS_STR.split(",").map(v => v.trim()).filter(Boolean);
+const ACTIVE_WIDGET_VERSION = process.env.ACTIVE_WIDGET_VERSION || WIDGET_VERSIONS[WIDGET_VERSIONS.length - 1];
+
+// Helper to generate template URI from version
+function templateUriFromVersion(version: string): string {
+  return `ui://widget/chat-vault-v${version}.html`;
+}
 
 const widgets: ChatVaultWidget[] = [
   {
     id: "browseMySavedChats",
     title: "ChatVault",
-    templateUri: `ui://widget/chat-vault-v${WIDGET_VERSION}.html`,
+    templateVersions: WIDGET_VERSIONS,
+    activeTemplateVersion: ACTIVE_WIDGET_VERSION,
+    templateUri: templateUriFromVersion(ACTIVE_WIDGET_VERSION), // Active version's URI (used in tools/list)
     invoking: "Browsing saved chats",
     invoked: "ChatVault opened",
     html: "", // Will be loaded lazily
@@ -195,7 +209,7 @@ const widgets: ChatVaultWidget[] = [
   },
 ];
 
-// Initialize widget HTML (lazy)
+// Initialize widget HTML (lazy) - same HTML for all versions
 widgets.forEach((widget) => {
   widget.html = getWidgetHtml("chat-vault");
 });
@@ -203,9 +217,16 @@ widgets.forEach((widget) => {
 const widgetsById = new Map<string, ChatVaultWidget>();
 const widgetsByUri = new Map<string, ChatVaultWidget>();
 
+// Register widgets by ID and by all template URIs (for backward compatibility)
 widgets.forEach((widget) => {
   widgetsById.set(widget.id, widget);
+  // Register active template URI
   widgetsByUri.set(widget.templateUri, widget);
+  // Register all template version URIs (all versions are available via resources/read)
+  widget.templateVersions.forEach((version) => {
+    const uri = templateUriFromVersion(version);
+    widgetsByUri.set(uri, widget);
+  });
 });
 
 // Chat data structure
@@ -420,21 +441,33 @@ const chatVaultTools: Tool[] = [
 
 const tools: Tool[] = [...chatVaultTools];
 
-const resources: Resource[] = widgets.map((widget) => ({
-  uri: widget.templateUri,
-  name: widget.title,
-  description: `${widget.title} widget markup`,
-  mimeType: "text/html+skybridge",
-  _meta: widgetDescriptorMeta(widget),
-}));
+// Generate resources for all template versions (all versions are available via resources/read)
+const resources: Resource[] = widgets.flatMap((widget) =>
+  widget.templateVersions.map((version) => {
+    const uri = templateUriFromVersion(version);
+    return {
+      uri,
+      name: `${widget.title} (v${version})`,
+      description: `${widget.title} widget markup (version ${version})`,
+      mimeType: "text/html+skybridge",
+      _meta: widgetDescriptorMeta(widget, uri),
+    };
+  })
+);
 
-const resourceTemplates: ResourceTemplate[] = widgets.map((widget) => ({
-  uriTemplate: widget.templateUri,
-  name: widget.title,
-  description: `${widget.title} widget markup`,
-  mimeType: "text/html+skybridge",
-  _meta: widgetDescriptorMeta(widget),
-}));
+// Resource templates: expose all template versions
+const resourceTemplates: ResourceTemplate[] = widgets.flatMap((widget) =>
+  widget.templateVersions.map((version) => {
+    const uri = templateUriFromVersion(version);
+    return {
+      uriTemplate: uri,
+      name: `${widget.title} (v${version})`,
+      description: `${widget.title} widget markup (version ${version})`,
+      mimeType: "text/html+skybridge",
+      _meta: widgetDescriptorMeta(widget, uri),
+    };
+  })
+);
 
 // Handler functions (extracted from server handlers for manual dispatch)
 async function handleListTools(_request: ListToolsRequest) {
@@ -700,23 +733,25 @@ async function handleListResources(_request: ListResourcesRequest) {
 
 async function handleReadResource(request: ReadResourceRequest) {
   const requestId = (request as { id?: string | number }).id;
-  console.log("[MCP Handler] handleReadResource - request id:", requestId, "uri:", request.params.uri);
-  const widget = widgetsByUri.get(request.params.uri);
+  const requestedUri = request.params.uri;
+  console.log("[MCP Handler] handleReadResource - request id:", requestId, "uri:", requestedUri);
+  const widget = widgetsByUri.get(requestedUri);
 
   if (!widget) {
-    console.error("[MCP Handler] handleReadResource - Unknown resource:", request.params.uri);
-    throw new Error(`Unknown resource: ${request.params.uri}`);
+    console.error("[MCP Handler] handleReadResource - Unknown resource:", requestedUri);
+    throw new Error(`Unknown resource: ${requestedUri}`);
   }
 
   console.log("[MCP Handler] handleReadResource - Found widget:", widget.id, "HTML length:", widget.html.length);
   const result = {
     contents: [
       {
-        uri: widget.templateUri,
+        uri: requestedUri, // Return the requested URI (which version was requested)
         mimeType: "text/html+skybridge",
-        text: widget.html,
+        text: widget.html, // Same HTML for all versions
         _meta: {
           ...widgetDescriptorMeta(widget),
+          "openai/outputTemplate": requestedUri, // Use requested URI in metadata
           "openai/widgetPrefersBorder": true,
           "openai/widgetDomain": "https://agentsyx.com",
           "openai/widgetCSP": {

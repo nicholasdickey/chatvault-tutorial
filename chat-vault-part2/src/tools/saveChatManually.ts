@@ -14,6 +14,7 @@ export interface SaveChatManuallyParams {
     userId: string;
     htmlContent: string;
     title?: string;
+    widgetVersion?: string; // Widget version (optional, for tracking which widget version is calling)
     userContext?: UserContext; // User context from Findexar headers
 }
 
