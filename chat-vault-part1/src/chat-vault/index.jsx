@@ -509,10 +509,13 @@ function App() {
     
     let html = markdown;
     
-    // Convert headers
+    // Convert headers (do this first before paragraph processing)
     html = html.replace(/^### (.*$)/gim, '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>');
     html = html.replace(/^## (.*$)/gim, '<h4 class="text-lg font-semibold mt-6 mb-3">$1</h4>');
     html = html.replace(/^# (.*$)/gim, '<h3 class="text-xl font-semibold mt-6 mb-4">$1</h3>');
+    
+    // Convert links [text](url) - do this before bold to avoid conflicts
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">$1</a>');
     
     // Convert bold
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -1144,11 +1147,6 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           isDarkMode ? "border-gray-700" : "border-black/5"
         }`}>
           <div className="flex items-center gap-2">
-            <div className={`px-2 py-1 text-xs font-medium ${
-              isDarkMode ? "text-green-400" : "text-green-600"
-            }`}>
-              test
-            </div>
             <button
               onClick={handleRefresh}
               className={`p-2 rounded-lg transition-colors ${
@@ -1988,11 +1986,26 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   )}
                   {userInfo?.message && (
                     <div className={`mt-4 p-3 rounded-lg border ${
-                      isDarkMode 
-                        ? "bg-gray-800/50 border-gray-700 text-gray-300" 
-                        : "bg-gray-50 border-gray-200 text-gray-700"
+                      userInfo.messageType === 'success'
+                        ? isDarkMode
+                          ? "bg-green-900/30 border-green-700/50 text-green-200"
+                          : "bg-green-50 border-green-200 text-green-800"
+                        : userInfo.messageType === 'error'
+                        ? isDarkMode
+                          ? "bg-red-900/30 border-red-700/50 text-red-200"
+                          : "bg-red-50 border-red-200 text-red-800"
+                        : userInfo.messageType === 'alert'
+                        ? isDarkMode
+                          ? "bg-yellow-900/30 border-yellow-700/50 text-yellow-200"
+                          : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                        : isDarkMode 
+                          ? "bg-gray-800/50 border-gray-700 text-gray-300" 
+                          : "bg-gray-50 border-gray-200 text-gray-700"
                     }`}>
-                      <div className="text-sm">{userInfo.message}</div>
+                      <div 
+                        className="text-sm"
+                        dangerouslySetInnerHTML={{ __html: markdownToHtml(userInfo.message) }}
+                      />
                     </div>
                   )}
                 </>
