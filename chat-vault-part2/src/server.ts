@@ -156,6 +156,10 @@ const chatVaultTools: Tool[] = [
                     type: "string",
                     description: "Optional search query to filter chats by title or content",
                 },
+                widgetVersion: {
+                    type: "string",
+                    description: "Widget version (optional, for tracking which widget version is calling)",
+                },
             },
             required: ["userId"],
         },
@@ -214,6 +218,10 @@ const chatVaultTools: Tool[] = [
                 title: {
                     type: "string",
                     description: "Optional title for the chat (defaults to 'manual save [timestamp]')",
+                },
+                widgetVersion: {
+                    type: "string",
+                    description: "Widget version (optional, for tracking which widget version is calling)",
                 },
             },
             required: ["userId", "htmlContent"],

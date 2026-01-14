@@ -164,6 +164,7 @@ function App() {
             const result = await window.openai.callTool("loadMyChats", {
               page: 0,
               size: 10,
+              widgetVersion: WIDGET_VERSION,
             });
             addLog("loadMyChats result", result);
             
@@ -367,6 +368,7 @@ function App() {
         const result = await window.openai.callTool("loadMyChats", {
           page: 0,
           size: 10,
+          widgetVersion: WIDGET_VERSION,
         });
         if (result?.structuredContent?.chats) {
           setChats(deduplicateChats(result.structuredContent.chats));
@@ -751,6 +753,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
       const toolArgs = {
         htmlContent: contentToSend,
         title: titleToSend,
+        widgetVersion: WIDGET_VERSION,
       };
       
       addLog("📤 [WIDGET] Calling saveChatManually tool", {
@@ -1003,6 +1006,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         query: query.trim(),
         page,
         size: 10,
+        widgetVersion: WIDGET_VERSION,
       });
 
       addLog("Search result", result);
@@ -1036,6 +1040,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         const result = await window.openai.callTool("loadMyChats", {
           page: 0,
           size: 10,
+          widgetVersion: WIDGET_VERSION,
         });
         if (result?.structuredContent?.chats) {
           setChats(deduplicateChats(result.structuredContent.chats));
@@ -1067,6 +1072,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           query: searchQuery.trim(),
           page: nextPage,
           size: 10,
+          widgetVersion: WIDGET_VERSION,
         });
         if (result?.structuredContent?.chats) {
           setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
@@ -1079,6 +1085,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         const result = await window.openai.callTool("loadMyChats", {
           page: nextPage,
           size: 10,
+          widgetVersion: WIDGET_VERSION,
         });
         if (result?.structuredContent?.chats) {
           setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));

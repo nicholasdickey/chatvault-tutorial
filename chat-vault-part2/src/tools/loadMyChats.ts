@@ -44,6 +44,7 @@ export interface LoadChatsParams {
   page?: number; // 0-indexed, default 0
   size?: number; // default 10
   query?: string; // Optional search query - when provided, uses vector similarity search (same as searchMyChats)
+  widgetVersion?: string; // Widget version (optional, for tracking which widget version is calling)
   userContext?: UserContext; // User context from Findexar headers
   headers?: Record<string, string | string[] | undefined>; // All request headers for logging
 }
@@ -255,7 +256,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         userName,
         ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         message: "This is a **test message** with markdown. Check out [OpenAI](https://openai.com) and [ChatGPT](https://chat.openai.com) for more info.", // TODO: Replace with dynamic message logic
-        messageType: "success",
+        messageType: widgetVersion === "1.0.0" ? "normal" : "success",
       },
     };
 
