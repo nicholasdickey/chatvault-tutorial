@@ -187,7 +187,6 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           totalChats,
           userName,
           ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
-          message: "This is a test message from the backend", // TODO: Replace with dynamic message logic
         },
       };
 
@@ -254,6 +253,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         totalChats,
         userName,
         ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+        message: "This is a test message from the backend", // TODO: Replace with dynamic message logic
       },
     };
 
