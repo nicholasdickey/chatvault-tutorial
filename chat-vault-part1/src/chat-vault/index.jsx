@@ -4,6 +4,9 @@ import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose,
 
 // Chat data structure (no TypeScript types in .jsx file)
 
+// Widget version from environment variable (injected at build time via vite.config.mts)
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.1";
+
 // Debug logging
 const debugLogs = [];
 const addLog = (message, data = null) => {
@@ -2057,6 +2060,11 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
               isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
             }`}>
+              <div className={`mb-3 pb-3 border-b ${
+                isDarkMode ? "border-gray-700" : "border-gray-300"
+              }`}>
+                <div className="font-semibold mb-1">Widget Version: v{WIDGET_VERSION}</div>
+              </div>
               {debugLogs.length === 0 ? (
                 <div className="opacity-60">No logs yet</div>
               ) : (
