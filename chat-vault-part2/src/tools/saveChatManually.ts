@@ -355,7 +355,7 @@ export async function saveChatManually(
         if (contentLength > maxLength) {
             const limitType = isAnonymousPlan !== undefined ? "20,000 characters" : "1,000,000 characters";
             const message = isAnonymousPlan !== undefined
-                ? `Content exceeds the ${limitType} limit for users without an account. Please shorten your content or sign in to save longer notes (up to 100,000 characters).`
+                ? `Content exceeds the ${limitType} limit for users without an account. Please shorten your content or sign in to save longer chats and notes (up to 1,100,000 characters).`
                 : `Content exceeds the ${limitType} limit. Please shorten your content.`;
             console.log("[saveChatManually] ❌ Content size limit exceeded:", {
                 contentLength,

@@ -914,6 +914,10 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
       setManualSaveHtml("");
       setManualSaveError(null);
       
+      // Clear search filter when adding a new chat/note
+      setSearchQuery("");
+      setIsSearching(false);
+      
       // Show loading indicator immediately after modal closes (same as pagination)
       setPaginationLoading(true);
 
@@ -1170,13 +1174,17 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           </div>
           <div className="flex items-center gap-2">
             {userInfo?.userName && !userInfo?.isAnon ? (
-              <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                isDarkMode
-                  ? "text-gray-300"
-                  : "text-gray-700"
-              }`}>
+              <button
+                onClick={handleOpenWebsite}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  isDarkMode
+                    ? "text-gray-300 hover:text-gray-200 hover:bg-gray-800"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+                title="Open on the website"
+              >
                 {userInfo.userName}
-              </div>
+              </button>
             ) : userInfo?.isAnonymousPlan && userInfo?.portalLink ? (
               <button
                 onClick={handleSignIn}
