@@ -323,6 +323,7 @@ export async function saveChatManually(
 ): Promise<SaveChatManuallyResult> {
     const { userId, htmlContent, title, userContext } = params;
     const isAnon = userContext?.isAnon ?? false;
+    const isAnonymousPlan = userContext?.isAnonymousPlan;
     const portalLink = userContext?.portalLink ?? null;
 
     console.log("[saveChatManually] ===== ENTRY =====");
@@ -349,11 +350,11 @@ export async function saveChatManually(
         // Check content size limits before parsing
         // Anonymous users: 2k limit, authenticated users: 100k limit
         const contentLength = htmlContent.length;
-        const maxLength = isAnon ? 20000 : 1000000;
+        const maxLength = isAnonymousPlan !== undefined ? 20000 : 1000000;
 
         if (contentLength > maxLength) {
-            const limitType = isAnon ? "2,000 characters" : "100,000 characters";
-            const message = isAnon
+            const limitType = isAnonymousPlan !== undefined ? "20,000 characters" : "1,000,000 characters";
+            const message = isAnonymousPlan !== undefined
                 ? `Content exceeds the ${limitType} limit for users without an account. Please shorten your content or sign in to save longer notes (up to 100,000 characters).`
                 : `Content exceeds the ${limitType} limit. Please shorten your content.`;
             console.log("[saveChatManually] ❌ Content size limit exceeded:", {
