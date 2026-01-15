@@ -1524,7 +1524,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         <div className="min-w-full text-sm flex flex-col py-8">
           {selectedChat ? (
             // Chat detail view
-            <div className="space-y-4">
+            <div className="space-y-4 pb-20">
               <div className={`p-4 rounded-lg ${
                 isDarkMode ? "bg-gray-800" : "bg-gray-50"
               }`}>
@@ -1532,7 +1532,21 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   <div className="flex-1">
                     <div className="font-medium mb-1">{selectedChat.title}</div>
                     <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                      {formatDate(selectedChat.timestamp)}
+
+                  <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                            {chat.turns.length === 1 && !chat.turns[0].response ? (
+                              <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
+                            ) : (
+                              <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
+                            )}
+                            {formatDate(chat.timestamp)}
+                            {chat.turns.length === 1 && !chat.turns[0].response ? (
+                              " • Note"
+                            ) : (
+                              ` • ${chat.turns?.length || 0} turn${(chat.turns?.length || 0) !== 1 ? "s" : ""}`
+                            )}
+                          </div>
+                    
                     </div>
                   </div>
                   <button
@@ -1558,28 +1572,91 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               </div>
               
               {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
-                // Note rendering - single card with content
-                <div className={`p-4 rounded-lg border ${
-                  isDarkMode ? "bg-purple-900/30 border-purple-700/50" : "bg-purple-50 border-purple-200"
-                }`}>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <MdNote className={`w-4 h-4 ${
-                        isDarkMode ? "text-purple-400" : "text-purple-600"
-                      }`} />
-                      <div className={`text-xs font-medium ${
-                        isDarkMode ? "text-purple-400" : "text-purple-600"
-                      }`}>
-                        Note
+                // Note rendering - single card with prompt (same style as turn prompt)
+                (() => {
+                  const noteTurn = selectedChat.turns[0];
+                  const noteIndex = 0;
+                  const isExpanded = expandedTurns.has(noteIndex);
+                  const noteId = `note-${selectedChat.timestamp}`;
+                  const noteCopied = !!copiedItems[noteId];
+                  
+                  // Check if note needs truncation (longer than 150 chars)
+                  const maxLength = 150;
+                  const noteNeedsTruncation = noteTurn.prompt.length > maxLength;
+                  
+                  return (
+                    <div className={`space-y-2 p-4 rounded-lg border ${
+                      isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+                    }`}>
+                      {/* Prompt */}
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className={`text-xs font-medium ${
+                            isDarkMode ? "text-blue-400" : "text-blue-600"
+                          }`}>
+                            Prompt
+                          </div>
+                          {noteNeedsTruncation && (
+                            <button
+                              onClick={() => toggleTurnExpansion(noteIndex)}
+                              className={`p-1.5 rounded ${
+                                isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              }`}
+                              title={isExpanded ? "Collapse" : "Expand"}
+                            >
+                              {isExpanded ? (
+                                <MdExpandLess className="w-4 h-4" />
+                              ) : (
+                                <MdExpandMore className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        <div className={`text-sm flex items-start justify-between gap-2 ${
+                          isDarkMode ? "text-gray-200" : "text-gray-800"
+                        }`}>
+                          <span 
+                            className={`flex-1 ${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                            onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
+                            onMouseDown={(e) => {
+                              // If expanded, allow text selection by not preventing default
+                              if (isExpanded) {
+                                return; // Allow normal text selection
+                              }
+                              // If not expanded and clickable, prevent text selection on click
+                              if (noteNeedsTruncation) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            {isExpanded ? noteTurn.prompt : truncateText(noteTurn.prompt)}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              copyToClipboard(noteTurn.prompt, noteId);
+                            }}
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
+                              isDarkMode
+                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
+                            title="Copy prompt"
+                          >
+                            {noteCopied ? (
+                              <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                            ) : (
+                              <MdContentCopy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className={`text-sm whitespace-pre-wrap ${
-                    isDarkMode ? "text-gray-200" : "text-gray-800"
-                  }`}>
-                    {selectedChat.content || ""}
-                  </div>
-                </div>
+                  );
+                })()
               ) : (
                 // Chat rendering - turns with prompt/response
                 selectedChat.turns?.map((turn, index) => {
@@ -1763,11 +1840,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                           className="flex-1 text-left"
                         >
                           <div className="flex items-center gap-2 font-medium mb-1">
-                            {chat.turns.length === 1 && !chat.turns[0].response && (
-                              <MdNote className={`w-4 h-4 flex-shrink-0 ${
-                                isDarkMode ? "text-purple-400" : "text-purple-600"
-                              }`} />
-                            )}
+                          
                             {chat.title}
                           </div>
                           <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
