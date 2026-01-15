@@ -1534,16 +1534,16 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                     <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
 
                   <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {chat.turns.length === 1 && !chat.turns[0].response ? (
+                            {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
                               <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
                             ) : (
                               <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
                             )}
-                            {formatDate(chat.timestamp)}
-                            {chat.turns.length === 1 && !chat.turns[0].response ? (
+                            {formatDate(selectedChat.timestamp)}
+                            {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
                               " • Note"
                             ) : (
-                              ` • ${chat.turns?.length || 0} turn${(chat.turns?.length || 0) !== 1 ? "s" : ""}`
+                              ` • ${selectedChat.turns?.length || 0} turn${(selectedChat.turns?.length || 0) !== 1 ? "s" : ""}`
                             )}
                           </div>
                     
