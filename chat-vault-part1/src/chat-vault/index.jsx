@@ -1040,7 +1040,6 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         const result = await window.openai.callTool("loadMyChats", {
           page: 0,
           size: 10,
-          widgetVersion: WIDGET_VERSION,
         });
         if (result?.structuredContent?.chats) {
           setChats(deduplicateChats(result.structuredContent.chats));
@@ -1522,7 +1521,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         )}
 
         {/* Content */}
-        <div className="min-w-full text-sm flex flex-col py-4">
+        <div className="min-w-full text-sm flex flex-col py-8">
           {selectedChat ? (
             // Chat detail view
             <div className="space-y-4">
@@ -1558,7 +1557,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                 </div>
               </div>
               
-              {selectedChat.type === "note" ? (
+              {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
                 // Note rendering - single card with content
                 <div className={`p-4 rounded-lg border ${
                   isDarkMode ? "bg-purple-900/30 border-purple-700/50" : "bg-purple-50 border-purple-200"
@@ -1723,7 +1722,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
             </div>
           ) : (
             // Chat list view
-            <div className="space-y-2 relative">
+            <div className="space-y-2 relative pb-4">
               {loading && chats.length === 0 ? (
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
                   Loading chats...
@@ -1764,7 +1763,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                           className="flex-1 text-left"
                         >
                           <div className="flex items-center gap-2 font-medium mb-1">
-                            {chat.type === "note" && (
+                            {chat.turns.length === 1 && !chat.turns[0].response && (
                               <MdNote className={`w-4 h-4 flex-shrink-0 ${
                                 isDarkMode ? "text-purple-400" : "text-purple-600"
                               }`} />
@@ -1772,13 +1771,13 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                             {chat.title}
                           </div>
                           <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {chat.type === "note" ? (
+                            {chat.turns.length === 1 && !chat.turns[0].response ? (
                               <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
                             ) : (
                               <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
                             )}
                             {formatDate(chat.timestamp)}
-                            {chat.type === "note" ? (
+                            {chat.turns.length === 1 && !chat.turns[0].response ? (
                               " • Note"
                             ) : (
                               ` • ${chat.turns?.length || 0} turn${(chat.turns?.length || 0) !== 1 ? "s" : ""}`
@@ -1817,7 +1816,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                   </div>
                   {/* Pagination */}
                   {pagination && pagination.totalPages > 1 && (
-                    <div className="pt-4 flex items-center justify-between gap-2">
+                    <div className="pt-4 flex items-center justify-between gap-2 mb-4">
                       <button
                         onClick={async () => {
                           if (currentPage > 0 && !paginationLoading && !searchLoading) {
@@ -2141,7 +2140,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                     <label className={`block text-sm font-medium mb-2 ${
                       isDarkMode ? "text-gray-300" : "text-gray-700"
                     }`}>
-                      Paste Chat Conversation
+                      Paste Chat Conversation or Note
                     </label>
                     <textarea
                       value={manualSaveContent}
@@ -2256,7 +2255,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         {!showHelp && (
           <button
             onClick={handleHelpClick}
-            className={`absolute bottom-4 right-4 w-6 h-6 flex items-center justify-center transition-colors z-50 ${
+            className={`absolute bottom-4 right-4 w-6 h-6 mt-4 flex items-center justify-center transition-colors z-50 ${
               isDarkMode
                 ? "text-gray-400 hover:text-gray-300"
                 : "text-gray-500 hover:text-gray-700"

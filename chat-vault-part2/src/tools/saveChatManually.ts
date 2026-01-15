@@ -350,7 +350,7 @@ export async function saveChatManually(
         // Anonymous users: 2k limit, authenticated users: 100k limit
         const contentLength = htmlContent.length;
         const maxLength = isAnon ? 2000 : 100000;
-        
+
         if (contentLength > maxLength) {
             const limitType = isAnon ? "2,000 characters" : "100,000 characters";
             const message = isAnon
