@@ -191,7 +191,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
           totalChats,
           userName,
-          ...(isAnon && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+          ...(isAnonymousPlan !== undefined && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
       };
 

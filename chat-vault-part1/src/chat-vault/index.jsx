@@ -1177,7 +1177,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               }`}>
                 {userInfo.userName}
               </div>
-            ) : userInfo?.isAnon && userInfo?.loginLink ? (
+            ) : userInfo?.isAnonymousPlan && userInfo?.portalLink ? (
               <button
                 onClick={handleSignIn}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
@@ -1243,7 +1243,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
         </div>
         {/* Delete Confirmation Modal - Centered Overlay */}
         {deleteConfirmation && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 min-h-screen">
             <div className={`w-full max-w-md rounded-lg ${
               isDarkMode ? "bg-gray-800" : "bg-white"
             } p-6 shadow-xl`}>
