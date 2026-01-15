@@ -174,7 +174,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const filteredHasMore = pageNum + 1 < filteredTotalPages;
       const filteredOffset = pageNum * sizeNum;
       const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
-
+      console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
       const result: LoadChatsResult = {
         chats: paginatedFilteredChats,
         pagination: {
