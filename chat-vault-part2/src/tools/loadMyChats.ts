@@ -101,7 +101,7 @@ function filterExpiredChats<T extends { timestamp: Date }>(
  * Load paginated chats for a user
  */
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
-  const { userId, page = 0, size = 10, query, widgetVersion, userContext, headers } = params;
+  let { userId, page = 0, size = 10, query, widgetVersion, userContext, headers } = params;
   const isAnon = userContext?.isAnon ?? false;
   const isAnonymousPlan = userContext?.isAnonymousPlan;
   const portalLink = userContext?.portalLink ?? null;
@@ -116,6 +116,9 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     }
     // Dump all headers to log
     console.log("[loadMyChats] All request headers:", JSON.stringify(headers, null, 2));
+  }
+  if (!widgetVersion) {
+    widgetVersion = "1.0.0";
   }
   console.log("[loadMyChats] Widget version:", widgetVersion);
   console.log(
