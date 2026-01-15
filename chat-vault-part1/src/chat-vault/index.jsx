@@ -1591,11 +1591,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
                       {/* Prompt */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${
-                            isDarkMode ? "text-blue-400" : "text-blue-600"
-                          }`}>
-                            Prompt
-                          </div>
+                        
                           {noteNeedsTruncation && (
                             <button
                               onClick={() => toggleTurnExpansion(noteIndex)}
