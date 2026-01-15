@@ -117,7 +117,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     // Dump all headers to log
     console.log("[loadMyChats] All request headers:", JSON.stringify(headers, null, 2));
   }
-
+  console.log("[loadMyChats] Widget version:", widgetVersion);
   console.log(
     "[loadMyChats] Loading chats - userId:",
     userId,
