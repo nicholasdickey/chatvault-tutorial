@@ -197,15 +197,15 @@ function templateUriFromVersion(version: string): string {
 const widgets: ChatVaultWidget[] = [
   {
     id: "browseMySavedChats",
-    title: "ChatVault",
+    title: "Chat Vault",
     templateVersions: WIDGET_VERSIONS,
     activeTemplateVersion: ACTIVE_WIDGET_VERSION,
     templateUri: templateUriFromVersion(ACTIVE_WIDGET_VERSION), // Active version's URI (used in tools/list)
     invoking: "Browsing saved chats",
-    invoked: "ChatVault opened",
+    invoked: "Chat Vault opened",
     html: "", // Will be loaded lazily
     responseText: "Opened ChatVault!",
-    description: "Browse, display, search, and and delete my saved chats in the ChatVault widget. Liited in scope to user's explicitely saved chats only",
+    description: "Browse, display, search, and and delete my saved chats in the Chat Vault widget. Liited in scope to user's explicitely saved chats only",
   },
 ];
 
