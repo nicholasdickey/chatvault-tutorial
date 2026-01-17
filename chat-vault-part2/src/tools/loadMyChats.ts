@@ -77,6 +77,7 @@ export interface LoadChatsResult {
   };
   content?: {
     helpText: string;
+    subTitle?: string;
     limits: {
       counterTooltip: string;
       limitReachedTooltip: string;
@@ -152,6 +153,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     }
     const contentMetadata = {
       helpText,
+      subTitle: `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save.`,
       limits: {
         counterTooltip: "Click to learn about chat limits",
         limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
