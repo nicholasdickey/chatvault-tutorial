@@ -56,6 +56,7 @@ function App() {
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpText, setHelpText] = useState(null);
+  const [subTitle, setSubTitle] = useState(null);
   const [displayMode, setDisplayMode] = useState("normal"); // "normal" | "fullscreen" | "pip"
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
@@ -552,33 +553,10 @@ function App() {
 
     // Get help text from metadata with fallback to default
     const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
-    const defaultHelpText = `# How to Use ChatVault
-
-ChatVault helps you save, organize, and search your conversations. Think of it as a personal archive for your most valuable chats.
-Note: chats are stored for {expirationDays} days in the free version of the app.
-## Saving Conversations
-
-You have three flexible ways to save conversations to your vault:
-
-### 1. Ask ChatGPT to Save
-Simply ask ChatGPT to save the current conversation to your vault. You can specify:
-- **By subject**: "Save this conversation about [topic] to my ChatVault"
-- **By number of turns**: "Save the last 5 turns to my ChatVault"
-- **The entire conversation**: "Add this entire chat to my ChatVault"
-
-### 2. Manual Save via Widget
-Use the '+' button in the ChatVault widget to manually add conversations:
-1. Copy a conversation from ChatGPT (or anywhere)
-2. Click the '+' button in the ChatVault widget header
-3. Paste the conversation into the text area
-4. Optionally add a custom title
-5. Click "Save"
-
-## Accessing Your Vault
-
-Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.`;
+   
     
-    const rawHelpText = contentMetadata?.helpText ?? defaultHelpText;
+    const rawHelpText = contentMetadata?.helpText ?? 'Loading...';
+    const rawSubTitle = contentMetadata?.subTitle ?? 'Loading...';
     // Replace placeholders in help text
     const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
     setHelpText(processedHelpText);
@@ -1096,6 +1074,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
+        
       }
     } catch (err) {
       addLog("Error loading more chats", { error: err.message });
@@ -1357,8 +1336,7 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               ChatVault
             </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-              {selectedChat ? selectedChat.title :
-              `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save.` }
+              {selectedChat ? selectedChat.title : rawSubTitle } 
             </div>
           </div>
           <div className="flex gap-2">

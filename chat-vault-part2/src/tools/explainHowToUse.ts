@@ -12,7 +12,7 @@ export interface ExplainHowToUseResult {
 }
 export const helpText = `# How to Use Chat Vault
 
-Chat Vault helps you save, organize, and search your ChatGPT conversations. Think of it as a personal archive for your most valuable chats. Your knowldge base. Your AI chatbot's long-term memory.
+Chat Vault helps you save, organize, and search your Claude, Geminim, ChatGPT, etc. "aha! moments" and knowledge-building conversations. Think of it as a personal archive for your most valuable chats. Your knowldge base. Your AI chatbot's long-term memory. That you can own and can take with you to any new platform or AI environment.
 
 ## Saving Conversations
 
