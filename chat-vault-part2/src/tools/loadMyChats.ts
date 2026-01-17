@@ -150,7 +150,19 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     if (!userId) {
       throw new Error("userId is required");
     }
-
+    const contentMetadata = {
+      helpText,
+      limits: {
+        counterTooltip: "Click to learn about chat limits",
+        limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
+        limitReachedMessageWithPortal: "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.",
+        limitReachedMessageWithoutPortal: "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.",
+      },
+      config: {
+        freeChatLimit: 10,
+        chatExpirationDays: 7,
+      },
+    };
     // Validate pagination parameters
     const pageNum = Math.max(0, Math.floor(page)); // Ensure page is at least 0
     const sizeNum = Math.max(1, Math.min(100, Math.floor(size))); // Size between 1 and 100
@@ -188,19 +200,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const filteredOffset = pageNum * sizeNum;
       const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
       console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
-      const contentMetadata = {
-        helpText,
-        limits: {
-          counterTooltip: "Click to learn about chat limits",
-          limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
-          limitReachedMessageWithPortal: "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.",
-          limitReachedMessageWithoutPortal: "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.",
-        },
-        config: {
-          freeChatLimit: 10,
-          chatExpirationDays: 7,
-        },
-      };
+
 
       const result: LoadChatsResult = {
         chats: paginatedFilteredChats,
@@ -220,7 +220,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           userName,
           ...(isAnonymousPlan !== undefined && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
-        content: contentMetadata,
+        //content: contentMetadata,
 
       };
 
@@ -290,6 +290,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         //message: "This is a **test message** with markdown. Check out [OpenAI](https://openai.com) and [ChatGPT](https://chat.openai.com) for more info.", // TODO: Replace with dynamic message logic
         //messageType: widgetVersion === "1.0.0" ? "normal" : "success",
       },
+      content: contentMetadata,
     };
 
     console.log(
