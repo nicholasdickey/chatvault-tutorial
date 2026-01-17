@@ -556,7 +556,7 @@ function App() {
    
     
     const rawHelpText = contentMetadata?.helpText ?? 'Loading...';
-    const rawSubTitle = contentMetadata?.subTitle ?? 'Loading...';
+   
     // Replace placeholders in help text
     const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
     setHelpText(processedHelpText);
@@ -921,6 +921,7 @@ function App() {
               setContentMetadata(loadResult.structuredContent.content);
             }
           }
+          
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
           setError(`Failed to reload chats: ${err.message}`);
@@ -1336,7 +1337,7 @@ function App() {
               ChatVault
             </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-              {selectedChat ? selectedChat.title : rawSubTitle } 
+              {selectedChat ? selectedChat.title : contentMetadata?.subTitle } 
             </div>
           </div>
           <div className="flex gap-2">
