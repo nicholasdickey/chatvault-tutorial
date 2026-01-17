@@ -296,8 +296,12 @@ function App() {
 
   const handleChatClick = (chat) => {
     addLog("Chat clicked", { title: chat.title });
-    setSelectedChat(chat);
+    // Create a fresh copy of the chat object to avoid reference issues
+    setSelectedChat({ ...chat });
     setExpandedTurns(new Set());
+    // Reset editing state when switching chats
+    setIsEditingTitle(false);
+    setEditedTitle("");
     // Search state persists - don't clear it
   };
 
@@ -305,6 +309,9 @@ function App() {
     addLog("Back clicked");
     setSelectedChat(null);
     setExpandedTurns(new Set());
+    // Reset editing state when going back
+    setIsEditingTitle(false);
+    setEditedTitle("");
   };
 
   const handleFullscreen = async () => {
@@ -560,6 +567,10 @@ function App() {
     setAlertMessage(null);
     setAlertPortalLink(null);
 
+    // Capture chatId and current title before async operation to avoid closure issues
+    const chatId = selectedChat.id;
+    const currentTitle = selectedChat.title;
+
     try {
       if (!window.openai?.callTool) {
         throw new Error("updateChat tool not available");
@@ -570,9 +581,9 @@ function App() {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
-      addLog("Calling updateChat tool", { chatId: selectedChat.id, userId, title: trimmedTitle });
+      addLog("Calling updateChat tool", { chatId, userId, title: trimmedTitle });
       const result = await window.openai.callTool("updateChat", {
-        chatId: selectedChat.id,
+        chatId,
         userId,
         chat: {
           title: trimmedTitle,
@@ -584,17 +595,17 @@ function App() {
       if (result?.structuredContent?.updated) {
         const newTitle = result.structuredContent.title || trimmedTitle;
         
-        // Update selectedChat
-        setSelectedChat((prev) => (prev ? { ...prev, title: newTitle } : null));
+        // Update selectedChat only if it's still the same chat
+        setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, title: newTitle } : prev));
         
         // Update chats list
         setChats((prev) =>
           prev.map((chat) =>
-            chat.id === selectedChat.id ? { ...chat, title: newTitle } : chat
+            chat.id === chatId ? { ...chat, title: newTitle } : chat
           )
         );
         
-        addLog("Title updated in local state", { newTitle });
+        addLog("Title updated in local state", { chatId, newTitle });
         
         // Exit edit mode
         setIsEditingTitle(false);
