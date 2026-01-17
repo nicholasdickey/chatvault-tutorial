@@ -846,7 +846,7 @@ function App() {
 
     try {
       if (!window.openai?.callTool) {
-        throw new Error("saveChatManually tool not available");
+        throw new Error("widgetAdd tool not available");
       }
 
       const toolArgs = {
@@ -855,8 +855,8 @@ function App() {
         widgetVersion: WIDGET_VERSION,
       };
       
-      addLog("📤 [WIDGET] Calling saveChatManually tool", {
-        toolName: "saveChatManually",
+      addLog("📤 [WIDGET] Calling widgetAdd tool", {
+        toolName: "widgetAdd",
         args: {
           htmlContentLength: toolArgs.htmlContent.length,
           htmlContentPreview: toolArgs.htmlContent.substring(0, 200),
@@ -869,7 +869,7 @@ function App() {
         setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
       });
 
-      const callToolPromise = window.openai.callTool("saveChatManually", toolArgs);
+      const callToolPromise = window.openai.callTool("widgetAdd", toolArgs);
 
       addLog("⏳ [WIDGET] Waiting for response...");
       const result = await Promise.race([callToolPromise, timeoutPromise]);
