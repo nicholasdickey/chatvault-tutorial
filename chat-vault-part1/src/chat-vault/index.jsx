@@ -1334,7 +1334,7 @@ function App() {
               onClick={selectedChat ? handleBackClick : undefined}
               title={selectedChat ? "Back to conversations" : undefined}
             >
-              ChatVault
+              The Chat Vault
             </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
               {selectedChat ? selectedChat.title : contentMetadata?.subTitle } 
