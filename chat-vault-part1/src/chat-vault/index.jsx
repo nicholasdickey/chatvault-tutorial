@@ -1818,7 +1818,7 @@ function App() {
                           <button
                             onClick={handleSaveTitle}
                             disabled={isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048}
-                            className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
                               isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048
                                 ? "opacity-50 cursor-not-allowed"
                                 : isDarkMode
@@ -1828,15 +1828,15 @@ function App() {
                             title="Save"
                           >
                             {isUpdatingTitle ? (
-                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <MdCheck className="w-3.5 h-3.5" />
+                              <MdCheck className="w-3 h-3" />
                             )}
                           </button>
                           <button
                             onClick={handleCancelEditTitle}
                             disabled={isUpdatingTitle}
-                            className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
                               isUpdatingTitle
                                 ? "opacity-50 cursor-not-allowed"
                                 : isDarkMode
@@ -1845,7 +1845,7 @@ function App() {
                             }`}
                             title="Cancel"
                           >
-                            <MdClose className="w-3.5 h-3.5" />
+                            <MdClose className="w-3 h-3" />
                           </button>
                         </div>
                         {editedTitle.trim().length > 2048 && (
@@ -1860,14 +1860,14 @@ function App() {
                         <div className="font-medium flex-1">{selectedChat.title}</div>
                         <button
                           onClick={handleStartEditTitle}
-                          className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
                             isDarkMode
                               ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
                           title="Edit title"
                         >
-                          <MdEdit className="w-3.5 h-3.5" />
+                          <MdEdit className="w-3 h-3" />
                         </button>
                       </div>
                     )}
@@ -1907,7 +1907,7 @@ function App() {
                       e.stopPropagation();
                       copyEntireChat(selectedChat);
                     }}
-                    className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                    className={`p-1 rounded flex items-center flex-shrink-0 ${
                       isDarkMode
                         ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -1915,16 +1915,16 @@ function App() {
                     title="Copy entire chat"
                   >
                     {copiedItems[`chat-${selectedChat.timestamp}`] ? (
-                      <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                      <MdCheck className="w-3 h-3 text-green-500" />
                     ) : (
-                      <MdContentCopy className="w-3.5 h-3.5" />
+                      <MdContentCopy className="w-3 h-3" />
                     )}
                   </button>
                   {hasUnsavedChanges && (
                     <button
                       onClick={handleSaveChat}
                       disabled={isSavingChat}
-                      className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                      className={`p-1 rounded flex items-center flex-shrink-0 ${
                         isSavingChat
                           ? "opacity-50 cursor-not-allowed"
                           : isDarkMode
@@ -1934,9 +1934,9 @@ function App() {
                       title="Save changes"
                     >
                       {isSavingChat ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <MdCheck className="w-3.5 h-3.5" />
+                        <MdCheck className="w-3 h-3" />
                       )}
                     </button>
                   )}
@@ -1979,7 +1979,7 @@ function App() {
                                     e.stopPropagation();
                                     copyToClipboard(noteTurn.prompt, noteId);
                                   }}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -1987,9 +1987,9 @@ function App() {
                                   title="Copy note"
                                 >
                                   {noteCopied ? (
-                                    <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                    <MdCheck className="w-3 h-3 text-green-500" />
                                   ) : (
-                                    <MdContentCopy className="w-3.5 h-3.5" />
+                                    <MdContentCopy className="w-3 h-3" />
                                   )}
                                 </button>
                                 <button
@@ -1998,14 +1998,14 @@ function App() {
                                     e.stopPropagation();
                                     handleStartEditTurn(noteIndex, 'prompt');
                                   }}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
                                   title="Edit note"
                                 >
-                                  <MdEdit className="w-3.5 h-3.5" />
+                                  <MdEdit className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={(e) => {
@@ -2014,7 +2014,7 @@ function App() {
                                     handleDeleteTurn(noteIndex);
                                   }}
                                   disabled={noteTurns.length <= 1}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
                                     noteTurns.length <= 1
                                       ? "opacity-50 cursor-not-allowed"
                                       : isDarkMode
@@ -2023,14 +2023,14 @@ function App() {
                                   }`}
                                   title={noteTurns.length <= 1 ? "Cannot delete the last turn" : "Delete note"}
                                 >
-                                  <MdDelete className="w-3.5 h-3.5" />
+                                  <MdDelete className="w-3 h-3" />
                                 </button>
                               </>
                             )}
                             {noteNeedsTruncation && !isEditingNote && (
                               <button
                                 onClick={() => toggleTurnExpansion(noteIndex)}
-                                className={`p-1.5 rounded ${
+                                className={`p-1 rounded ${
                                   isDarkMode
                                     ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                     : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -2038,9 +2038,9 @@ function App() {
                                 title={isExpanded ? "Collapse" : "Expand"}
                               >
                                 {isExpanded ? (
-                                  <MdExpandLess className="w-4 h-4" />
+                                  <MdExpandLess className="w-3 h-3" />
                                 ) : (
-                                  <MdExpandMore className="w-4 h-4" />
+                                  <MdExpandMore className="w-3 h-3" />
                                 )}
                               </button>
                             )}
@@ -2073,7 +2073,7 @@ function App() {
                                 <button
                                   onClick={() => handleSaveTurnEdit(noteIndex, 'prompt')}
                                   disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
                                     editingTurnValue.trim().length === 0
                                       ? "opacity-50 cursor-not-allowed"
                                       : isDarkMode
@@ -2082,18 +2082,18 @@ function App() {
                                   }`}
                                   title="Save (Ctrl+Enter)"
                                 >
-                                  <MdCheck className="w-3.5 h-3.5" />
+                                  <MdCheck className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={handleCancelEditTurn}
-                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
                                   title="Cancel (Esc)"
                                 >
-                                  <MdClose className="w-3.5 h-3.5" />
+                                  <MdClose className="w-3 h-3" />
                                 </button>
                               </div>
                             </div>
@@ -2162,7 +2162,7 @@ function App() {
                                     e.stopPropagation();
                                     copyToClipboard(turn.prompt, promptId);
                                   }}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -2170,9 +2170,9 @@ function App() {
                                   title="Copy prompt"
                                 >
                                   {promptCopied ? (
-                                    <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                    <MdCheck className="w-3 h-3 text-green-500" />
                                   ) : (
-                                    <MdContentCopy className="w-3.5 h-3.5" />
+                                    <MdContentCopy className="w-3 h-3" />
                                   )}
                                 </button>
                                 <button
@@ -2181,14 +2181,14 @@ function App() {
                                     e.stopPropagation();
                                     handleStartEditTurn(index, 'prompt');
                                   }}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
                                   title="Edit prompt"
                                 >
-                                  <MdEdit className="w-3.5 h-3.5" />
+                                  <MdEdit className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={(e) => {
@@ -2197,7 +2197,7 @@ function App() {
                                     handleDeleteTurn(index);
                                   }}
                                   disabled={editedTurns.length <= 1}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
                                     editedTurns.length <= 1
                                       ? "opacity-50 cursor-not-allowed"
                                       : isDarkMode
@@ -2206,14 +2206,14 @@ function App() {
                                   }`}
                                   title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}
                                 >
-                                  <MdDelete className="w-3.5 h-3.5" />
+                                  <MdDelete className="w-3 h-3" />
                                 </button>
                               </>
                             )}
                             {needsExpansion && !isEditingPrompt && (
                               <button
                                 onClick={() => toggleTurnExpansion(index)}
-                                className={`p-1.5 rounded ${
+                                className={`p-1 rounded ${
                                   isDarkMode
                                     ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                     : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -2221,9 +2221,9 @@ function App() {
                                 title={isExpanded ? "Collapse" : "Expand"}
                               >
                                 {isExpanded ? (
-                                  <MdExpandLess className="w-4 h-4" />
+                                  <MdExpandLess className="w-3 h-3" />
                                 ) : (
-                                  <MdExpandMore className="w-4 h-4" />
+                                  <MdExpandMore className="w-3 h-3" />
                                 )}
                               </button>
                             )}
@@ -2256,7 +2256,7 @@ function App() {
                                 <button
                                   onClick={() => handleSaveTurnEdit(index, 'prompt')}
                                   disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
                                     editingTurnValue.trim().length === 0
                                       ? "opacity-50 cursor-not-allowed"
                                       : isDarkMode
@@ -2265,18 +2265,18 @@ function App() {
                                   }`}
                                   title="Save (Ctrl+Enter)"
                                 >
-                                  <MdCheck className="w-3.5 h-3.5" />
+                                  <MdCheck className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={handleCancelEditTurn}
-                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
                                   title="Cancel (Esc)"
                                 >
-                                  <MdClose className="w-3.5 h-3.5" />
+                                  <MdClose className="w-3 h-3" />
                                 </button>
                               </div>
                             </div>
@@ -2339,14 +2339,14 @@ function App() {
                                   e.stopPropagation();
                                   handleStartEditTurn(index, 'response');
                                 }}
-                                className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
-                                title="Edit response"
-                              >
-                                <MdEdit className="w-3.5 h-3.5" />
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Edit response"
+                                >
+                                  <MdEdit className="w-3 h-3" />
                               </button>
                             </div>
                           )}
@@ -2378,7 +2378,7 @@ function App() {
                                 <button
                                   onClick={() => handleSaveTurnEdit(index, 'response')}
                                   disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
                                     editingTurnValue.trim().length === 0
                                       ? "opacity-50 cursor-not-allowed"
                                       : isDarkMode
@@ -2387,18 +2387,18 @@ function App() {
                                   }`}
                                   title="Save (Ctrl+Enter)"
                                 >
-                                  <MdCheck className="w-3.5 h-3.5" />
+                                  <MdCheck className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={handleCancelEditTurn}
-                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
                                     isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
                                   title="Cancel (Esc)"
                                 >
-                                  <MdClose className="w-3.5 h-3.5" />
+                                  <MdClose className="w-3 h-3" />
                                 </button>
                               </div>
                             </div>
