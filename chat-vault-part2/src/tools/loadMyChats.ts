@@ -8,7 +8,7 @@ import { eq, desc, count } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
-
+import { helpText } from "./explainHowToUse.js";
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
  * This ensures pagination works correctly by removing duplicates before pagination calculations
@@ -74,6 +74,19 @@ export interface LoadChatsResult {
     userName?: string | null;
     message?: string | null; // Optional message to display at bottom of widget (supports markdown)
     messageType?: 'alert' | 'normal' | 'success' | 'error'; // Message type for styling
+  };
+  content?: {
+    helpText: string;
+    limits: {
+      counterTooltip: string;
+      limitReachedTooltip: string;
+      limitReachedMessageWithPortal: string;
+      limitReachedMessageWithoutPortal: string;
+    };
+    config: {
+      freeChatLimit: number;
+      chatExpirationDays: number;
+    };
   };
 }
 
@@ -175,6 +188,20 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const filteredOffset = pageNum * sizeNum;
       const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
       console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
+      const contentMetadata = {
+        helpText,
+        limits: {
+          counterTooltip: "Click to learn about chat limits",
+          limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
+          limitReachedMessageWithPortal: "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.",
+          limitReachedMessageWithoutPortal: "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.",
+        },
+        config: {
+          freeChatLimit: 10,
+          chatExpirationDays: 7,
+        },
+      };
+
       const result: LoadChatsResult = {
         chats: paginatedFilteredChats,
         pagination: {
@@ -193,6 +220,8 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           userName,
           ...(isAnonymousPlan !== undefined && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
+        content: contentMetadata,
+
       };
 
       return result;

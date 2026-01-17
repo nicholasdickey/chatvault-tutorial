@@ -666,18 +666,11 @@ export async function handleMcpRequest(
 
         // For all other requests, we need a session
         if (!session) {
-            console.error(
-                "[MCP] Session not found for method:",
-                method,
-                "sessionId:",
-                sessionId
-            );
-            writeJsonRpcResponse(res, id, undefined, {
-                code: -32000,
-                message: "Session not found. Call initialize first.",
-            });
-            res.end();
-            return;
+            sessionId = generateSessionId();
+            console.log("[MCP] Creating new session:", sessionId);
+            const server = createMcpServer();
+            session = { server, sessionId };
+            sessions.set(sessionId, session);
         }
 
         // Dispatch to handler functions
