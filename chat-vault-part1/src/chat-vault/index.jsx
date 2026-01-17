@@ -1895,7 +1895,7 @@ function App() {
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
                         }`}>
-                          <span 
+                          <div 
                             className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
                             onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
                             onMouseDown={(e) => {
@@ -1908,9 +1908,12 @@ function App() {
                                 e.preventDefault();
                               }
                             }}
-                          >
-                            {isExpanded ? turn.prompt : truncateText(turn.prompt)}
-                          </span>
+                            dangerouslySetInnerHTML={{
+                              __html: isExpanded 
+                                ? markdownToHtml(turn.prompt) 
+                                : markdownToHtml(truncateText(turn.prompt))
+                            }}
+                          />
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -1945,7 +1948,7 @@ function App() {
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
                         }`}>
-                          <span 
+                          <div 
                             className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
                             onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
                             onMouseDown={(e) => {
@@ -1958,9 +1961,12 @@ function App() {
                                 e.preventDefault();
                               }
                             }}
-                          >
-                            {isExpanded ? turn.response : truncateText(turn.response)}
-                          </span>
+                            dangerouslySetInnerHTML={{
+                              __html: isExpanded 
+                                ? markdownToHtml(turn.response) 
+                                : markdownToHtml(truncateText(turn.response))
+                            }}
+                          />
                           <button
                             onClick={(e) => {
                               e.preventDefault();
