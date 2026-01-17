@@ -2496,14 +2496,14 @@ function App() {
                             e.stopPropagation();
                             handleDeleteChat(chat);
                           }}
-                          className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                          className={`p-0.5 rounded transition-colors flex-shrink-0 ${
                             isDarkMode
                               ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
                               : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
                           }`}
                           title="Delete chat"
                         >
-                          <MdDelete className="w-5 h-5" />
+                          <MdDelete className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
