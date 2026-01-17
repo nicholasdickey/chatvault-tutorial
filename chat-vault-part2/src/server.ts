@@ -102,7 +102,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "updateChat",
-        description: "USED INSIDE THE WIDGET. Update a chat's properties (currently supports title)",
+        description: "USED INSIDE THE WIDGET. Update a chat's properties (title and/or turns). When turns are updated, embeddings are regenerated.",
         inputSchema: {
             type: "object",
             properties: {
@@ -116,14 +116,25 @@ const chatVaultTools: Tool[] = [
                 },
                 chat: {
                     type: "object",
-                    description: "Chat properties to update",
+                    description: "Chat properties to update (at least one of title or turns must be provided)",
                     properties: {
                         title: {
                             type: "string",
-                            description: "New title for the chat (required, max 2048 characters)",
+                            description: "New title for the chat (optional, max 2048 characters)",
+                        },
+                        turns: {
+                            type: "array",
+                            description: "Updated turns array (optional, must be non-empty if provided)",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    prompt: { type: "string" },
+                                    response: { type: "string" },
+                                },
+                                required: ["prompt", "response"],
+                            },
                         },
                     },
-                    required: ["title"],
                 },
             },
             required: ["userId", "chatId", "chat"],
@@ -446,7 +457,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 structuredContent: result,
             };
         } else if (toolName === "updateChat") {
-            const result = await updateChat(args as { userId: string; chatId: string; chat: { title: string } });
+            const result = await updateChat(args as { userId: string; chatId: string; chat: { title?: string; turns?: Array<{ prompt: string; response: string }> } });
             console.log("[MCP Handler] handleCallTool - updateChat result:", JSON.stringify(result));
             return {
                 content: [
