@@ -150,9 +150,95 @@ function parseHtmlStructure(html: string): Array<{ prompt: string; response: str
 }
 
 /**
+ * Parse "User:" / "Assistant:" pattern from plain text
+ * High confidence pattern - splits on clear "User:" / "Assistant:" markers
+ */
+function parseUserAssistantPattern(text: string): Array<{ prompt: string; response: string }> | null {
+    const turns: Array<{ prompt: string; response: string }> = [];
+    
+    // Look for "User:" or "Assistant:" at the start of lines (case-insensitive)
+    // Pattern: "User:" or "Assistant:" followed by optional whitespace, then content
+    // Content continues until next "User:" or "Assistant:" marker
+    const userPattern = /^User:\s*/im;
+    const assistantPattern = /^Assistant:\s*/im;
+    
+    // Find all markers
+    const markers: Array<{ index: number; type: 'user' | 'assistant' }> = [];
+    let match;
+    
+    // Find all "User:" markers
+    const userRegex = /^User:\s*/gim;
+    while ((match = userRegex.exec(text)) !== null) {
+        markers.push({ index: match.index, type: 'user' });
+    }
+    
+    // Find all "Assistant:" markers
+    const assistantRegex = /^Assistant:\s*/gim;
+    while ((match = assistantRegex.exec(text)) !== null) {
+        markers.push({ index: match.index, type: 'assistant' });
+    }
+    
+    // Sort markers by position
+    markers.sort((a, b) => a.index - b.index);
+    
+    // Need at least one User and one Assistant marker to be confident
+    const hasUser = markers.some(m => m.type === 'user');
+    const hasAssistant = markers.some(m => m.type === 'assistant');
+    
+    if (!hasUser || !hasAssistant || markers.length < 2) {
+        // Not confident - return null to try other patterns
+        return null;
+    }
+    
+    // Extract turns based on markers
+    for (let i = 0; i < markers.length; i++) {
+        const marker = markers[i];
+        const nextMarker = markers[i + 1];
+        const startIndex = marker.index;
+        const endIndex = nextMarker ? nextMarker.index : text.length;
+        
+        // Extract content (skip the marker itself)
+        const markerLength = marker.type === 'user' ? 5 : 10; // "User:" = 5, "Assistant:" = 10
+        const content = text.substring(startIndex + markerLength, endIndex).trim();
+        
+        if (!content) continue;
+        
+        if (marker.type === 'user') {
+            // User message - wait for assistant response
+            if (nextMarker && nextMarker.type === 'assistant') {
+                // Extract assistant response
+                const assistantStart = nextMarker.index + 10; // "Assistant:" = 10
+                const assistantEnd = markers[i + 2] ? markers[i + 2].index : text.length;
+                const response = text.substring(assistantStart, assistantEnd).trim();
+                
+                if (content && response) {
+                    turns.push({ prompt: content, response });
+                    i++; // Skip the assistant marker we just processed
+                }
+            } else {
+                // User message without following assistant - save as note (prompt only)
+                turns.push({ prompt: content, response: '' });
+            }
+        } else if (marker.type === 'assistant' && i === 0) {
+            // Assistant message at start (no preceding user) - save as note
+            turns.push({ prompt: '', response: content });
+        }
+    }
+    
+    // Only return if we found at least one complete turn or clear pattern
+    if (turns.length > 0) {
+        console.log("[saveChatManually] Successfully parsed User:/Assistant: pattern, found", turns.length, "turns");
+        return turns;
+    }
+    
+    return null;
+}
+
+/**
  * Parse HTML/text content to extract chat turns
  * Expected format: "You said:" followed by prompt, "ChatGPT said:" followed by response
  * Also handles HTML structure from ChatGPT copy/paste
+ * Uses conservative parsing - only splits when high confidence, otherwise treats as note
  */
 function parseChatContent(content: string): Array<{ prompt: string; response: string }> {
     const turns: Array<{ prompt: string; response: string }> = [];
@@ -186,117 +272,99 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
         text = content.trim();
     }
 
-    // Split by "You said:" markers
+    // HIGH CONFIDENCE PATTERN 1: "You said:" / "ChatGPT said:" or "AI said:"
     const youSaidRegex = /You said:\s*/gi;
     const parts = text.split(youSaidRegex);
 
-    // If no "You said:" markers found, try alternative parsing
-    if (parts.length === 1) {
-        // No markers found - try to parse as single message or look for other patterns
-        // Check if it looks like a single AI response (common when copying just the AI's response)
-        const chatGptSaidMatch = text.match(/ChatGPT said:\s*(.*)/is);
-        const aiSaidMatch = text.match(/AI said:\s*(.*)/is);
+    if (parts.length > 1) {
+        // Found "You said:" markers - high confidence pattern
+        // Skip the first part (everything before first "You said:")
+        for (let i = 1; i < parts.length; i++) {
+            const part = parts[i].trim();
+            if (!part) continue;
 
-        if (chatGptSaidMatch || aiSaidMatch) {
-            // Found "ChatGPT said:" or "AI said:" but no "You said:" - treat as single turn with empty prompt
-            const response = (chatGptSaidMatch?.[1] || aiSaidMatch?.[1] || '').trim();
-            if (response) {
-                turns.push({ prompt: '', response });
-                return turns;
+            // Find "ChatGPT said:" or "AI said:" marker (ChatGPT copy uses "ChatGPT said:", widget copy uses "AI said:")
+            const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
+            const aiSaidIndex = part.search(/AI said:\s*/i);
+
+            let saidIndex = -1;
+            let saidPattern = "";
+
+            if (chatGptSaidIndex !== -1 && aiSaidIndex !== -1) {
+                // Both found, use whichever comes first
+                saidIndex = chatGptSaidIndex < aiSaidIndex ? chatGptSaidIndex : aiSaidIndex;
+                saidPattern = chatGptSaidIndex < aiSaidIndex ? "ChatGPT said:" : "AI said:";
+            } else if (chatGptSaidIndex !== -1) {
+                saidIndex = chatGptSaidIndex;
+                saidPattern = "ChatGPT said:";
+            } else if (aiSaidIndex !== -1) {
+                saidIndex = aiSaidIndex;
+                saidPattern = "AI said:";
+            }
+
+            if (saidIndex === -1) {
+                // No response marker found, skip this turn
+                console.warn("[saveChatManually] No 'ChatGPT said:' or 'AI said:' found for turn", i, "part preview:", part.substring(0, 200));
+                continue;
+            }
+
+            const prompt = part.substring(0, saidIndex).trim();
+            const responsePart = part.substring(saidIndex);
+
+            // Extract response (remove "ChatGPT said:" or "AI said:" prefix)
+            const responseMatch = responsePart.match(new RegExp(`${saidPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.*)`, 'is'));
+            if (!responseMatch) {
+                console.warn("[saveChatManually] Could not extract response for turn", i);
+                continue;
+            }
+
+            let response = responseMatch[1].trim();
+
+            // Remove next "You said:" if it exists in the response
+            const nextYouSaidIndex = response.search(/You said:\s*/i);
+            if (nextYouSaidIndex !== -1) {
+                response = response.substring(0, nextYouSaidIndex).trim();
+            }
+
+            if (prompt && response) {
+                turns.push({ prompt, response });
+            } else {
+                console.warn("[saveChatManually] Empty prompt or response for turn", i);
             }
         }
-
-        // If content is plain text without conversation markers, treat it as a simple note
-        // Save it as a single turn with the text as the prompt and empty response
-        // This allows users to save unstructured notes without needing conversation format
-        if (!hasHtml && text.split('\n').length < 20) {
-            // Plain text without HTML and no conversation markers - treat as a note
-            console.log("[saveChatManually] Content appears to be a simple note, saving as single turn");
-            turns.push({ prompt: text, response: '' });
+        
+        if (turns.length > 0) {
             return turns;
         }
-
-        // Try to find alternating pattern (user message, then AI response)
-        // Look for patterns like paragraphs separated by blank lines
-        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
-        if (paragraphs.length >= 2) {
-            // Assume first paragraph is user, second is AI, and so on
-            for (let i = 0; i < paragraphs.length - 1; i += 2) {
-                const prompt = paragraphs[i].trim();
-                const response = paragraphs[i + 1].trim();
-                if (prompt && response) {
-                    turns.push({ prompt, response });
-                }
-            }
-            if (turns.length > 0) {
-                return turns;
-            }
-        }
-
-        // No recognizable pattern found - treat as a note
-        // Save the entire content as a single turn with text as prompt and empty response
-        console.log("[saveChatManually] No recognizable conversation format found, treating as a note");
-        if (text.trim().length > 0) {
-            turns.push({ prompt: text.trim(), response: '' });
-        }
-        return turns;
     }
 
-    // Skip the first part (everything before first "You said:")
-    for (let i = 1; i < parts.length; i++) {
-        const part = parts[i].trim();
-        if (!part) continue;
+    // HIGH CONFIDENCE PATTERN 2: "User:" / "Assistant:" pattern
+    const userAssistantTurns = parseUserAssistantPattern(text);
+    if (userAssistantTurns && userAssistantTurns.length > 0) {
+        return userAssistantTurns;
+    }
 
-        // Find "ChatGPT said:" or "AI said:" marker (ChatGPT copy uses "ChatGPT said:", widget copy uses "AI said:")
-        const chatGptSaidIndex = part.search(/ChatGPT said:\s*/i);
-        const aiSaidIndex = part.search(/AI said:\s*/i);
+    // LOW CONFIDENCE: Check for single AI response without user prompt
+    const chatGptSaidMatch = text.match(/ChatGPT said:\s*(.*)/is);
+    const aiSaidMatch = text.match(/AI said:\s*(.*)/is);
 
-        let saidIndex = -1;
-        let saidPattern = "";
-
-        if (chatGptSaidIndex !== -1 && aiSaidIndex !== -1) {
-            // Both found, use whichever comes first
-            saidIndex = chatGptSaidIndex < aiSaidIndex ? chatGptSaidIndex : aiSaidIndex;
-            saidPattern = chatGptSaidIndex < aiSaidIndex ? "ChatGPT said:" : "AI said:";
-        } else if (chatGptSaidIndex !== -1) {
-            saidIndex = chatGptSaidIndex;
-            saidPattern = "ChatGPT said:";
-        } else if (aiSaidIndex !== -1) {
-            saidIndex = aiSaidIndex;
-            saidPattern = "AI said:";
-        }
-
-        if (saidIndex === -1) {
-            // No response marker found, skip this turn
-            console.warn("[saveChatManually] No 'ChatGPT said:' or 'AI said:' found for turn", i, "part preview:", part.substring(0, 200));
-            continue;
-        }
-
-        const prompt = part.substring(0, saidIndex).trim();
-        const responsePart = part.substring(saidIndex);
-
-        // Extract response (remove "ChatGPT said:" or "AI said:" prefix)
-        const responseMatch = responsePart.match(new RegExp(`${saidPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.*)`, 'is'));
-        if (!responseMatch) {
-            console.warn("[saveChatManually] Could not extract response for turn", i);
-            continue;
-        }
-
-        let response = responseMatch[1].trim();
-
-        // Remove next "You said:" if it exists in the response
-        const nextYouSaidIndex = response.search(/You said:\s*/i);
-        if (nextYouSaidIndex !== -1) {
-            response = response.substring(0, nextYouSaidIndex).trim();
-        }
-
-        if (prompt && response) {
-            turns.push({ prompt, response });
-        } else {
-            console.warn("[saveChatManually] Empty prompt or response for turn", i);
+    if (chatGptSaidMatch || aiSaidMatch) {
+        // Found "ChatGPT said:" or "AI said:" but no "You said:" - treat as single turn with empty prompt
+        const response = (chatGptSaidMatch?.[1] || aiSaidMatch?.[1] || '').trim();
+        if (response) {
+            console.log("[saveChatManually] Found single AI response, saving as single turn");
+            turns.push({ prompt: '', response });
+            return turns;
         }
     }
 
+    // NO CONFIDENCE: Default to single note
+    // Don't try paragraph-based splitting - it's too aggressive and can fracture markdown
+    // If we can't find clear conversation markers, treat as a note
+    console.log("[saveChatManually] No high-confidence conversation patterns found, treating as a single note");
+    if (text.trim().length > 0) {
+        turns.push({ prompt: text.trim(), response: '' });
+    }
     return turns;
 }
 
@@ -430,7 +498,7 @@ export async function saveChatManually(
             chatId: coreResult.chatId,
             saved: coreResult.saved,
         });
-        if (turns.length = 1) {
+        if (turns.length === 1) {
             const contentLength = turns[0].response.length;
             if (contentLength > maxLength) {
                 const limitType = isAnonymousPlan !== undefined ? "20,000 characters" : "1,000,000 characters";
