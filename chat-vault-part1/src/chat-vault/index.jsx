@@ -1962,72 +1962,70 @@ function App() {
                     <div className={`space-y-2 p-4 rounded-lg border ${
                       isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
                     }`}>
-                      {/* Note header with delete button */}
-                      <div className="flex items-center justify-end mb-2">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteTurn(noteIndex);
-                          }}
-                          disabled={noteTurns.length <= 1}
-                          className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            noteTurns.length <= 1
-                              ? "opacity-50 cursor-not-allowed"
-                              : isDarkMode
-                              ? "bg-gray-700 text-red-400 hover:bg-gray-600"
-                              : "bg-gray-200 text-red-600 hover:bg-gray-300"
-                          }`}
-                          title={noteTurns.length <= 1 ? "Cannot delete the last turn" : "Delete note"}
-                        >
-                          <MdDelete className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      
-                      {/* Prompt */}
+                      {/* Note */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`text-xs font-medium ${
-                              isDarkMode ? "text-purple-400" : "text-purple-600"
-                            }`}>
-                              Note
-                            </div>
+                          <div className={`text-xs font-medium ${
+                            isDarkMode ? "text-purple-400" : "text-purple-600"
+                          }`}>
+                            Note
+                          </div>
+                          <div className="flex items-center gap-1">
                             {!isEditingNote && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleStartEditTurn(noteIndex, 'prompt');
+                                  }}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Edit note"
+                                >
+                                  <MdEdit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDeleteTurn(noteIndex);
+                                  }}
+                                  disabled={noteTurns.length <= 1}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                    noteTurns.length <= 1
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title={noteTurns.length <= 1 ? "Cannot delete the last turn" : "Delete note"}
+                                >
+                                  <MdDelete className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                            {noteNeedsTruncation && !isEditingNote && (
                               <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleStartEditTurn(noteIndex, 'prompt');
-                                }}
-                                className={`p-0.5 rounded flex items-center ${
+                                onClick={() => toggleTurnExpansion(noteIndex)}
+                                className={`p-1.5 rounded ${
                                   isDarkMode
-                                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
-                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                 }`}
-                                title="Edit note"
+                                title={isExpanded ? "Collapse" : "Expand"}
                               >
-                                <MdEdit className="w-3 h-3" />
+                                {isExpanded ? (
+                                  <MdExpandLess className="w-4 h-4" />
+                                ) : (
+                                  <MdExpandMore className="w-4 h-4" />
+                                )}
                               </button>
                             )}
                           </div>
-                          {noteNeedsTruncation && !isEditingNote && (
-                            <button
-                              onClick={() => toggleTurnExpansion(noteIndex)}
-                              className={`p-1.5 rounded ${
-                                isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              }`}
-                              title={isExpanded ? "Collapse" : "Expand"}
-                            >
-                              {isExpanded ? (
-                                <MdExpandLess className="w-4 h-4" />
-                              ) : (
-                                <MdExpandMore className="w-4 h-4" />
-                              )}
-                            </button>
-                          )}
                         </div>
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
@@ -2151,72 +2149,70 @@ function App() {
                     <div key={index} className={`space-y-2 p-4 rounded-lg border ${
                       isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
                     }`}>
-                      {/* Turn header with delete button */}
-                      <div className="flex items-center justify-end mb-2">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteTurn(index);
-                          }}
-                          disabled={editedTurns.length <= 1}
-                          className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            editedTurns.length <= 1
-                              ? "opacity-50 cursor-not-allowed"
-                              : isDarkMode
-                              ? "bg-gray-700 text-red-400 hover:bg-gray-600"
-                              : "bg-gray-200 text-red-600 hover:bg-gray-300"
-                          }`}
-                          title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}
-                        >
-                          <MdDelete className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      
                       {/* Prompt */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`text-xs font-medium ${
-                              isDarkMode ? "text-blue-400" : "text-blue-600"
-                            }`}>
-                              Prompt
-                            </div>
+                          <div className={`text-xs font-medium ${
+                            isDarkMode ? "text-blue-400" : "text-blue-600"
+                          }`}>
+                            Prompt
+                          </div>
+                          <div className="flex items-center gap-1">
                             {!isEditingPrompt && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleStartEditTurn(index, 'prompt');
+                                  }}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Edit prompt"
+                                >
+                                  <MdEdit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDeleteTurn(index);
+                                  }}
+                                  disabled={editedTurns.length <= 1}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                    editedTurns.length <= 1
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}
+                                >
+                                  <MdDelete className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                            {needsExpansion && !isEditingPrompt && (
                               <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleStartEditTurn(index, 'prompt');
-                                }}
-                                className={`p-0.5 rounded flex items-center ${
+                                onClick={() => toggleTurnExpansion(index)}
+                                className={`p-1.5 rounded ${
                                   isDarkMode
-                                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
-                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                 }`}
-                                title="Edit prompt"
+                                title={isExpanded ? "Collapse" : "Expand"}
                               >
-                                <MdEdit className="w-3 h-3" />
+                                {isExpanded ? (
+                                  <MdExpandLess className="w-4 h-4" />
+                                ) : (
+                                  <MdExpandMore className="w-4 h-4" />
+                                )}
                               </button>
                             )}
                           </div>
-                          {needsExpansion && !isEditingPrompt && (
-                            <button
-                              onClick={() => toggleTurnExpansion(index)}
-                              className={`p-1.5 rounded ${
-                                isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              }`}
-                              title={isExpanded ? "Collapse" : "Expand"}
-                            >
-                              {isExpanded ? (
-                                <MdExpandLess className="w-4 h-4" />
-                              ) : (
-                                <MdExpandMore className="w-4 h-4" />
-                              )}
-                            </button>
-                          )}
                         </div>
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
@@ -2319,30 +2315,28 @@ function App() {
                       {/* Response */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`text-xs font-medium ${
-                              isDarkMode ? "text-green-400" : "text-green-600"
-                            }`}>
-                              Response
-                            </div>
-                            {!isEditingResponse && (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleStartEditTurn(index, 'response');
-                                }}
-                                className={`p-0.5 rounded flex items-center ${
-                                  isDarkMode
-                                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
-                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-                                }`}
-                                title="Edit response"
-                              >
-                                <MdEdit className="w-3 h-3" />
-                              </button>
-                            )}
+                          <div className={`text-xs font-medium ${
+                            isDarkMode ? "text-green-400" : "text-green-600"
+                          }`}>
+                            Response
                           </div>
+                          {!isEditingResponse && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleStartEditTurn(index, 'response');
+                              }}
+                              className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              }`}
+                              title="Edit response"
+                            >
+                              <MdEdit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
