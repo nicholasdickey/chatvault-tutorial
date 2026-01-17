@@ -10,6 +10,42 @@ export interface ExplainHowToUseParams {
 export interface ExplainHowToUseResult {
     helpText: string;
 }
+export const helpText = `# How to Use Chat Vault
+
+Chat Vault helps you save, organize, and search your ChatGPT conversations. Think of it as a personal archive for your most valuable chats. Your knowldge base. Your AI chatbot's long-term memory.
+
+## Saving Conversations
+
+You have three flexible ways to save conversations to your vault:
+
+### 1. Ask ChatGPT to Save
+Simply ask ChatGPT to save the current conversation to your vault. You can specify:
+- **By subject**: "Save this conversation about [topic] to my ChatVault"
+- **By number of turns**: "Save the last 5 turns to my ChatVault"
+- **The entire conversation**: "Add this entire chat to my ChatVault"
+Note, in works best when the start is from a fresh chat, and the chatbot is not already in the middle of a long conversation.
+If the chatbot is having trouble saving a verbatim chat - you can copy the chat manually, start a new chat, paste the chat into the new chat, and ask the chatbot to parse and save the chat turn-by-turn into the vault.
+
+### 2. Manual Save via Widget
+Use the '+' button in the ChatVault widget to manually add conversations or notes:
+1. Copy a conversation from Claude, ChatGPT, Gemini, etc. (or anywhere)
+2. Click the '+' button in the ChatVault widget header
+3. Paste the conversation into the text area
+4. Optionally add a custom title
+5. Click "Save"
+
+## Accessing Your Vault
+
+Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
+To leverage the true power of Chat Vault, you can ask the chatbot to user the chat vault as your personal knowledge base and search it automatically to include in the context when researching or any other agentic tasks. 
+
+## Getting Started in ChatGPT
+
+The easiest way to start is to simply ask ChatGPT: "Save this conversation to my ChatVault" or "Add this chat about [topic] to my vault". ChatGPT will handle the rest!
+
+For manual saves, use the '+' button in the widget and paste your conversation. The widget will automatically format and save it.
+
+Need help? Ask ChatGPT or check the widget interface for more options!`;
 
 /**
  * Generate help text explaining how to use ChatVault
@@ -23,39 +59,6 @@ export function explainHowToUse(params: ExplainHowToUseParams): ExplainHowToUseR
 
     console.log("[explainHowToUse] Generating help text for userId:", userId);
 
-    const helpText = `# How to Use ChatVault
-
-ChatVault helps you save, organize, and search your ChatGPT conversations. Think of it as a personal archive for your most valuable chats.
-
-## Saving Conversations
-
-You have three flexible ways to save conversations to your vault:
-
-### 1. Ask ChatGPT to Save
-Simply ask ChatGPT to save the current conversation to your vault. You can specify:
-- **By subject**: "Save this conversation about [topic] to my ChatVault"
-- **By number of turns**: "Save the last 5 turns to my ChatVault"
-- **The entire conversation**: "Add this entire chat to my ChatVault"
-
-### 2. Manual Save via Widget
-Use the '+' button in the ChatVault widget to manually add conversations:
-1. Copy a conversation from ChatGPT (or anywhere)
-2. Click the '+' button in the ChatVault widget header
-3. Paste the conversation into the text area
-4. Optionally add a custom title
-5. Click "Save"
-
-## Accessing Your Vault
-
-Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
-
-## Getting Started
-
-The easiest way to start is to simply ask ChatGPT: "Save this conversation to my ChatVault" or "Add this chat about [topic] to my vault". ChatGPT will handle the rest!
-
-For manual saves, use the '+' button in the widget and paste your conversation. The widget will automatically format and save it.
-
-Need help? Ask ChatGPT or check the widget interface for more options!`;
 
     return {
         helpText,
