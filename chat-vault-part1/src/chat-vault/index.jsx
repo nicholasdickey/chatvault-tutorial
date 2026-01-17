@@ -61,6 +61,11 @@ function App() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
+  const [editedTurns, setEditedTurns] = useState([]); // Local copy of turns being edited
+  const [editingTurn, setEditingTurn] = useState(null); // { turnIndex: number, field: 'prompt' | 'response' }
+  const [editingTurnValue, setEditingTurnValue] = useState(""); // Current value being edited
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSavingChat, setIsSavingChat] = useState(false);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -302,6 +307,11 @@ function App() {
     // Reset editing state when switching chats
     setIsEditingTitle(false);
     setEditedTitle("");
+    // Initialize editedTurns from selected chat (deep copy to avoid reference issues)
+    setEditedTurns(chat.turns ? chat.turns.map(turn => ({ ...turn })) : []);
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    setHasUnsavedChanges(false);
     // Search state persists - don't clear it
   };
 
@@ -312,6 +322,10 @@ function App() {
     // Reset editing state when going back
     setIsEditingTitle(false);
     setEditedTitle("");
+    setEditedTurns([]);
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    setHasUnsavedChanges(false);
   };
 
   const handleFullscreen = async () => {
@@ -620,6 +634,138 @@ function App() {
       setAlertPortalLink(null);
     } finally {
       setIsUpdatingTitle(false);
+    }
+  };
+
+  const handleStartEditTurn = (turnIndex, field) => {
+    if (!selectedChat || !editedTurns[turnIndex]) return;
+    const turn = editedTurns[turnIndex];
+    setEditingTurn({ turnIndex, field });
+    setEditingTurnValue(field === 'prompt' ? turn.prompt : turn.response);
+    addLog("Started editing turn", { turnIndex, field });
+  };
+
+  const handleCancelEditTurn = () => {
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    addLog("Cancelled editing turn");
+  };
+
+  const handleSaveTurnEdit = (turnIndex, field) => {
+    if (!selectedChat || !editedTurns[turnIndex]) return;
+    
+    const trimmedValue = editingTurnValue.trim();
+    
+    // Update the edited turn
+    const updatedTurns = [...editedTurns];
+    updatedTurns[turnIndex] = {
+      ...updatedTurns[turnIndex],
+      [field]: trimmedValue,
+    };
+    
+    setEditedTurns(updatedTurns);
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    setHasUnsavedChanges(true);
+    addLog("Turn edited", { turnIndex, field });
+  };
+
+  const handleDeleteTurn = (turnIndex) => {
+    if (!selectedChat || editedTurns.length <= 1) {
+      setAlertMessage("Cannot delete the last turn. A chat must have at least one turn.");
+      setAlertPortalLink(null);
+      return;
+    }
+    
+    const updatedTurns = editedTurns.filter((_, index) => index !== turnIndex);
+    setEditedTurns(updatedTurns);
+    setHasUnsavedChanges(true);
+    addLog("Turn deleted", { turnIndex, remainingTurns: updatedTurns.length });
+  };
+
+  const handleSaveChat = async () => {
+    if (!selectedChat) return;
+    
+    // Validate: at least one turn
+    if (editedTurns.length === 0) {
+      setAlertMessage("Chat must have at least one turn");
+      setAlertPortalLink(null);
+      return;
+    }
+    
+    // Validate each turn (notes can have empty response, but must have prompt)
+    for (let i = 0; i < editedTurns.length; i++) {
+      const turn = editedTurns[i];
+      if (!turn.prompt || turn.prompt.trim().length === 0) {
+        setAlertMessage(`Turn ${i + 1} must have a prompt`);
+        setAlertPortalLink(null);
+        return;
+      }
+      // Response is optional (for notes), but if present must be a string
+      if (turn.response !== undefined && typeof turn.response !== "string") {
+        setAlertMessage(`Turn ${i + 1} response must be a string`);
+        setAlertPortalLink(null);
+        return;
+      }
+    }
+    
+    setIsSavingChat(true);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+    
+    // Capture chatId before async operation
+    const chatId = selectedChat.id;
+    
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("updateChat tool not available");
+      }
+      
+      const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+      if (!userId) {
+        throw new Error("User ID not available. Please refresh and try again.");
+      }
+      
+      addLog("Calling updateChat tool with turns", { chatId, userId, turnsCount: editedTurns.length });
+      const result = await window.openai.callTool("updateChat", {
+        chatId,
+        userId,
+        chat: {
+          turns: editedTurns,
+        },
+      });
+      
+      addLog("Update chat result", result);
+      
+      if (result?.structuredContent?.updated) {
+        const updatedTurns = result.structuredContent.turns || editedTurns;
+        
+        // Update selectedChat
+        setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, turns: updatedTurns } : prev));
+        
+        // Update chats list
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId ? { ...chat, turns: updatedTurns } : chat
+          )
+        );
+        
+        addLog("Chat turns updated in local state", { chatId, turnsCount: updatedTurns.length });
+        
+        // Clear editing state
+        setHasUnsavedChanges(false);
+        setEditingTurn(null);
+        setEditingTurnValue("");
+      } else {
+        throw new Error(result?.structuredContent?.message || "Update failed");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error updating chat turns", { error: errorMessage });
+      setAlertMessage(`Failed to update chat: ${errorMessage}`);
+      setAlertPortalLink(null);
+    } finally {
+      setIsSavingChat(false);
     }
   };
 
@@ -1728,16 +1874,28 @@ function App() {
                     <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
 
                   <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
+                            {(() => {
+                              const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                              return currentTurns.length === 1 && !currentTurns[0].response;
+                            })() ? (
                               <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
                             ) : (
                               <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
                             )}
                             {formatDate(selectedChat.timestamp)}
-                            {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
+                            {(() => {
+                              const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                              return currentTurns.length === 1 && !currentTurns[0].response;
+                            })() ? (
                               " • Note"
                             ) : (
-                              ` • ${selectedChat.turns?.length || 0} turn${(selectedChat.turns?.length || 0) !== 1 ? "s" : ""}`
+                              ` • ${(() => {
+                                const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                                return currentTurns?.length || 0;
+                              })()} turn${(() => {
+                                const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                                return (currentTurns?.length || 0) !== 1 ? "s" : "";
+                              })()}`
                             )}
                           </div>
                     
@@ -1762,17 +1920,39 @@ function App() {
                       <MdContentCopy className="w-3.5 h-3.5" />
                     )}
                   </button>
+                  {hasUnsavedChanges && (
+                    <button
+                      onClick={handleSaveChat}
+                      disabled={isSavingChat}
+                      className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                        isSavingChat
+                          ? "opacity-50 cursor-not-allowed"
+                          : isDarkMode
+                          ? "bg-green-600 text-white hover:bg-green-700"
+                          : "bg-green-600 text-white hover:bg-green-700"
+                      }`}
+                      title="Save changes"
+                    >
+                      {isSavingChat ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <MdCheck className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
               
               {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
                 // Note rendering - single card with prompt (same style as turn prompt)
                 (() => {
-                  const noteTurn = selectedChat.turns[0];
+                  const noteTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                  const noteTurn = noteTurns[0];
                   const noteIndex = 0;
                   const isExpanded = expandedTurns.has(noteIndex);
                   const noteId = `note-${selectedChat.timestamp}`;
                   const noteCopied = !!copiedItems[noteId];
+                  const isEditingNote = editingTurn?.turnIndex === noteIndex && editingTurn?.field === 'prompt';
                   
                   // Check if note needs truncation (longer than 150 chars)
                   const maxLength = 150;
@@ -1782,11 +1962,56 @@ function App() {
                     <div className={`space-y-2 p-4 rounded-lg border ${
                       isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
                     }`}>
+                      {/* Note header with delete button */}
+                      <div className="flex items-center justify-end mb-2">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteTurn(noteIndex);
+                          }}
+                          disabled={noteTurns.length <= 1}
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
+                            noteTurns.length <= 1
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
+                              ? "bg-gray-700 text-red-400 hover:bg-gray-600"
+                              : "bg-gray-200 text-red-600 hover:bg-gray-300"
+                          }`}
+                          title={noteTurns.length <= 1 ? "Cannot delete the last turn" : "Delete note"}
+                        >
+                          <MdDelete className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      
                       {/* Prompt */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                        
-                          {noteNeedsTruncation && (
+                          <div className="flex items-center gap-2">
+                            <div className={`text-xs font-medium ${
+                              isDarkMode ? "text-purple-400" : "text-purple-600"
+                            }`}>
+                              Note
+                            </div>
+                            {!isEditingNote && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleStartEditTurn(noteIndex, 'prompt');
+                                }}
+                                className={`p-0.5 rounded flex items-center ${
+                                  isDarkMode
+                                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                }`}
+                                title="Edit note"
+                              >
+                                <MdEdit className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                          {noteNeedsTruncation && !isEditingNote && (
                             <button
                               onClick={() => toggleTurnExpansion(noteIndex)}
                               className={`p-1.5 rounded ${
@@ -1807,41 +2032,98 @@ function App() {
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
                         }`}>
-                          <span 
-                            className={`flex-1 ${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                            onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
-                            onMouseDown={(e) => {
-                              // If expanded, allow text selection by not preventing default
-                              if (isExpanded) {
-                                return; // Allow normal text selection
-                              }
-                              // If not expanded and clickable, prevent text selection on click
-                              if (noteNeedsTruncation) {
-                                e.preventDefault();
-                              }
-                            }}
-                          >
-                            {isExpanded ? noteTurn.prompt : truncateText(noteTurn.prompt)}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              copyToClipboard(noteTurn.prompt, noteId);
-                            }}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${
-                              isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                            title="Copy prompt"
-                          >
-                            {noteCopied ? (
-                              <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                            ) : (
-                              <MdContentCopy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {isEditingNote ? (
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <textarea
+                                  value={editingTurnValue}
+                                  onChange={(e) => setEditingTurnValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                      e.preventDefault();
+                                      handleSaveTurnEdit(noteIndex, 'prompt');
+                                    } else if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      handleCancelEditTurn();
+                                    }
+                                  }}
+                                  autoFocus
+                                  rows={4}
+                                  className={`flex-1 px-2 py-1 rounded border text-sm ${
+                                    isDarkMode
+                                      ? "bg-gray-700 border-gray-600 text-white"
+                                      : "bg-white border-gray-300 text-black"
+                                  } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                />
+                                <button
+                                  onClick={() => handleSaveTurnEdit(noteIndex, 'prompt')}
+                                  disabled={editingTurnValue.trim().length === 0}
+                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                    editingTurnValue.trim().length === 0
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : isDarkMode
+                                      ? "bg-green-600 text-white hover:bg-green-700"
+                                      : "bg-green-600 text-white hover:bg-green-700"
+                                  }`}
+                                  title="Save (Ctrl+Enter)"
+                                >
+                                  <MdCheck className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={handleCancelEditTurn}
+                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Cancel (Esc)"
+                                >
+                                  <MdClose className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div 
+                                className={`flex-1 ${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                                onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
+                                onMouseDown={(e) => {
+                                  // If expanded, allow text selection by not preventing default
+                                  if (isExpanded) {
+                                    return; // Allow normal text selection
+                                  }
+                                  // If not expanded and clickable, prevent text selection on click
+                                  if (noteNeedsTruncation) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: isExpanded 
+                                    ? markdownToHtml(noteTurn.prompt) 
+                                    : markdownToHtml(truncateText(noteTurn.prompt))
+                                }}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  copyToClipboard(noteTurn.prompt, noteId);
+                                }}
+                                className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                }`}
+                                title="Copy note"
+                              >
+                                {noteCopied ? (
+                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <MdContentCopy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1849,7 +2131,7 @@ function App() {
                 })()
               ) : (
                 // Chat rendering - turns with prompt/response
-                selectedChat.turns?.map((turn, index) => {
+                (editedTurns.length > 0 ? editedTurns : selectedChat.turns)?.map((turn, index) => {
                   const isExpanded = expandedTurns.has(index);
                   const promptId = `prompt-${selectedChat.timestamp}-${index}`;
                   const responseId = `response-${selectedChat.timestamp}-${index}`;
@@ -1862,19 +2144,63 @@ function App() {
                   const responseNeedsTruncation = turn.response.length > maxLength;
                   const needsExpansion = promptNeedsTruncation || responseNeedsTruncation;
                   
+                  const isEditingPrompt = editingTurn?.turnIndex === index && editingTurn?.field === 'prompt';
+                  const isEditingResponse = editingTurn?.turnIndex === index && editingTurn?.field === 'response';
+                  
                   return (
                     <div key={index} className={`space-y-2 p-4 rounded-lg border ${
                       isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
                     }`}>
+                      {/* Turn header with delete button */}
+                      <div className="flex items-center justify-end mb-2">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteTurn(index);
+                          }}
+                          disabled={editedTurns.length <= 1}
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${
+                            editedTurns.length <= 1
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
+                              ? "bg-gray-700 text-red-400 hover:bg-gray-600"
+                              : "bg-gray-200 text-red-600 hover:bg-gray-300"
+                          }`}
+                          title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}
+                        >
+                          <MdDelete className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      
                       {/* Prompt */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${
-                            isDarkMode ? "text-blue-400" : "text-blue-600"
-                          }`}>
-                            Prompt
+                          <div className="flex items-center gap-2">
+                            <div className={`text-xs font-medium ${
+                              isDarkMode ? "text-blue-400" : "text-blue-600"
+                            }`}>
+                              Prompt
+                            </div>
+                            {!isEditingPrompt && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleStartEditTurn(index, 'prompt');
+                                }}
+                                className={`p-0.5 rounded flex items-center ${
+                                  isDarkMode
+                                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                }`}
+                                title="Edit prompt"
+                              >
+                                <MdEdit className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
-                          {needsExpansion && (
+                          {needsExpansion && !isEditingPrompt && (
                             <button
                               onClick={() => toggleTurnExpansion(index)}
                               className={`p-1.5 rounded ${
@@ -1895,97 +2221,224 @@ function App() {
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
                         }`}>
-                          <div 
-                            className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                            onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                            onMouseDown={(e) => {
-                              // If expanded, allow text selection by not preventing default
-                              if (isExpanded) {
-                                return; // Allow normal text selection
-                              }
-                              // If not expanded and clickable, prevent text selection on click
-                              if (needsExpansion) {
-                                e.preventDefault();
-                              }
-                            }}
-                            dangerouslySetInnerHTML={{
-                              __html: isExpanded 
-                                ? markdownToHtml(turn.prompt) 
-                                : markdownToHtml(truncateText(turn.prompt))
-                            }}
-                          />
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              copyToClipboard(turn.prompt, promptId);
-                            }}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${
-                              isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                            title="Copy prompt"
-                          >
-                            {promptCopied ? (
-                              <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                            ) : (
-                              <MdContentCopy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {isEditingPrompt ? (
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <textarea
+                                  value={editingTurnValue}
+                                  onChange={(e) => setEditingTurnValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                      e.preventDefault();
+                                      handleSaveTurnEdit(index, 'prompt');
+                                    } else if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      handleCancelEditTurn();
+                                    }
+                                  }}
+                                  autoFocus
+                                  rows={4}
+                                  className={`flex-1 px-2 py-1 rounded border text-sm ${
+                                    isDarkMode
+                                      ? "bg-gray-700 border-gray-600 text-white"
+                                      : "bg-white border-gray-300 text-black"
+                                  } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                />
+                                <button
+                                  onClick={() => handleSaveTurnEdit(index, 'prompt')}
+                                  disabled={editingTurnValue.trim().length === 0}
+                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                    editingTurnValue.trim().length === 0
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : isDarkMode
+                                      ? "bg-green-600 text-white hover:bg-green-700"
+                                      : "bg-green-600 text-white hover:bg-green-700"
+                                  }`}
+                                  title="Save (Ctrl+Enter)"
+                                >
+                                  <MdCheck className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={handleCancelEditTurn}
+                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Cancel (Esc)"
+                                >
+                                  <MdClose className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div 
+                                className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                                onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                                onMouseDown={(e) => {
+                                  // If expanded, allow text selection by not preventing default
+                                  if (isExpanded) {
+                                    return; // Allow normal text selection
+                                  }
+                                  // If not expanded and clickable, prevent text selection on click
+                                  if (needsExpansion) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: isExpanded 
+                                    ? markdownToHtml(turn.prompt) 
+                                    : markdownToHtml(truncateText(turn.prompt))
+                                }}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  copyToClipboard(turn.prompt, promptId);
+                                }}
+                                className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                }`}
+                                title="Copy prompt"
+                              >
+                                {promptCopied ? (
+                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <MdContentCopy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       
                       {/* Response */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${
-                            isDarkMode ? "text-green-400" : "text-green-600"
-                          }`}>
-                            Response
+                          <div className="flex items-center gap-2">
+                            <div className={`text-xs font-medium ${
+                              isDarkMode ? "text-green-400" : "text-green-600"
+                            }`}>
+                              Response
+                            </div>
+                            {!isEditingResponse && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleStartEditTurn(index, 'response');
+                                }}
+                                className={`p-0.5 rounded flex items-center ${
+                                  isDarkMode
+                                    ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                }`}
+                                title="Edit response"
+                              >
+                                <MdEdit className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className={`text-sm flex items-start justify-between gap-2 ${
                           isDarkMode ? "text-gray-200" : "text-gray-800"
                         }`}>
-                          <div 
-                            className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                            onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                            onMouseDown={(e) => {
-                              // If expanded, allow text selection by not preventing default
-                              if (isExpanded) {
-                                return; // Allow normal text selection
-                              }
-                              // If not expanded and clickable, prevent text selection on click
-                              if (needsExpansion) {
-                                e.preventDefault();
-                              }
-                            }}
-                            dangerouslySetInnerHTML={{
-                              __html: isExpanded 
-                                ? markdownToHtml(turn.response) 
-                                : markdownToHtml(truncateText(turn.response))
-                            }}
-                          />
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              copyToClipboard(turn.response, responseId);
-                            }}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${
-                              isDarkMode
-                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                            title="Copy response"
-                          >
-                            {responseCopied ? (
-                              <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                            ) : (
-                              <MdContentCopy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {isEditingResponse ? (
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <textarea
+                                  value={editingTurnValue}
+                                  onChange={(e) => setEditingTurnValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                      e.preventDefault();
+                                      handleSaveTurnEdit(index, 'response');
+                                    } else if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      handleCancelEditTurn();
+                                    }
+                                  }}
+                                  autoFocus
+                                  rows={6}
+                                  className={`flex-1 px-2 py-1 rounded border text-sm ${
+                                    isDarkMode
+                                      ? "bg-gray-700 border-gray-600 text-white"
+                                      : "bg-white border-gray-300 text-black"
+                                  } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                />
+                                <button
+                                  onClick={() => handleSaveTurnEdit(index, 'response')}
+                                  disabled={editingTurnValue.trim().length === 0}
+                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                    editingTurnValue.trim().length === 0
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : isDarkMode
+                                      ? "bg-green-600 text-white hover:bg-green-700"
+                                      : "bg-green-600 text-white hover:bg-green-700"
+                                  }`}
+                                  title="Save (Ctrl+Enter)"
+                                >
+                                  <MdCheck className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={handleCancelEditTurn}
+                                  className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Cancel (Esc)"
+                                >
+                                  <MdClose className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div 
+                                className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                                onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                                onMouseDown={(e) => {
+                                  // If expanded, allow text selection by not preventing default
+                                  if (isExpanded) {
+                                    return; // Allow normal text selection
+                                  }
+                                  // If not expanded and clickable, prevent text selection on click
+                                  if (needsExpansion) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: isExpanded 
+                                    ? markdownToHtml(turn.response) 
+                                    : markdownToHtml(truncateText(turn.response))
+                                }}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  copyToClipboard(turn.response, responseId);
+                                }}
+                                className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                }`}
+                                title="Copy response"
+                              >
+                                {responseCopied ? (
+                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <MdContentCopy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
