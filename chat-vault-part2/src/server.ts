@@ -18,7 +18,7 @@ import * as dotenv from "dotenv";
 import { testConnection, db } from "./db/index.js";
 import { sql } from "drizzle-orm";
 import { saveChat } from "./tools/saveChat.js";
-import { saveChatManually } from "./tools/saveChatManually.js";
+import { widgetAdd } from "./tools/widgetAdd.js";
 import { loadMyChats } from "./tools/loadMyChats.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
@@ -237,7 +237,7 @@ const chatVaultTools: Tool[] = [
         }
     },
     {
-        name: "saveChatManually",
+        name: "widgetAdd",
         description: "NOT TO BE USED OUTSIDE OF THE WIDGET!!! In-widget save a manually pasted Claude, Gemini, ChatGPT, etc. conversation by parsing HTML/text content",
         inputSchema: {
             type: "object",
@@ -385,8 +385,8 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                     pagination: result.pagination,
                 },
             };
-        } else if (toolName === "saveChatManually") {
-            console.log("[MCP Handler] 📥 saveChatManually request received:", {
+        } else if (toolName === "widgetAdd") {
+            console.log("[MCP Handler] 📥 widgetAdd request received:", {
                 requestId: requestId,
                 userId: (args as any)?.userId?.substring(0, 20) + "...",
                 htmlContentLength: (args as any)?.htmlContent?.length || 0,
@@ -399,11 +399,11 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                     hasLoginLink: !!userContext.loginLink,
                 } : "none",
             });
-            const result = await saveChatManually({
+            const result = await widgetAdd({
                 ...(args as { userId: string; htmlContent: string; title?: string }),
                 userContext,
             });
-            console.log("[MCP Handler] 📤 saveChatManually result:", {
+            console.log("[MCP Handler] 📤 widgetAdd result:", {
                 chatId: result.chatId || "(empty)",
                 saved: result.saved,
                 turnsCount: result.turnsCount,
@@ -743,6 +743,11 @@ export async function handleMcpRequest(
                 );
                 result = await handleCallTool(request, userContext, req.headers);
                 console.log("[MCP] tools/call response:", JSON.stringify(result));
+            } else if (method === "resources/list") {
+                // MCP protocol: resources/list - return empty list since we don't provide resources
+                console.log("[MCP] resources/list - id:", id);
+                result = { resources: [] };
+                console.log("[MCP] resources/list response: empty list");
             } else {
                 console.error("[MCP] Method not found:", method);
                 writeJsonRpcResponse(res, id, undefined, {

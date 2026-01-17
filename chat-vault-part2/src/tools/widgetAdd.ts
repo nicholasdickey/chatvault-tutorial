@@ -1,6 +1,7 @@
 /**
- * saveChatManually tool implementation
+ * widgetAdd tool implementation
  * Parses HTML/text content from ChatGPT copy/paste and saves as structured chat
+ * WIDGET-ONLY: This tool is only for use within the widget UI, not for LLM calls
  */
 
 import { db } from "../db/index.js";
@@ -10,7 +11,7 @@ import { saveChatCore, checkForExistingChat } from "../utils/saveChatCore.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 
-export interface SaveChatManuallyParams {
+export interface WidgetAddParams {
     userId: string;
     htmlContent: string;
     title?: string;
@@ -18,7 +19,7 @@ export interface SaveChatManuallyParams {
     userContext?: UserContext; // User context from Findexar headers
 }
 
-export interface SaveChatManuallyResult {
+export interface WidgetAddResult {
     chatId: string;
     saved: boolean;
     turnsCount: number;
@@ -227,7 +228,7 @@ function parseUserAssistantPattern(text: string): Array<{ prompt: string; respon
     
     // Only return if we found at least one complete turn or clear pattern
     if (turns.length > 0) {
-        console.log("[saveChatManually] Successfully parsed User:/Assistant: pattern, found", turns.length, "turns");
+        console.log("[widgetAdd] Successfully parsed User:/Assistant: pattern, found", turns.length, "turns");
         return turns;
     }
     
@@ -252,7 +253,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
         // Look for common ChatGPT HTML patterns like role attributes or specific classes
         const htmlTurns = parseHtmlStructure(content);
         if (htmlTurns.length > 0) {
-            console.log("[saveChatManually] Successfully parsed HTML structure, found", htmlTurns.length, "turns");
+            console.log("[widgetAdd] Successfully parsed HTML structure, found", htmlTurns.length, "turns");
             return htmlTurns;
         }
 
@@ -304,7 +305,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
 
             if (saidIndex === -1) {
                 // No response marker found, skip this turn
-                console.warn("[saveChatManually] No 'ChatGPT said:' or 'AI said:' found for turn", i, "part preview:", part.substring(0, 200));
+                console.warn("[widgetAdd] No 'ChatGPT said:' or 'AI said:' found for turn", i, "part preview:", part.substring(0, 200));
                 continue;
             }
 
@@ -314,7 +315,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
             // Extract response (remove "ChatGPT said:" or "AI said:" prefix)
             const responseMatch = responsePart.match(new RegExp(`${saidPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.*)`, 'is'));
             if (!responseMatch) {
-                console.warn("[saveChatManually] Could not extract response for turn", i);
+                console.warn("[widgetAdd] Could not extract response for turn", i);
                 continue;
             }
 
@@ -329,7 +330,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
             if (prompt && response) {
                 turns.push({ prompt, response });
             } else {
-                console.warn("[saveChatManually] Empty prompt or response for turn", i);
+                console.warn("[widgetAdd] Empty prompt or response for turn", i);
             }
         }
         
@@ -352,7 +353,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
         // Found "ChatGPT said:" or "AI said:" but no "You said:" - treat as single turn with empty prompt
         const response = (chatGptSaidMatch?.[1] || aiSaidMatch?.[1] || '').trim();
         if (response) {
-            console.log("[saveChatManually] Found single AI response, saving as single turn");
+            console.log("[widgetAdd] Found single AI response, saving as single turn");
             turns.push({ prompt: '', response });
             return turns;
         }
@@ -361,7 +362,7 @@ function parseChatContent(content: string): Array<{ prompt: string; response: st
     // NO CONFIDENCE: Default to single note
     // Don't try paragraph-based splitting - it's too aggressive and can fracture markdown
     // If we can't find clear conversation markers, treat as a note
-    console.log("[saveChatManually] No high-confidence conversation patterns found, treating as a single note");
+    console.log("[widgetAdd] No high-confidence conversation patterns found, treating as a single note");
     if (text.trim().length > 0) {
         turns.push({ prompt: text.trim(), response: '' });
     }
@@ -385,17 +386,18 @@ function generateDefaultTitle(): string {
 
 /**
  * Save a manually pasted chat to the database with embedding
+ * WIDGET-ONLY: This function is only for use within the widget UI
  */
-export async function saveChatManually(
-    params: SaveChatManuallyParams
-): Promise<SaveChatManuallyResult> {
+export async function widgetAdd(
+    params: WidgetAddParams
+): Promise<WidgetAddResult> {
     const { userId, htmlContent, title, userContext } = params;
     const isAnon = userContext?.isAnon ?? false;
     const isAnonymousPlan = userContext?.isAnonymousPlan;
     const portalLink = userContext?.portalLink ?? null;
 
-    console.log("[saveChatManually] ===== ENTRY =====");
-    console.log("[saveChatManually] Received params:", {
+    console.log("[widgetAdd] ===== ENTRY =====");
+    console.log("[widgetAdd] Received params:", {
         userId: userId?.substring(0, 20) + "...",
         htmlContentLength: htmlContent?.length || 0,
         htmlContentPreview: htmlContent?.substring(0, 200) || "(empty)",
@@ -404,7 +406,7 @@ export async function saveChatManually(
         hasPortalLink: !!portalLink,
         hasLoginLink: !!userContext?.loginLink,
     });
-    console.log("[saveChatManually] Saving manual chat - userId:", userId, "hasTitle:", !!title, "isAnon:", isAnon);
+    console.log("[widgetAdd] Saving manual chat - userId:", userId, "hasTitle:", !!title, "isAnon:", isAnon);
 
     try {
         // Validate required parameters
@@ -424,11 +426,11 @@ export async function saveChatManually(
         // Check chat limit for anonymous users only (normal users are not affected)
         if (isAnon) {
             const nonExpiredCount = await countNonExpiredChats(userId);
-            console.log("[saveChatManually] Anonymous user - non-expired chats:", nonExpiredCount, "limit:", ANON_MAX_CHATS);
+            console.log("[widgetAdd] Anonymous user - non-expired chats:", nonExpiredCount, "limit:", ANON_MAX_CHATS);
 
             if (nonExpiredCount >= ANON_MAX_CHATS) {
                 const message = `You've reached the limit of ${ANON_MAX_CHATS} free chats. Please delete a chat in the widget to save more, or upgrade your account to save unlimited chats.`;
-                console.log("[saveChatManually] ❌ Chat count limit reached for anonymous user:", {
+                console.log("[widgetAdd] ❌ Chat count limit reached for anonymous user:", {
                     nonExpiredCount,
                     limit: ANON_MAX_CHATS,
                 });
@@ -440,19 +442,19 @@ export async function saveChatManually(
                     message,
                     portalLink,
                 };
-                console.log("[saveChatManually] ===== EXIT (chat limit) =====", errorResult);
+                console.log("[widgetAdd] ===== EXIT (chat limit) =====", errorResult);
                 return errorResult;
             }
         }
 
         // Parse the content to extract turns
         // If parsing fails, it will be saved as a note (single turn with text as prompt)
-        console.log("[saveChatManually] Parsing content...");
-        console.log("[saveChatManually] Content preview (first 500 chars):", htmlContent.substring(0, 500));
+        console.log("[widgetAdd] Parsing content...");
+        console.log("[widgetAdd] Content preview (first 500 chars):", htmlContent.substring(0, 500));
         const turns = parseChatContent(htmlContent);
-        console.log("[saveChatManually] Parsed turns count:", turns.length);
+        console.log("[widgetAdd] Parsed turns count:", turns.length);
         if (turns.length > 0) {
-            console.log("[saveChatManually] First turn preview:", {
+            console.log("[widgetAdd] First turn preview:", {
                 prompt: turns[0].prompt.substring(0, 100),
                 response: turns[0].response.substring(0, 100)
             });
@@ -462,7 +464,7 @@ export async function saveChatManually(
         // Only check for empty content (not parse errors)
         if (turns.length === 0) {
             // This should not happen with the new logic, but handle it as a safety check
-            console.warn("[saveChatManually] ❌ Unexpected: no turns after parsing, content may be empty");
+            console.warn("[widgetAdd] ❌ Unexpected: no turns after parsing, content may be empty");
             const errorResult = {
                 chatId: "",
                 saved: false,
@@ -471,12 +473,12 @@ export async function saveChatManually(
                 message: "Content is empty or could not be processed",
                 portalLink: null,
             };
-            console.log("[saveChatManually] ===== EXIT (empty content) =====", errorResult);
+            console.log("[widgetAdd] ===== EXIT (empty content) =====", errorResult);
             return errorResult;
         }
 
-        console.log("[saveChatManually] ✅ Parsed", turns.length, "turns successfully");
-        console.log("[saveChatManually] Turn summary:", {
+        console.log("[widgetAdd] ✅ Parsed", turns.length, "turns successfully");
+        console.log("[widgetAdd] Turn summary:", {
             totalTurns: turns.length,
             firstTurnPromptLength: turns[0]?.prompt?.length || 0,
             firstTurnResponseLength: turns[0]?.response?.length || 0,
@@ -485,16 +487,16 @@ export async function saveChatManually(
 
         // Use provided title or generate default
         const finalTitle = title?.trim() || generateDefaultTitle();
-        console.log("[saveChatManually] Using title:", finalTitle);
+        console.log("[widgetAdd] Using title:", finalTitle);
 
         // Use shared core logic to save the chat
-        console.log("[saveChatManually] Calling saveChatCore...");
+        console.log("[widgetAdd] Calling saveChatCore...");
         const coreResult = await saveChatCore({
             userId,
             title: finalTitle,
             turns,
         });
-        console.log("[saveChatManually] ✅ saveChatCore result:", {
+        console.log("[widgetAdd] ✅ saveChatCore result:", {
             chatId: coreResult.chatId,
             saved: coreResult.saved,
         });
@@ -505,7 +507,7 @@ export async function saveChatManually(
                 const message = isAnonymousPlan !== undefined
                     ? `Content exceeds the ${limitType} limit for users on the free plan. Please shorten your content or sign in to save longer chats and notes (up to 1,000,000 characters).`
                     : `Content exceeds the ${limitType} limit. Please shorten your content.`;
-                console.log("[saveChatManually] ❌ Content size limit exceeded:", {
+                console.log("[widgetAdd] ❌ Content size limit exceeded:", {
                     contentLength,
                     maxLength,
                     isAnon,
@@ -519,7 +521,7 @@ export async function saveChatManually(
                     message,
                     portalLink: isAnon ? portalLink : null,
                 };
-                console.log("[saveChatManually] ===== EXIT (size limit) =====", errorResult);
+                console.log("[widgetAdd] ===== EXIT (size limit) =====", errorResult);
                 return errorResult;
             }
 
@@ -530,11 +532,11 @@ export async function saveChatManually(
             saved: coreResult.saved,
             turnsCount: turns.length,
         };
-        console.log("[saveChatManually] ===== EXIT (success) =====", successResult);
+        console.log("[widgetAdd] ===== EXIT (success) =====", successResult);
         return successResult;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("[saveChatManually] ❌ EXCEPTION:", {
+        console.error("[widgetAdd] ❌ EXCEPTION:", {
             error: errorMessage,
             errorType: error instanceof Error ? error.constructor.name : typeof error,
             stack: error instanceof Error ? error.stack : "N/A",
@@ -548,8 +550,7 @@ export async function saveChatManually(
             message: "An error occurred while saving the chat. Please try again.",
             portalLink: null,
         };
-        console.log("[saveChatManually] ===== EXIT (exception) =====", errorResult);
+        console.log("[widgetAdd] ===== EXIT (exception) =====", errorResult);
         return errorResult;
     }
 }
-
