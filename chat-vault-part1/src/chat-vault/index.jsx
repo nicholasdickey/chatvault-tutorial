@@ -1357,7 +1357,8 @@ Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, d
               ChatVault
             </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-              {selectedChat ? selectedChat.title : "You your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking itto parse and save the chat turn-by-turn into the vault, or use the manual chat save."}
+              {selectedChat ? selectedChat.title :
+              `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save.` }
             </div>
           </div>
           <div className="flex gap-2">
