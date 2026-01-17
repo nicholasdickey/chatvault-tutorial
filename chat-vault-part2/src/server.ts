@@ -326,16 +326,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                         text: `Loaded ${result.chats.length} chats`,
                     },
                 ],
-                structuredContent: {
-                    chats: result.chats,
-                    pagination: result.pagination,
-                    userInfo: result.userInfo,
-                },
-                _meta: {
-                    chats: result.chats,
-                    pagination: result.pagination,
-                    userInfo: result.userInfo,
-                },
+                structuredContent: result,
             };
         } else if (toolName === "searchMyChats") {
             const result = await searchMyChats(args as { userId: string; query: string; page?: number; size?: number });
