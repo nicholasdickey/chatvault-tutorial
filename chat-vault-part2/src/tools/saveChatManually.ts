@@ -352,28 +352,6 @@ export async function saveChatManually(
         const contentLength = htmlContent.length;
         const maxLength = isAnonymousPlan !== undefined ? 20000 : 1000000;
 
-        if (contentLength > maxLength) {
-            const limitType = isAnonymousPlan !== undefined ? "20,000 characters" : "1,000,000 characters";
-            const message = isAnonymousPlan !== undefined
-                ? `Content exceeds the ${limitType} limit for users without an account. Please shorten your content or sign in to save longer chats and notes (up to 1,100,000 characters).`
-                : `Content exceeds the ${limitType} limit. Please shorten your content.`;
-            console.log("[saveChatManually] ❌ Content size limit exceeded:", {
-                contentLength,
-                maxLength,
-                isAnon,
-                limitType,
-            });
-            const errorResult = {
-                chatId: "",
-                saved: false,
-                turnsCount: 0,
-                error: "limit_reached" as const,
-                message,
-                portalLink: isAnon ? portalLink : null,
-            };
-            console.log("[saveChatManually] ===== EXIT (size limit) =====", errorResult);
-            return errorResult;
-        }
 
         // Check chat limit for anonymous users only (normal users are not affected)
         if (isAnon) {
@@ -452,6 +430,32 @@ export async function saveChatManually(
             chatId: coreResult.chatId,
             saved: coreResult.saved,
         });
+        if (turns.length = 1) {
+            const contentLength = turns[0].response.length;
+            if (contentLength > maxLength) {
+                const limitType = isAnonymousPlan !== undefined ? "20,000 characters" : "1,000,000 characters";
+                const message = isAnonymousPlan !== undefined
+                    ? `Content exceeds the ${limitType} limit for users on the free plan. Please shorten your content or sign in to save longer chats and notes (up to 1,000,000 characters).`
+                    : `Content exceeds the ${limitType} limit. Please shorten your content.`;
+                console.log("[saveChatManually] ❌ Content size limit exceeded:", {
+                    contentLength,
+                    maxLength,
+                    isAnon,
+                    limitType,
+                });
+                const errorResult = {
+                    chatId: "",
+                    saved: false,
+                    turnsCount: 0,
+                    error: "limit_reached" as const,
+                    message,
+                    portalLink: isAnon ? portalLink : null,
+                };
+                console.log("[saveChatManually] ===== EXIT (size limit) =====", errorResult);
+                return errorResult;
+            }
+
+        }
 
         const successResult = {
             chatId: coreResult.chatId,
