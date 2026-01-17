@@ -1977,6 +1977,25 @@ function App() {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
+                                    copyToClipboard(noteTurn.prompt, noteId);
+                                  }}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Copy note"
+                                >
+                                  {noteCopied ? (
+                                    <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                  ) : (
+                                    <MdContentCopy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     handleStartEditTurn(noteIndex, 'prompt');
                                   }}
                                   className={`p-1 rounded flex items-center flex-shrink-0 ${
@@ -2027,9 +2046,7 @@ function App() {
                             )}
                           </div>
                         </div>
-                        <div className={`text-sm flex items-start justify-between gap-2 ${
-                          isDarkMode ? "text-gray-200" : "text-gray-800"
-                        }`}>
+                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
                           {isEditingNote ? (
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
@@ -2081,46 +2098,25 @@ function App() {
                               </div>
                             </div>
                           ) : (
-                            <>
-                              <div 
-                                className={`flex-1 ${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                                onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
-                                onMouseDown={(e) => {
-                                  // If expanded, allow text selection by not preventing default
-                                  if (isExpanded) {
-                                    return; // Allow normal text selection
-                                  }
-                                  // If not expanded and clickable, prevent text selection on click
-                                  if (noteNeedsTruncation) {
-                                    e.preventDefault();
-                                  }
-                                }}
-                                dangerouslySetInnerHTML={{
-                                  __html: isExpanded 
-                                    ? markdownToHtml(noteTurn.prompt) 
-                                    : markdownToHtml(truncateText(noteTurn.prompt))
-                                }}
-                              />
-                              <button
-                                onClick={(e) => {
+                            <div 
+                              className={`${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                              onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
+                              onMouseDown={(e) => {
+                                // If expanded, allow text selection by not preventing default
+                                if (isExpanded) {
+                                  return; // Allow normal text selection
+                                }
+                                // If not expanded and clickable, prevent text selection on click
+                                if (noteNeedsTruncation) {
                                   e.preventDefault();
-                                  e.stopPropagation();
-                                  copyToClipboard(noteTurn.prompt, noteId);
-                                }}
-                                className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
-                                title="Copy note"
-                              >
-                                {noteCopied ? (
-                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <MdContentCopy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </>
+                                }
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: isExpanded 
+                                  ? markdownToHtml(noteTurn.prompt) 
+                                  : markdownToHtml(truncateText(noteTurn.prompt))
+                              }}
+                            />
                           )}
                         </div>
                       </div>
@@ -2160,6 +2156,25 @@ function App() {
                           <div className="flex items-center gap-1">
                             {!isEditingPrompt && (
                               <>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    copyToClipboard(turn.prompt, promptId);
+                                  }}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                    isDarkMode
+                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
+                                  title="Copy prompt"
+                                >
+                                  {promptCopied ? (
+                                    <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                  ) : (
+                                    <MdContentCopy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
                                 <button
                                   onClick={(e) => {
                                     e.preventDefault();
@@ -2214,9 +2229,7 @@ function App() {
                             )}
                           </div>
                         </div>
-                        <div className={`text-sm flex items-start justify-between gap-2 ${
-                          isDarkMode ? "text-gray-200" : "text-gray-800"
-                        }`}>
+                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
                           {isEditingPrompt ? (
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
@@ -2268,46 +2281,25 @@ function App() {
                               </div>
                             </div>
                           ) : (
-                            <>
-                              <div 
-                                className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                                onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                                onMouseDown={(e) => {
-                                  // If expanded, allow text selection by not preventing default
-                                  if (isExpanded) {
-                                    return; // Allow normal text selection
-                                  }
-                                  // If not expanded and clickable, prevent text selection on click
-                                  if (needsExpansion) {
-                                    e.preventDefault();
-                                  }
-                                }}
-                                dangerouslySetInnerHTML={{
-                                  __html: isExpanded 
-                                    ? markdownToHtml(turn.prompt) 
-                                    : markdownToHtml(truncateText(turn.prompt))
-                                }}
-                              />
-                              <button
-                                onClick={(e) => {
+                            <div 
+                              className={`${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                              onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                              onMouseDown={(e) => {
+                                // If expanded, allow text selection by not preventing default
+                                if (isExpanded) {
+                                  return; // Allow normal text selection
+                                }
+                                // If not expanded and clickable, prevent text selection on click
+                                if (needsExpansion) {
                                   e.preventDefault();
-                                  e.stopPropagation();
-                                  copyToClipboard(turn.prompt, promptId);
-                                }}
-                                className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
-                                title="Copy prompt"
-                              >
-                                {promptCopied ? (
-                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <MdContentCopy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </>
+                                }
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: isExpanded 
+                                  ? markdownToHtml(turn.prompt) 
+                                  : markdownToHtml(truncateText(turn.prompt))
+                              }}
+                            />
                           )}
                         </div>
                       </div>
@@ -2321,26 +2313,45 @@ function App() {
                             Response
                           </div>
                           {!isEditingResponse && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleStartEditTurn(index, 'response');
-                              }}
-                              className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              }`}
-                              title="Edit response"
-                            >
-                              <MdEdit className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  copyToClipboard(turn.response, responseId);
+                                }}
+                                className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                }`}
+                                title="Copy response"
+                              >
+                                {responseCopied ? (
+                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <MdContentCopy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleStartEditTurn(index, 'response');
+                                }}
+                                className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                  isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                }`}
+                                title="Edit response"
+                              >
+                                <MdEdit className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           )}
                         </div>
-                        <div className={`text-sm flex items-start justify-between gap-2 ${
-                          isDarkMode ? "text-gray-200" : "text-gray-800"
-                        }`}>
+                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
                           {isEditingResponse ? (
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
@@ -2392,46 +2403,25 @@ function App() {
                               </div>
                             </div>
                           ) : (
-                            <>
-                              <div 
-                                className={`flex-1 ${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                                onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                                onMouseDown={(e) => {
-                                  // If expanded, allow text selection by not preventing default
-                                  if (isExpanded) {
-                                    return; // Allow normal text selection
-                                  }
-                                  // If not expanded and clickable, prevent text selection on click
-                                  if (needsExpansion) {
-                                    e.preventDefault();
-                                  }
-                                }}
-                                dangerouslySetInnerHTML={{
-                                  __html: isExpanded 
-                                    ? markdownToHtml(turn.response) 
-                                    : markdownToHtml(truncateText(turn.response))
-                                }}
-                              />
-                              <button
-                                onClick={(e) => {
+                            <div 
+                              className={`${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
+                              onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
+                              onMouseDown={(e) => {
+                                // If expanded, allow text selection by not preventing default
+                                if (isExpanded) {
+                                  return; // Allow normal text selection
+                                }
+                                // If not expanded and clickable, prevent text selection on click
+                                if (needsExpansion) {
                                   e.preventDefault();
-                                  e.stopPropagation();
-                                  copyToClipboard(turn.response, responseId);
-                                }}
-                                className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
-                                title="Copy response"
-                              >
-                                {responseCopied ? (
-                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <MdContentCopy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </>
+                                }
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: isExpanded 
+                                  ? markdownToHtml(turn.response) 
+                                  : markdownToHtml(truncateText(turn.response))
+                              }}
+                            />
                           )}
                         </div>
                       </div>
