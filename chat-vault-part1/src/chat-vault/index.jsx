@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -58,6 +58,9 @@ function App() {
   const [helpText, setHelpText] = useState(null);
   const [subTitle, setSubTitle] = useState(null);
   const [displayMode, setDisplayMode] = useState("normal"); // "normal" | "fullscreen" | "pip"
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
   useEffect(() => {
@@ -486,8 +489,22 @@ function App() {
         setChats((prev) => prev.filter((c) => c.id !== chatId));
         addLog("Chat removed from local state");
 
-        // Refresh the list to update counts
-        await handleRefresh();
+        // Update userInfo counts locally
+        if (userInfo) {
+          setUserInfo((prev) => ({
+            ...prev,
+            totalChats: Math.max(0, (prev.totalChats || 0) - 1),
+            remainingSlots: prev.remainingSlots !== undefined 
+              ? (prev.remainingSlots || 0) + 1
+              : undefined,
+          }));
+          addLog("UserInfo counts updated locally");
+        }
+
+        // If deleted chat was selected, clear selection
+        if (selectedChat?.id === chatId) {
+          setSelectedChat(null);
+        }
       } else {
         throw new Error(result?.structuredContent?.message || "Delete failed");
       }
@@ -499,6 +516,99 @@ function App() {
     } finally {
       // Hide loading indicator when done
       setPaginationLoading(false);
+    }
+  };
+
+  const handleStartEditTitle = () => {
+    if (!selectedChat) return;
+    setEditedTitle(selectedChat.title);
+    setIsEditingTitle(true);
+    addLog("Started editing title", { currentTitle: selectedChat.title });
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setEditedTitle("");
+    addLog("Cancelled editing title");
+  };
+
+  const handleSaveTitle = async () => {
+    if (!selectedChat) return;
+
+    const trimmedTitle = editedTitle.trim();
+
+    // Local validation
+    if (trimmedTitle.length === 0) {
+      setAlertMessage("Title cannot be empty");
+      setAlertPortalLink(null);
+      return;
+    }
+
+    if (trimmedTitle.length > 2048) {
+      setAlertMessage("Title cannot exceed 2048 characters");
+      setAlertPortalLink(null);
+      return;
+    }
+
+    // If title hasn't changed, just cancel editing
+    if (trimmedTitle === selectedChat.title) {
+      handleCancelEditTitle();
+      return;
+    }
+
+    setIsUpdatingTitle(true);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("updateChat tool not available");
+      }
+
+      const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+      if (!userId) {
+        throw new Error("User ID not available. Please refresh and try again.");
+      }
+
+      addLog("Calling updateChat tool", { chatId: selectedChat.id, userId, title: trimmedTitle });
+      const result = await window.openai.callTool("updateChat", {
+        chatId: selectedChat.id,
+        userId,
+        chat: {
+          title: trimmedTitle,
+        },
+      });
+
+      addLog("Update chat result", result);
+
+      if (result?.structuredContent?.updated) {
+        const newTitle = result.structuredContent.title || trimmedTitle;
+        
+        // Update selectedChat
+        setSelectedChat((prev) => (prev ? { ...prev, title: newTitle } : null));
+        
+        // Update chats list
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === selectedChat.id ? { ...chat, title: newTitle } : chat
+          )
+        );
+        
+        addLog("Title updated in local state", { newTitle });
+        
+        // Exit edit mode
+        setIsEditingTitle(false);
+        setEditedTitle("");
+      } else {
+        throw new Error(result?.structuredContent?.message || "Update failed");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error updating chat title", { error: errorMessage });
+      setAlertMessage(`Failed to update title: ${errorMessage}`);
+      setAlertPortalLink(null);
+    } finally {
+      setIsUpdatingTitle(false);
     }
   };
 
@@ -1518,7 +1628,92 @@ function App() {
               }`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
-                    <div className="font-medium mb-1">{selectedChat.title}</div>
+                    {isEditingTitle ? (
+                      // Inline editing mode
+                      <div className="mb-1">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editedTitle}
+                            onChange={(e) => setEditedTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveTitle();
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                handleCancelEditTitle();
+                              }
+                            }}
+                            disabled={isUpdatingTitle}
+                            autoFocus
+                            maxLength={2048}
+                            className={`flex-1 px-2 py-1 rounded border text-sm font-medium ${
+                              isUpdatingTitle
+                                ? "opacity-50 cursor-not-allowed"
+                                : ""
+                            } ${
+                              isDarkMode
+                                ? "bg-gray-700 border-gray-600 text-white"
+                                : "bg-white border-gray-300 text-black"
+                            } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          />
+                          <button
+                            onClick={handleSaveTitle}
+                            disabled={isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048}
+                            className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                              isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048
+                                ? "opacity-50 cursor-not-allowed"
+                                : isDarkMode
+                                ? "bg-green-600 text-white hover:bg-green-700"
+                                : "bg-green-600 text-white hover:bg-green-700"
+                            }`}
+                            title="Save"
+                          >
+                            {isUpdatingTitle ? (
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <MdCheck className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleCancelEditTitle}
+                            disabled={isUpdatingTitle}
+                            className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                              isUpdatingTitle
+                                ? "opacity-50 cursor-not-allowed"
+                                : isDarkMode
+                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
+                            title="Cancel"
+                          >
+                            <MdClose className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {editedTitle.trim().length > 2048 && (
+                          <div className={`text-xs mt-1 ${isDarkMode ? "text-red-400" : "text-red-600"}`}>
+                            Title cannot exceed 2048 characters
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      // Display mode
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="font-medium flex-1">{selectedChat.title}</div>
+                        <button
+                          onClick={handleStartEditTitle}
+                          className={`p-1.5 rounded flex items-center flex-shrink-0 ${
+                            isDarkMode
+                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          }`}
+                          title="Edit title"
+                        >
+                          <MdEdit className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                     <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
 
                   <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>

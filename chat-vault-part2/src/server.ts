@@ -23,6 +23,7 @@ import { loadMyChats } from "./tools/loadMyChats.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
+import { updateChat } from "./tools/updateChat.js";
 
 dotenv.config();
 
@@ -98,6 +99,40 @@ const chatVaultTools: Tool[] = [
             destructiveHint: true,
         },
 
+    },
+    {
+        name: "updateChat",
+        description: "Update a chat's properties (currently supports title)",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: {
+                    type: "string",
+                    description: "User ID (required)",
+                },
+                chatId: {
+                    type: "string",
+                    description: "Chat ID to update (required)",
+                },
+                chat: {
+                    type: "object",
+                    description: "Chat properties to update",
+                    properties: {
+                        title: {
+                            type: "string",
+                            description: "New title for the chat (required, max 2048 characters)",
+                        },
+                    },
+                    required: ["title"],
+                },
+            },
+            required: ["userId", "chatId", "chat"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
     },
     {
         name: "saveChat",
@@ -406,6 +441,18 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                     {
                         type: "text",
                         text: `Chat deleted successfully with ID: ${result.chatId}`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "updateChat") {
+            const result = await updateChat(args as { userId: string; chatId: string; chat: { title: string } });
+            console.log("[MCP Handler] handleCallTool - updateChat result:", JSON.stringify(result));
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Chat updated successfully with ID: ${result.chatId}`,
                     },
                 ],
                 structuredContent: result,

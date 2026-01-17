@@ -10,16 +10,16 @@ export interface ExplainHowToUseParams {
 export interface ExplainHowToUseResult {
     helpText: string;
 }
-export const helpText = `# How to Use Chat Vault
+export const helpText = `# How to Use The Chat Vault App
 
-Chat Vault helps you save, organize, and search your Claude, Geminim, ChatGPT, etc. "aha! moments" and knowledge-building conversations. Think of it as a personal archive for your most valuable chats. Your knowldge base. Your AI chatbot's long-term memory. That you can own and can take with you to any new platform or AI environment.
+Chat Vault helps you save, organize, and search your Claude, Gemini, Claude, etc. "aha! moments" and knowledge-building conversations. Think of it as a personal archive for your most valuable chats. Your knowldge base. Your AI chatbot's long-term memory. That you can own and can take with you to any new platform or AI environment.
 
 ## Saving Conversations
 
 You have three flexible ways to save conversations to your vault:
 
-### 1. Ask ChatGPT to Save
-Simply ask ChatGPT to save the current conversation to your vault. You can specify:
+### 1. Ask the Chatbot to Save
+Simply ask ChatGPT or the chatbot you are using to save the current conversation to your vault. You can specify:
 - **By subject**: "Save this conversation about [topic] to my ChatVault"
 - **By number of turns**: "Save the last 5 turns to my ChatVault"
 - **The entire conversation**: "Add this entire chat to my ChatVault"
@@ -36,7 +36,7 @@ Use the '+' button in the ChatVault widget to manually add conversations or note
 
 ## Accessing Your Vault
 
-Just ask ChatGPT to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
+Just ask Claude,ChatGPT or whatever the chatbot you are using to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
 To leverage the true power of Chat Vault, you can ask the chatbot to user the chat vault as your personal knowledge base and search it automatically to include in the context when researching or any other agentic tasks. 
 
 ## Getting Started in ChatGPT
