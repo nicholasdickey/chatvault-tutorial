@@ -78,7 +78,7 @@ function createMcpServer(): Server {
 const chatVaultTools: Tool[] = [
     {
         name: "deleteChat",
-        description: "Delete selected chat by the widget using chatId",
+        description: "USED INSIDE THE WIDGET. Delete selected chat by the widget using chatId",
         inputSchema: {
             type: "object",
             properties: {
@@ -102,7 +102,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "updateChat",
-        description: "Update a chat's properties (currently supports title)",
+        description: "USED INSIDE THE WIDGET. Update a chat's properties (currently supports title)",
         inputSchema: {
             type: "object",
             properties: {
@@ -136,7 +136,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChat",
-        description: "Save a chat conversation with embeddings for semantic search",
+        description: "Save a chat conversation with embeddings for semantic search. To be used by LLM to save chats turn-by-turn verbatiminto the vault.",
         inputSchema: {
             type: "object",
             properties: {
@@ -171,7 +171,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "loadMyChats",
-        description: "Load paginated chat data for a user with optional text search filter",
+        description: "USED INSIDE THE WIDGET. Load paginated chat data for a user with optional text search filter",
         inputSchema: {
             type: "object",
             properties: {
@@ -207,7 +207,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "searchMyChats",
-        description: "Search chats using vector similarity search",
+        description: "LLM: Search chats using vector similarity search. Access user's knowledge base and long-term memory and include with your context.",
         inputSchema: {
             type: "object",
             properties: {
@@ -238,7 +238,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChatManually",
-        description: "Save a manually pasted ChatGPT conversation by parsing HTML/text content",
+        description: "NOT TO BE USED OUTSIDE OF THE WIDGET!!! In-widget save a manually pasted Claude, Gemini, ChatGPT, etc. conversation by parsing HTML/text content",
         inputSchema: {
             type: "object",
             properties: {
