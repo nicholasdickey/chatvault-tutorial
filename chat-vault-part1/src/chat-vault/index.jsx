@@ -2882,10 +2882,10 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={` fixed top-5 bottom-4 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col max-h-[70vh] ${isDarkMode
+        <div className={` fixed top-5 bottom-4 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
           ? "bg-gray-800 border-gray-600 text-white"
           : "bg-gray-50 border-gray-300 text-black"
-          }`}>
+          }`} style={{ maxHeight: 'calc(100vh - 1.25rem)' }}>
           <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${isDarkMode ? "border-gray-700" : "border-gray-200"
             }`} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
@@ -2903,7 +2903,7 @@ function App() {
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 min-h-0 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
+          <div className="overflow-y-auto flex-1 min-h-0 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '100%' }}>
             {helpText ? (
               <div
                 className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
