@@ -391,11 +391,18 @@ function App() {
     setError(null);
     try {
       if (window.openai?.callTool) {
+        addLog("Calling loadMyChats via skybridge");
+        addLog("loadMyChats parameters", {
+          page: 0,
+          size: 10,
+          widgetVersion: WIDGET_VERSION,
+        });
         const result = await window.openai.callTool("loadMyChats", {
           page: 0,
           size: 10,
           widgetVersion: WIDGET_VERSION,
         });
+        addLog("loadMyChats result", result);
         if (result?.structuredContent?.chats) {
           setChats(deduplicateChats(result.structuredContent.chats));
           setPagination(result.structuredContent.pagination);
