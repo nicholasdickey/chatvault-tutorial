@@ -1404,7 +1404,7 @@ function App() {
         <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${isDarkMode ? "border-gray-700" : "border-black/5"
           }`}>
           <div className="flex items-center gap-2">
-            
+
             {selectedChat ? (
               <button
                 onClick={handleBackClick}
@@ -2915,7 +2915,7 @@ function App() {
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 min-h-0 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '100%' }}>
+          <div className="flex-1 min-h-0 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '100%' }}>
             {helpText ? (
               <div
                 className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
