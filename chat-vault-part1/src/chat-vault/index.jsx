@@ -1639,16 +1639,16 @@ function App() {
               ) : contentMetadata?.subTitle ? (
                 <span
                   onClick={() => {
-                    if (contentMetadata.subTitle && contentMetadata.subTitle.length > 100) {
+                    if (contentMetadata.subTitle && contentMetadata.subTitle.length > 64) {
                       setSubTitleExpanded(!subTitleExpanded);
                     }
                   }}
-                  className={contentMetadata.subTitle.length > 100 ? "cursor-pointer hover:opacity-80" : ""}
-                  title={contentMetadata.subTitle.length > 100 ? (subTitleExpanded ? "Click to collapse" : "Click to expand") : ""}
+                  className={contentMetadata.subTitle.length > 64 ? "cursor-pointer hover:opacity-80" : ""}
+                  title={contentMetadata.subTitle.length > 64 ? (subTitleExpanded ? "Click to collapse" : "Click to expand") : ""}
                 >
-                  {subTitleExpanded || contentMetadata.subTitle.length <= 100
+                  {subTitleExpanded || contentMetadata.subTitle.length <= 64
                     ? contentMetadata.subTitle
-                    : `${contentMetadata.subTitle.substring(0, 100)}...`}
+                    : `${contentMetadata.subTitle.substring(0, 64)}...`}
                 </span>
               ) : null}
             </div>
