@@ -2882,10 +2882,7 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed top-5 left-4 mr-4 bottom-8 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
-          ? "bg-gray-900 border-gray-600 text-white"
-          : "bg-gray-200 border-gray-300 text-black"
-          }`} >
+        <div className={`fixed top-5 left-4 right-4 bottom-8 border-t rounded-t-lg z-40 flex flex-col`} >
           <div className={`flex items-center justify-between px-6 py-3 flex-shrink-0 `} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
               }`}>
