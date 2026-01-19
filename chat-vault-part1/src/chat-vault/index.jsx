@@ -1657,18 +1657,7 @@ function App() {
                 : ""
                 }`} />
             </button>
-            {selectedChat && (
-              <button
-                onClick={handleBackClick}
-                className={`p-2 rounded-lg ${isDarkMode
-                  ? "bg-gray-800 text-white hover:bg-gray-700"
-                  : "bg-gray-100 text-black hover:bg-gray-200"
-                  }`}
-                title="Back"
-              >
-                <MdArrowBack className="w-5 h-5" />
-              </button>
-            )}
+
           </div>
         </div>}
 
