@@ -2882,11 +2882,12 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed top-5 left-4 right-4 bottom-8rounded-t-lg z-40 flex flex-col ${isDarkMode
+        <div className={`fixed top-5 left-4 mr-4 bottom-8 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
           ? "bg-gray-900 border-gray-600 text-white"
           : "bg-gray-200 border-gray-300 text-black"
           }`} >
-          <div className={`flex items-center justify-between px-6 py-3 flex-shrink-0 `} style={{ minHeight: '40px', height: '40px' }}>
+          <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${isDarkMode ? "border-gray-700" : "border-gray-200"
+            }`} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
               }`}>
               Help
@@ -2905,7 +2906,7 @@ function App() {
           <div className="flex-1 min-h-0 mx-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '50%' }}>
             {helpText ? (
               <div
-                className={`overflow-y-auto text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
                   }`}
                 dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText) }}
               />
