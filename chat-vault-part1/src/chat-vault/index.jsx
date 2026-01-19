@@ -2882,7 +2882,7 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={` fixed top-5 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
+        <div className={` fixed top-64 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
           ? "bg-gray-800 border-gray-600 text-white"
           : "bg-gray-50 border-gray-300 text-black"
           }`} style={{ maxHeight: 'calc(100vh - 1.25rem - 600px)' }}>
