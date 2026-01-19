@@ -56,6 +56,7 @@ function App() {
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpText, setHelpText] = useState(null);
+  const [helpTextLoading, setHelpTextLoading] = useState(false);
   const [subTitle, setSubTitle] = useState(null);
   const [displayMode, setDisplayMode] = useState("normal"); // "normal" | "fullscreen" | "pip"
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -806,28 +807,59 @@ function App() {
     return html;
   };
 
-  const handleHelpClick = () => {
+  const handleHelpClick = async () => {
     if (showHelp) {
       setShowHelp(false);
       return;
     }
 
-    // If help text is already loaded, just show it
+    // If help text is already cached, just show it
     if (helpText) {
       setShowHelp(true);
       return;
     }
 
-    // Get help text from metadata with fallback to default
-    const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
-
-
-    const rawHelpText = contentMetadata?.helpText ?? 'Loading...';
-
-    // Replace placeholders in help text
-    const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
-    setHelpText(processedHelpText);
+    // Show help panel and fetch help text on demand
     setShowHelp(true);
+    setHelpTextLoading(true);
+
+    try {
+      if (!window.openai?.callTool) {
+        throw new Error("explainHowToUse tool not available");
+      }
+
+      // Get userId from chats
+      const userId = selectedChat?.userId || (chats.length > 0 && chats[0].userId) || "";
+
+      if (!userId) {
+        throw new Error("User ID not available. Please refresh and try again.");
+      }
+
+      addLog("Calling explainHowToUse tool", { userId });
+      const result = await window.openai.callTool("explainHowToUse", {
+        userId,
+      });
+
+      addLog("explainHowToUse result", result);
+
+      if (result?.structuredContent?.helpText) {
+        const rawHelpText = result.structuredContent.helpText;
+        // Replace placeholders in help text
+        const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
+        const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
+        setHelpText(processedHelpText);
+      } else {
+        throw new Error("No help text received from server");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error loading help text", { error: errorMessage });
+      setAlertMessage(`Failed to load help text: ${errorMessage}`);
+      setAlertPortalLink(null);
+      // Keep help panel open but show error state
+    } finally {
+      setHelpTextLoading(false);
+    }
   };
 
   const toggleTurnExpansion = (index) => {
@@ -2904,18 +2936,25 @@ function App() {
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 min-h-0 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '100%' }}>
+          <div className="flex-1 min-h-0 px-6 pt-6 relative" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '100%' }}>
+            {helpTextLoading && (
+              <div className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? "bg-gray-900/80" : "bg-gray-200/80"}`}>
+                <div className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Loading...
+                </div>
+              </div>
+            )}
             {helpText ? (
               <div
                 className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
                   }`}
                 dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText) }}
               />
-            ) : (
+            ) : !helpTextLoading ? (
               <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                 No help text available.
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       )}

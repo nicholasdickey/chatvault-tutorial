@@ -8,7 +8,6 @@ import { eq, desc, count } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
-import { helpText } from "./explainHowToUse.js";
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
  * This ensures pagination works correctly by removing duplicates before pagination calculations
@@ -76,7 +75,6 @@ export interface LoadChatsResult {
     messageType?: 'alert' | 'normal' | 'success' | 'error'; // Message type for styling
   };
   content?: {
-    helpText: string;
     subTitle?: string;
     limits: {
       counterTooltip: string;
@@ -152,7 +150,6 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       throw new Error("userId is required");
     }
     const contentMetadata = {
-      helpText,
       subTitle: `If your AI chatbot is having trouble saving a chat into the vault, you can add the chat manually`,
       limits: {
         counterTooltip: "Click to learn about chat limits",
