@@ -2882,7 +2882,7 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed top-32 left-0 right-0 mt-32 mb-4 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
+        <div className={`fixed top-5 left-4 right-4 bottom-4 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
           ? "bg-gray-800 border-gray-600 text-white"
           : "bg-gray-50 border-gray-300 text-black"
           }`} >
