@@ -94,36 +94,36 @@ function App() {
   // Check for dark mode
   useEffect(() => {
     addLog("Widget initialized", { debugEnabled: showDebug });
-    
+
     const checkDarkMode = () => {
       const root = document.documentElement;
       const theme = root.getAttribute("data-theme");
       const hasDarkClass = root.classList.contains("dark");
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      
+
       // Only use dark mode if explicitly set via data-theme or class
       // Don't use system preference by default (widget should default to light)
       const isDark = theme === "dark" || hasDarkClass;
-      
+
       setIsDarkMode(isDark);
-      addLog("Dark mode check", { 
-        isDark, 
-        theme, 
-        hasDarkClass, 
+      addLog("Dark mode check", {
+        isDark,
+        theme,
+        hasDarkClass,
         prefersDark,
         note: "Only using explicit theme/class, not system preference"
       });
     };
-    
+
     checkDarkMode();
-    
+
     // Watch for theme changes
     const observer = new MutationObserver(checkDarkMode);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme", "class"],
     });
-    
+
     // Watch for system theme changes (but don't use it, just log)
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleSystemThemeChange = () => {
@@ -131,7 +131,7 @@ function App() {
       // Don't update isDarkMode based on system preference
     };
     mediaQuery.addEventListener("change", handleSystemThemeChange);
-    
+
     return () => {
       observer.disconnect();
       mediaQuery.removeEventListener("change", handleSystemThemeChange);
@@ -151,7 +151,7 @@ function App() {
       hasLoadedInitial.current = true;
       try {
         addLog("Loading initial chat data");
-        
+
         // Try to read embedded data first
         const dataScript = document.getElementById("chatvault-initial-data");
         if (dataScript) {
@@ -165,7 +165,7 @@ function App() {
             addLog("Failed to parse embedded data", { error: e.message });
           }
         }
-        
+
         // Fallback: call loadMyChats via skybridge
         if (window.openai?.callTool) {
           addLog("Calling loadMyChats via skybridge");
@@ -176,7 +176,7 @@ function App() {
               widgetVersion: WIDGET_VERSION,
             });
             addLog("loadMyChats result", result);
-            
+
             if (result?.structuredContent?.chats) {
               setChats(deduplicateChats(result.structuredContent.chats));
               setPagination(result.structuredContent.pagination);
@@ -207,7 +207,7 @@ function App() {
           // The widget should still be functional for UI testing
           setChats([]);
         }
-        
+
         setLoading(false);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -216,7 +216,7 @@ function App() {
         setLoading(false);
       }
     };
-    
+
     loadInitialData();
   }, []);
 
@@ -263,7 +263,7 @@ function App() {
   const deduplicateChats = (chatList) => {
     const seen = new Map();
     const deduplicated = [];
-    
+
     for (const chat of chatList) {
       // Create a signature based on title and content (different for notes vs chats)
       let signature;
@@ -275,7 +275,7 @@ function App() {
         const firstTurn = chat.turns?.[0];
         signature = `${chat.title || ""}|${firstTurn?.prompt || ""}|${firstTurn?.response || ""}`;
       }
-      
+
       if (!seen.has(signature)) {
         seen.set(signature, chat);
         deduplicated.push(chat);
@@ -284,7 +284,7 @@ function App() {
         const existing = seen.get(signature);
         const existingTime = new Date(existing.timestamp).getTime();
         const currentTime = new Date(chat.timestamp).getTime();
-        
+
         if (currentTime > existingTime) {
           // Replace the existing one with the newer one
           const index = deduplicated.indexOf(existing);
@@ -295,7 +295,7 @@ function App() {
         }
       }
     }
-    
+
     return deduplicated;
   };
 
@@ -438,7 +438,7 @@ function App() {
       const message = userInfo.remainingSlots <= 1
         ? `${baseMessage} Delete chats or`
         : baseMessage;
-      
+
       addLog("Counter clicked - setting alert", { message, portalLink: userInfo.portalLink });
       setAlertMessage(message);
       setAlertPortalLink(userInfo.portalLink || null);
@@ -466,7 +466,7 @@ function App() {
 
   const handleDeleteChat = async (chat) => {
     addLog("Delete chat clicked", { chatId: chat.id, title: chat.title });
-    
+
     // Show confirmation in alert area
     setDeleteConfirmation({
       chatId: chat.id,
@@ -484,7 +484,7 @@ function App() {
     setDeleteConfirmation(null);
     setAlertMessage(null);
     setAlertPortalLink(null);
-    
+
     // Show loading indicator during delete operation
     setPaginationLoading(true);
 
@@ -515,7 +515,7 @@ function App() {
           setUserInfo((prev) => ({
             ...prev,
             totalChats: Math.max(0, (prev.totalChats || 0) - 1),
-            remainingSlots: prev.remainingSlots !== undefined 
+            remainingSlots: prev.remainingSlots !== undefined
               ? (prev.remainingSlots || 0) + 1
               : undefined,
           }));
@@ -608,19 +608,19 @@ function App() {
 
       if (result?.structuredContent?.updated) {
         const newTitle = result.structuredContent.title || trimmedTitle;
-        
+
         // Update selectedChat only if it's still the same chat
         setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, title: newTitle } : prev));
-        
+
         // Update chats list
         setChats((prev) =>
           prev.map((chat) =>
             chat.id === chatId ? { ...chat, title: newTitle } : chat
           )
         );
-        
+
         addLog("Title updated in local state", { chatId, newTitle });
-        
+
         // Exit edit mode
         setIsEditingTitle(false);
         setEditedTitle("");
@@ -653,16 +653,16 @@ function App() {
 
   const handleSaveTurnEdit = (turnIndex, field) => {
     if (!selectedChat || !editedTurns[turnIndex]) return;
-    
+
     const trimmedValue = editingTurnValue.trim();
-    
+
     // Update the edited turn
     const updatedTurns = [...editedTurns];
     updatedTurns[turnIndex] = {
       ...updatedTurns[turnIndex],
       [field]: trimmedValue,
     };
-    
+
     setEditedTurns(updatedTurns);
     setEditingTurn(null);
     setEditingTurnValue("");
@@ -676,7 +676,7 @@ function App() {
       setAlertPortalLink(null);
       return;
     }
-    
+
     const updatedTurns = editedTurns.filter((_, index) => index !== turnIndex);
     setEditedTurns(updatedTurns);
     setHasUnsavedChanges(true);
@@ -685,14 +685,14 @@ function App() {
 
   const handleSaveChat = async () => {
     if (!selectedChat) return;
-    
+
     // Validate: at least one turn
     if (editedTurns.length === 0) {
       setAlertMessage("Chat must have at least one turn");
       setAlertPortalLink(null);
       return;
     }
-    
+
     // Validate each turn (notes can have empty response, but must have prompt)
     for (let i = 0; i < editedTurns.length; i++) {
       const turn = editedTurns[i];
@@ -708,24 +708,24 @@ function App() {
         return;
       }
     }
-    
+
     setIsSavingChat(true);
     setAlertMessage(null);
     setAlertPortalLink(null);
-    
+
     // Capture chatId before async operation
     const chatId = selectedChat.id;
-    
+
     try {
       if (!window.openai?.callTool) {
         throw new Error("updateChat tool not available");
       }
-      
+
       const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
-      
+
       addLog("Calling updateChat tool with turns", { chatId, userId, turnsCount: editedTurns.length });
       const result = await window.openai.callTool("updateChat", {
         chatId,
@@ -734,24 +734,24 @@ function App() {
           turns: editedTurns,
         },
       });
-      
+
       addLog("Update chat result", result);
-      
+
       if (result?.structuredContent?.updated) {
         const updatedTurns = result.structuredContent.turns || editedTurns;
-        
+
         // Update selectedChat
         setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, turns: updatedTurns } : prev));
-        
+
         // Update chats list
         setChats((prev) =>
           prev.map((chat) =>
             chat.id === chatId ? { ...chat, turns: updatedTurns } : chat
           )
         );
-        
+
         addLog("Chat turns updated in local state", { chatId, turnsCount: updatedTurns.length });
-        
+
         // Clear editing state
         setHasUnsavedChanges(false);
         setEditingTurn(null);
@@ -779,20 +779,20 @@ function App() {
   // Convert markdown to HTML
   const markdownToHtml = (markdown) => {
     if (!markdown) return "";
-    
+
     let html = markdown;
-    
+
     // Convert headers (do this first before paragraph processing)
     html = html.replace(/^### (.*$)/gim, '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>');
     html = html.replace(/^## (.*$)/gim, '<h4 class="text-lg font-semibold mt-6 mb-3">$1</h4>');
     html = html.replace(/^# (.*$)/gim, '<h3 class="text-xl font-semibold mt-6 mb-4">$1</h3>');
-    
+
     // Convert links [text](url) - do this before bold to avoid conflicts
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">$1</a>');
-    
+
     // Convert bold
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
+
     // Convert line breaks to paragraphs (double newline = paragraph, single = br)
     const paragraphs = html.split(/\n\s*\n/);
     html = paragraphs.map(p => {
@@ -802,7 +802,7 @@ function App() {
       const withBreaks = trimmed.replace(/\n/g, '<br />');
       return `<p class="mb-3">${withBreaks}</p>`;
     }).join('');
-    
+
     return html;
   };
 
@@ -820,10 +820,10 @@ function App() {
 
     // Get help text from metadata with fallback to default
     const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
-   
-    
+
+
     const rawHelpText = contentMetadata?.helpText ?? 'Loading...';
-   
+
     // Replace placeholders in help text
     const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
     setHelpText(processedHelpText);
@@ -845,7 +845,7 @@ function App() {
 
   const copyToClipboard = async (text, id) => {
     console.log("[copyToClipboard] Called", { id, textLength: text?.length });
-    
+
     const setCopiedState = () => {
       setCopiedItems((prev) => {
         const next = {
@@ -871,7 +871,7 @@ function App() {
       // Store current scroll position
       const scrollY = window.scrollY;
       const scrollX = window.scrollX;
-      
+
       // Create a temporary textarea element
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -881,17 +881,17 @@ function App() {
       textarea.style.opacity = "0";
       textarea.setAttribute("readonly", "");
       document.body.appendChild(textarea);
-      
+
       // Select text without focusing (to avoid scroll)
       textarea.select();
       textarea.setSelectionRange(0, text.length);
-      
+
       const successful = document.execCommand("copy");
       document.body.removeChild(textarea);
-      
+
       // Restore scroll position
       window.scrollTo(scrollX, scrollY);
-      
+
       if (successful) {
         console.log("[copyToClipboard] Copy successful", { id });
         addLog("Copied to clipboard", { id });
@@ -901,11 +901,11 @@ function App() {
       }
     } catch (err) {
       console.error("[copyToClipboard] Copy failed", { id, error: err.message, err });
-      addLog("Failed to copy - clipboard access blocked. Please copy manually.", { 
+      addLog("Failed to copy - clipboard access blocked. Please copy manually.", {
         error: err.message,
         suggestion: "The clipboard API is blocked in this context. You may need to copy the text manually."
       });
-      
+
       // Show a user-friendly message
       setAlertMessage("Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.");
       setAlertPortalLink(null);
@@ -916,17 +916,17 @@ function App() {
     if (!chat) {
       return "";
     }
-    
+
     // Handle notes differently
     if (chat.type === "note") {
       return chat.content || "";
     }
-    
+
     // Handle chats with turns
     if (!chat.turns || chat.turns.length === 0) {
       return "";
     }
-    
+
     return chat.turns
       .map((turn) => {
         return `You said:\n${turn.prompt}\n\nAI said:\n${turn.response}`;
@@ -976,12 +976,12 @@ function App() {
 
     setIsSaving(true);
     setManualSaveError(null);
-    
+
     const contentToSend = manualSaveHtml || manualSaveContent;
     const titleToSend = manualSaveTitle.trim() || undefined;
-    
-    addLog("🚀 [WIDGET] Starting manual save", { 
-      hasTitle: !!titleToSend, 
+
+    addLog("🚀 [WIDGET] Starting manual save", {
+      hasTitle: !!titleToSend,
       title: titleToSend || "(none)",
       contentLength: contentToSend.length,
       contentPreview: contentToSend.substring(0, 200),
@@ -1000,7 +1000,7 @@ function App() {
         title: titleToSend,
         widgetVersion: WIDGET_VERSION,
       };
-      
+
       addLog("📤 [WIDGET] Calling widgetAdd tool", {
         toolName: "widgetAdd",
         args: {
@@ -1020,8 +1020,8 @@ function App() {
       addLog("⏳ [WIDGET] Waiting for response...");
       const result = await Promise.race([callToolPromise, timeoutPromise]);
       addLog("✅ [WIDGET] Response received");
-      
-      addLog("📥 [WIDGET] Manual save result received", { 
+
+      addLog("📥 [WIDGET] Manual save result received", {
         resultType: typeof result,
         isNull: result === null,
         isUndefined: result === undefined,
@@ -1087,13 +1087,13 @@ function App() {
           turnsCount: result.structuredContent.turnsCount,
           message: result.structuredContent.message || "(none)",
         });
-        
+
         // Check for limit_reached error specifically
         if (result.structuredContent.error === "limit_reached") {
           const message = result.structuredContent.message || "Chat limit reached";
           const portalLink = result.structuredContent.portalLink;
           addLog("❌ [WIDGET] Limit reached error", { message, portalLink });
-          
+
           // Show error in alert area (close modal first)
           setShowManualSaveModal(false);
           setManualSaveError(null);
@@ -1101,19 +1101,19 @@ function App() {
           setAlertPortalLink(portalLink || null);
           return; // Don't throw, just show error in alert
         }
-        
+
         // Parse errors are now handled by backend - content is saved as note instead of erroring
         // No need to handle parse_error here anymore
-        
+
         // Check for server_error
         if (result.structuredContent.error === "server_error") {
           const message = result.structuredContent.message || "An error occurred while saving the chat";
-          addLog("❌ [WIDGET] Server error in structuredContent", { 
-            message, 
+          addLog("❌ [WIDGET] Server error in structuredContent", {
+            message,
             error: result.structuredContent.error,
             fullResult: result,
           });
-          
+
           // Show error in alert area (close modal first)
           setShowManualSaveModal(false);
           setManualSaveError(null);
@@ -1122,7 +1122,7 @@ function App() {
           setIsSaving(false);
           return; // Don't throw, just show error in alert
         }
-        
+
         if (result.structuredContent.error) {
           const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
           addLog("❌ [WIDGET] Error found in structuredContent.error", {
@@ -1144,25 +1144,25 @@ function App() {
           throw new Error(errorMessage);
         }
       }
-      
+
       addLog("✅ [WIDGET] Manual save successful", {
         chatId: result?.structuredContent?.chatId || "(none)",
         saved: result?.structuredContent?.saved,
         turnsCount: result?.structuredContent?.turnsCount,
         fullResult: result,
       });
-      
+
       // Close modal and reset form on success
       setShowManualSaveModal(false);
       setManualSaveTitle("");
       setManualSaveContent("");
       setManualSaveHtml("");
       setManualSaveError(null);
-      
+
       // Clear search filter when adding a new chat/note
       setSearchQuery("");
       setIsSearching(false);
-      
+
       // Show loading indicator immediately after modal closes (same as pagination)
       setPaginationLoading(true);
 
@@ -1188,7 +1188,7 @@ function App() {
               setContentMetadata(loadResult.structuredContent.content);
             }
           }
-          
+
         } catch (err) {
           addLog("Error reloading chats after manual save", { error: err.message });
           setError(`Failed to reload chats: ${err.message}`);
@@ -1200,7 +1200,7 @@ function App() {
       }
     } catch (err) {
       let errorMessage = "Unknown error occurred";
-      
+
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === "string") {
@@ -1209,8 +1209,8 @@ function App() {
         // Try to extract error message from various possible structures
         errorMessage = err.message || err.error?.message || err.error || JSON.stringify(err);
       }
-      
-      addLog("❌ [WIDGET] Manual save failed", { 
+
+      addLog("❌ [WIDGET] Manual save failed", {
         error: errorMessage,
         errorType: typeof err,
         errorString: String(err),
@@ -1342,7 +1342,7 @@ function App() {
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
-        
+
       }
     } catch (err) {
       addLog("Error loading more chats", { error: err.message });
@@ -1369,51 +1369,47 @@ function App() {
   // SVG logo component
   const ChatVaultLogo = () => (
     <svg width="64" height="64" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A"/>
-      <circle cx="512" cy="512" r="300" fill="none" stroke="#E5E7EB" strokeWidth="80"/>
-      <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB"/>
-      <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB"/>
-      <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB"/>
-      <rect x="692" y="492" width="120" height="40" rx="20" fill="#E5E7EB"/>
-      <circle cx="512" cy="512" r="40" fill="#E5E7EB"/>
-      <rect x="590" y="350" width="220" height="140" rx="40" fill="#3B82F6"/>
-      <path d="M650 490 L620 560 L700 500 Z" fill="#3B82F6"/>
-      <rect x="630" y="385" width="140" height="16" rx="8" fill="#E5E7EB"/>
-      <rect x="630" y="420" width="100" height="16" rx="8" fill="#E5E7EB"/>
+      <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A" />
+      <circle cx="512" cy="512" r="300" fill="none" stroke="#E5E7EB" strokeWidth="80" />
+      <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB" />
+      <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB" />
+      <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB" />
+      <rect x="692" y="492" width="120" height="40" rx="20" fill="#E5E7EB" />
+      <circle cx="512" cy="512" r="40" fill="#E5E7EB" />
+      <rect x="590" y="350" width="220" height="140" rx="40" fill="#3B82F6" />
+      <path d="M650 490 L620 560 L700 500 Z" fill="#3B82F6" />
+      <rect x="630" y="385" width="140" height="16" rx="8" fill="#E5E7EB" />
+      <rect x="630" y="420" width="100" height="16" rx="8" fill="#E5E7EB" />
     </svg>
   );
 
   if (loading && chats.length === 0) {
     return (
-      <div className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${
-        isDarkMode 
-          ? "bg-gray-900 border-gray-700 text-white" 
-          : "bg-white border-black/10 text-black"
-      }`}>
+      <div className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${isDarkMode
+        ? "bg-gray-900 border-gray-700 text-white"
+        : "bg-white border-black/10 text-black"
+        }`}>
         <div className="text-center text-sm opacity-60">Loading chats...</div>
       </div>
     );
   }
 
   return (
-    <div className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-hidden ${
-      isDarkMode 
-        ? "bg-gray-900 border-gray-700 text-white" 
-        : "bg-white border-black/10 text-black"
-    }`}>
+    <div className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-hidden ${isDarkMode
+      ? "bg-gray-900 border-gray-700 text-white"
+      : "bg-white border-black/10 text-black"
+      }`}>
       <div className="max-w-full relative">
         {/* Toolbar */}
-        <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${
-          isDarkMode ? "border-gray-700" : "border-black/5"
-        }`}>
+        <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}>
           <div className="flex items-center gap-2">
             <button
               onClick={handleRefresh}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode 
-                  ? "hover:bg-gray-800 text-gray-300" 
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
+              className={`p-2 rounded-lg transition-colors ${isDarkMode
+                ? "hover:bg-gray-800 text-gray-300"
+                : "hover:bg-gray-100 text-gray-600"
+                }`}
               title="Refresh chats"
             >
               <MdRefresh className="w-5 h-5" />
@@ -1423,11 +1419,10 @@ function App() {
             {userInfo?.userName && !userInfo?.isAnon ? (
               <button
                 onClick={handleOpenWebsite}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                  isDarkMode
-                    ? "text-gray-300 hover:text-gray-200 hover:bg-gray-800"
-                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${isDarkMode
+                  ? "text-gray-300 hover:text-gray-200 hover:bg-gray-800"
+                  : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
                 title="Open on the website"
               >
                 {userInfo.userName}
@@ -1435,11 +1430,10 @@ function App() {
             ) : userInfo?.isAnonymousPlan && userInfo?.portalLink ? (
               <button
                 onClick={handleSignIn}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                  isDarkMode
-                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
-                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${isDarkMode
+                  ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
+                  : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
+                  }`}
                 title="Sign in for long-term persistence"
               >
                 <MdLogin className="w-4 h-4" />
@@ -1449,17 +1443,15 @@ function App() {
             {userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined && (
               <button
                 onClick={handleCounterClick}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  isDarkMode
-                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
-                    : "bg-white border-gray-300 hover:bg-gray-50"
-                } ${
-                  userInfo.remainingSlots === 0
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkMode
+                  ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
+                  : "bg-white border-gray-300 hover:bg-gray-50"
+                  } ${userInfo.remainingSlots === 0
                     ? "text-red-500"
                     : userInfo.remainingSlots === 1
-                    ? "text-yellow-500"
-                    : "text-green-500"
-                }`}
+                      ? "text-yellow-500"
+                      : "text-green-500"
+                  }`}
                 title={contentMetadata?.limits?.counterTooltip ?? "Click to learn about chat limits"}
               >
                 {userInfo.remainingSlots}
@@ -1467,24 +1459,21 @@ function App() {
             )}
             <button
               onClick={handleOpenWebsite}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode 
-                  ? "hover:bg-gray-800 text-gray-300" 
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
+              className={`p-2 rounded-lg transition-colors ${isDarkMode
+                ? "hover:bg-gray-800 text-gray-300"
+                : "hover:bg-gray-100 text-gray-600"
+                }`}
               title="Open on the website"
             >
               <MdOpenInNew className="w-5 h-5" />
             </button>
             <button
               onClick={handleFullscreen}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode
-                  ? "hover:bg-gray-800 text-gray-300"
-                  : "hover:bg-gray-100 text-gray-600"
-              } ${
-                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              className={`p-2 rounded-lg transition-colors ${isDarkMode
+                ? "hover:bg-gray-800 text-gray-300"
+                : "hover:bg-gray-100 text-gray-600"
+                } ${!window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
               disabled={!window.openai?.requestDisplayMode}
             >
@@ -1499,32 +1488,28 @@ function App() {
         {/* Delete Confirmation Modal - Centered Overlay */}
         {deleteConfirmation && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 min-h-screen">
-            <div className={`w-full max-w-md rounded-lg ${
-              isDarkMode ? "bg-gray-800" : "bg-white"
-            } p-6 shadow-xl`}>
-              <div className={`text-sm mb-4 ${
-                isDarkMode ? "text-gray-300" : "text-gray-700"
-              }`}>
+            <div className={`w-full max-w-md rounded-lg ${isDarkMode ? "bg-gray-800" : "bg-white"
+              } p-6 shadow-xl`}>
+              <div className={`text-sm mb-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}>
                 {alertMessage}
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={handleCancelDelete}
-                  className={`px-4 py-2 rounded text-sm font-medium ${
-                    isDarkMode
-                      ? "bg-gray-700 text-white hover:bg-gray-600"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
+                  className={`px-4 py-2 rounded text-sm font-medium ${isDarkMode
+                    ? "bg-gray-700 text-white hover:bg-gray-600"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className={`px-4 py-2 rounded text-sm font-medium ${
-                    isDarkMode
-                      ? "bg-red-600 text-white hover:bg-red-700"
-                      : "bg-red-500 text-white hover:bg-red-600"
-                  }`}
+                  className={`px-4 py-2 rounded text-sm font-medium ${isDarkMode
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-red-500 text-white hover:bg-red-600"
+                    }`}
                 >
                   Delete
                 </button>
@@ -1537,74 +1522,66 @@ function App() {
         {alertMessage && !deleteConfirmation && (() => {
           console.log("[ChatVault] Rendering alert", { alertMessage, alertPortalLink });
           return (
-          <div 
-            className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
-            isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
-          } ${
-            userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined
-              ? userInfo.remainingSlots === 0
-                ? "border-red-500"
-                : userInfo.remainingSlots === 1
-                ? "border-yellow-500"
-                : "border-green-500"
-              : "border-gray-300"
-          }`}>
-            <div className={`flex-1 text-sm ${
-              isDarkMode ? "text-gray-300" : "text-gray-700"
-            }`}>
-              {alertMessage}
-              {alertPortalLink && (
-                <> Click <button
-                  onClick={handleAlertPortalClick}
-                  className={`underline font-medium ${
-                    isDarkMode
+            <div
+              className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
+                } ${userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined
+                  ? userInfo.remainingSlots === 0
+                    ? "border-red-500"
+                    : userInfo.remainingSlots === 1
+                      ? "border-yellow-500"
+                      : "border-green-500"
+                  : "border-gray-300"
+                }`}>
+              <div className={`flex-1 text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}>
+                {alertMessage}
+                {alertPortalLink && (
+                  <> Click <button
+                    onClick={handleAlertPortalClick}
+                    className={`underline font-medium ${isDarkMode
                       ? "text-blue-400 hover:text-blue-300"
                       : "text-blue-600 hover:text-blue-700"
-                  }`}
-                >
-                  here
-                </button> to manage your account settings.</>
-              )}
-            </div>
-            <button
-              onClick={handleCloseAlert}
-              className={`p-1 rounded ${
-                isDarkMode
+                      }`}
+                  >
+                    here
+                  </button> to manage your account settings.</>
+                )}
+              </div>
+              <button
+                onClick={handleCloseAlert}
+                className={`p-1 rounded ${isDarkMode
                   ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-              }`}
-              title="Close"
-            >
-              <MdClose className="w-4 h-4" />
-            </button>
-          </div>
+                  }`}
+                title="Close"
+              >
+                <MdClose className="w-4 h-4" />
+              </button>
+            </div>
           );
         })()}
         {/* Header */}
-        <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
-          isDarkMode ? "border-gray-700" : "border-black/5"
-        }`}>
-          <div 
-            className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${
-              selectedChat ? "cursor-pointer hover:opacity-80" : ""
-            }`}
+        <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}>
+          <div
+            className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${selectedChat ? "cursor-pointer hover:opacity-80" : ""
+              }`}
             onClick={selectedChat ? handleBackClick : undefined}
             title={selectedChat ? "Back to conversations" : undefined}
           >
             <ChatVaultLogo />
           </div>
           <div className="flex-1">
-            <div 
-              className={`text-base sm:text-xl font-medium ${
-                selectedChat ? "cursor-pointer hover:opacity-80" : ""
-              }`}
+            <div
+              className={`text-base sm:text-xl font-medium ${selectedChat ? "cursor-pointer hover:opacity-80" : ""
+                }`}
               onClick={selectedChat ? handleBackClick : undefined}
               title={selectedChat ? "Back to conversations" : undefined}
             >
               The Chat Vault
             </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-              {selectedChat ? selectedChat.title : contentMetadata?.subTitle } 
+              {selectedChat ? selectedChat.title : contentMetadata?.subTitle}
             </div>
           </div>
           <div className="flex gap-2">
@@ -1632,8 +1609,8 @@ function App() {
               onClick={() => {
                 // Check if limit reached for users on anonymous plan
                 if (userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0) {
-                  const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined 
-                    ? userInfo.totalChats + userInfo.remainingSlots 
+                  const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined
+                    ? userInfo.totalChats + userInfo.remainingSlots
                     : (contentMetadata?.config?.freeChatLimit ?? 10);
                   const messageTemplate = userInfo.portalLink
                     ? (contentMetadata?.limits?.limitReachedMessageWithPortal ?? "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.")
@@ -1649,35 +1626,31 @@ function App() {
                 setShowManualSaveModal(true);
               }}
               disabled={paginationLoading || searchLoading}
-              className={`p-2 rounded-lg transition-colors ${
-                paginationLoading || searchLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              } ${
-                userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+              className={`p-2 rounded-lg transition-colors ${paginationLoading || searchLoading
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+                } ${userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
                   ? "hover:bg-gray-100"
                   : isDarkMode
-                  ? "bg-gray-800 text-white hover:bg-gray-700"
-                  : "bg-gray-100 text-black hover:bg-gray-200"
-              }`}
-              title={userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0 
+                    ? "bg-gray-800 text-white hover:bg-gray-700"
+                    : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+              title={userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
                 ? (contentMetadata?.limits?.limitReachedTooltip ?? "Chat limit reached - delete a chat or upgrade")
                 : "Save chat manually"}
             >
-              <MdAdd className={`w-5 h-5 ${
-                userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0 
-                  ? "text-red-500" 
-                  : ""
-              }`} />
+              <MdAdd className={`w-5 h-5 ${userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                ? "text-red-500"
+                : ""
+                }`} />
             </button>
             {selectedChat && (
               <button
                 onClick={handleBackClick}
-                className={`p-2 rounded-lg ${
-                  isDarkMode
-                    ? "bg-gray-800 text-white hover:bg-gray-700"
-                    : "bg-gray-100 text-black hover:bg-gray-200"
-                }`}
+                className={`p-2 rounded-lg ${isDarkMode
+                  ? "bg-gray-800 text-white hover:bg-gray-700"
+                  : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
                 title="Back"
               >
                 <MdArrowBack className="w-5 h-5" />
@@ -1709,37 +1682,32 @@ function App() {
                     }
                   }}
                   placeholder="Search conversations..."
-                  className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${
-                    paginationLoading || searchLoading
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  } ${
-                    isDarkMode
+                  className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${paginationLoading || searchLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                    } ${isDarkMode
                       ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                       : "bg-white border-gray-300 text-black placeholder-gray-500"
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 />
                 {isSearching ? (
                   <button
                     onClick={handleClearSearch}
                     disabled={paginationLoading || searchLoading}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${
-                      paginationLoading || searchLoading
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                    } ${
-                      isDarkMode
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                      } ${isDarkMode
                         ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                    }`}
+                      }`}
                     title="Clear search (Esc)"
                   >
                     <MdClose className="w-4 h-4" />
                   </button>
                 ) : (
-                  <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${
-                    isDarkMode ? "text-gray-400" : "text-gray-500"
-                  }`}>
+                  <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? "text-gray-400" : "text-gray-500"
+                    }`}>
                     <MdSearch className="w-4 h-4" />
                   </div>
                 )}
@@ -1756,13 +1724,12 @@ function App() {
                   }
                 }}
                 disabled={(!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading}
-                className={`p-2 rounded-lg ${
-                  ((!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading)
-                    ? "opacity-50 cursor-not-allowed"
-                    : isDarkMode
+                className={`p-2 rounded-lg ${((!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading)
+                  ? "opacity-50 cursor-not-allowed"
+                  : isDarkMode
                     ? "bg-blue-600 text-white hover:bg-blue-700"
                     : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
+                  }`}
                 title={isSearching ? "Clear search" : "Search"}
               >
                 {isSearching ? (
@@ -1780,9 +1747,8 @@ function App() {
           {selectedChat ? (
             // Chat detail view
             <div className="space-y-4 pb-20">
-              <div className={`p-4 rounded-lg ${
-                isDarkMode ? "bg-gray-800" : "bg-gray-50"
-              }`}>
+              <div className={`p-4 rounded-lg ${isDarkMode ? "bg-gray-800" : "bg-gray-50"
+                }`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
                     {isEditingTitle ? (
@@ -1805,26 +1771,23 @@ function App() {
                             disabled={isUpdatingTitle}
                             autoFocus
                             maxLength={2048}
-                            className={`flex-1 px-2 py-1 rounded border text-sm font-medium ${
-                              isUpdatingTitle
-                                ? "opacity-50 cursor-not-allowed"
-                                : ""
-                            } ${
-                              isDarkMode
+                            className={`flex-1 px-2 py-1 rounded border text-sm font-medium ${isUpdatingTitle
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                              } ${isDarkMode
                                 ? "bg-gray-700 border-gray-600 text-white"
                                 : "bg-white border-gray-300 text-black"
-                            } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                           />
                           <button
                             onClick={handleSaveTitle}
                             disabled={isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${
-                              isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048
-                                ? "opacity-50 cursor-not-allowed"
-                                : isDarkMode
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
                                 ? "bg-green-600 text-white hover:bg-green-700"
                                 : "bg-green-600 text-white hover:bg-green-700"
-                            }`}
+                              }`}
                             title="Save"
                           >
                             {isUpdatingTitle ? (
@@ -1836,13 +1799,12 @@ function App() {
                           <button
                             onClick={handleCancelEditTitle}
                             disabled={isUpdatingTitle}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${
-                              isUpdatingTitle
-                                ? "opacity-50 cursor-not-allowed"
-                                : isDarkMode
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${isUpdatingTitle
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
                                 ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
+                              }`}
                             title="Cancel"
                           >
                             <MdClose className="w-3 h-3" />
@@ -1860,11 +1822,10 @@ function App() {
                         <div className="font-medium flex-1">{selectedChat.title}</div>
                         <button
                           onClick={handleStartEditTitle}
-                          className={`p-1 rounded flex items-center flex-shrink-0 ${
-                            isDarkMode
-                              ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          }`}
+                          className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
+                            ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
                           title="Edit title"
                         >
                           <MdEdit className="w-3 h-3" />
@@ -1873,32 +1834,32 @@ function App() {
                     )}
                     <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
 
-                  <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {(() => {
-                              const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                              return currentTurns.length === 1 && !currentTurns[0].response;
-                            })() ? (
-                              <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
-                            ) : (
-                              <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
-                            )}
-                            {formatDate(selectedChat.timestamp)}
-                            {(() => {
-                              const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                              return currentTurns.length === 1 && !currentTurns[0].response;
-                            })() ? (
-                              " • Note"
-                            ) : (
-                              ` • ${(() => {
-                                const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                                return currentTurns?.length || 0;
-                              })()} turn${(() => {
-                                const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                                return (currentTurns?.length || 0) !== 1 ? "s" : "";
-                              })()}`
-                            )}
-                          </div>
-                    
+                      <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
+                        {(() => {
+                          const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                          return currentTurns.length === 1 && !currentTurns[0].response;
+                        })() ? (
+                          <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
+                        ) : (
+                          <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
+                        )}
+                        {formatDate(selectedChat.timestamp)}
+                        {(() => {
+                          const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                          return currentTurns.length === 1 && !currentTurns[0].response;
+                        })() ? (
+                          " • Note"
+                        ) : (
+                          ` • ${(() => {
+                            const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                            return currentTurns?.length || 0;
+                          })()} turn${(() => {
+                            const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                            return (currentTurns?.length || 0) !== 1 ? "s" : "";
+                          })()}`
+                        )}
+                      </div>
+
                     </div>
                   </div>
                   <button
@@ -1907,11 +1868,10 @@ function App() {
                       e.stopPropagation();
                       copyEntireChat(selectedChat);
                     }}
-                    className={`p-1 rounded flex items-center flex-shrink-0 ${
-                      isDarkMode
-                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
+                    className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
+                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
                     title="Copy entire chat"
                   >
                     {copiedItems[`chat-${selectedChat.timestamp}`] ? (
@@ -1924,13 +1884,12 @@ function App() {
                     <button
                       onClick={handleSaveChat}
                       disabled={isSavingChat}
-                      className={`p-1 rounded flex items-center flex-shrink-0 ${
-                        isSavingChat
-                          ? "opacity-50 cursor-not-allowed"
-                          : isDarkMode
+                      className={`p-1 rounded flex items-center flex-shrink-0 ${isSavingChat
+                        ? "opacity-50 cursor-not-allowed"
+                        : isDarkMode
                           ? "bg-green-600 text-white hover:bg-green-700"
                           : "bg-green-600 text-white hover:bg-green-700"
-                      }`}
+                        }`}
                       title="Save changes"
                     >
                       {isSavingChat ? (
@@ -1942,7 +1901,7 @@ function App() {
                   )}
                 </div>
               </div>
-              
+
               {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
                 // Note rendering - single card with prompt (same style as turn prompt)
                 (() => {
@@ -1953,21 +1912,19 @@ function App() {
                   const noteId = `note-${selectedChat.timestamp}`;
                   const noteCopied = !!copiedItems[noteId];
                   const isEditingNote = editingTurn?.turnIndex === noteIndex && editingTurn?.field === 'prompt';
-                  
+
                   // Check if note needs truncation (longer than 150 chars)
                   const maxLength = 150;
                   const noteNeedsTruncation = noteTurn.prompt.length > maxLength;
-                  
+
                   return (
-                    <div className={`space-y-2 p-4 rounded-lg border ${
-                      isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
-                    }`}>
+                    <div className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+                      }`}>
                       {/* Note */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${
-                            isDarkMode ? "text-purple-400" : "text-purple-600"
-                          }`}>
+                          <div className={`text-xs font-medium ${isDarkMode ? "text-purple-400" : "text-purple-600"
+                            }`}>
                             Note
                           </div>
                           <div className="flex items-center gap-1">
@@ -1979,11 +1936,10 @@ function App() {
                                     e.stopPropagation();
                                     copyToClipboard(noteTurn.prompt, noteId);
                                   }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Copy note"
                                 >
                                   {noteCopied ? (
@@ -1998,11 +1954,10 @@ function App() {
                                     e.stopPropagation();
                                     handleStartEditTurn(noteIndex, 'prompt');
                                   }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Edit note"
                                 >
                                   <MdEdit className="w-3 h-3" />
@@ -2014,13 +1969,12 @@ function App() {
                                     handleDeleteTurn(noteIndex);
                                   }}
                                   disabled={noteTurns.length <= 1}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    noteTurns.length <= 1
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : isDarkMode
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${noteTurns.length <= 1
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                    }`}
                                   title={noteTurns.length <= 1 ? "Cannot delete the last turn" : "Delete note"}
                                 >
                                   <MdDelete className="w-3 h-3" />
@@ -2030,11 +1984,10 @@ function App() {
                             {noteNeedsTruncation && !isEditingNote && (
                               <button
                                 onClick={() => toggleTurnExpansion(noteIndex)}
-                                className={`p-1 rounded ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
+                                className={`p-1 rounded ${isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
                                 title={isExpanded ? "Collapse" : "Expand"}
                               >
                                 {isExpanded ? (
@@ -2064,33 +2017,30 @@ function App() {
                                   }}
                                   autoFocus
                                   rows={4}
-                                  className={`flex-1 px-2 py-1 rounded border text-sm ${
-                                    isDarkMode
-                                      ? "bg-gray-700 border-gray-600 text-white"
-                                      : "bg-white border-gray-300 text-black"
-                                  } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                  className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode
+                                    ? "bg-gray-700 border-gray-600 text-white"
+                                    : "bg-white border-gray-300 text-black"
+                                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
                                 />
                                 <button
                                   onClick={() => handleSaveTurnEdit(noteIndex, 'prompt')}
                                   disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                    editingTurnValue.trim().length === 0
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : isDarkMode
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
                                       ? "bg-green-600 text-white hover:bg-green-700"
                                       : "bg-green-600 text-white hover:bg-green-700"
-                                  }`}
+                                    }`}
                                   title="Save (Ctrl+Enter)"
                                 >
                                   <MdCheck className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={handleCancelEditTurn}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Cancel (Esc)"
                                 >
                                   <MdClose className="w-3 h-3" />
@@ -2098,7 +2048,7 @@ function App() {
                               </div>
                             </div>
                           ) : (
-                            <div 
+                            <div
                               className={`${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
                               onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
                               onMouseDown={(e) => {
@@ -2112,8 +2062,8 @@ function App() {
                                 }
                               }}
                               dangerouslySetInnerHTML={{
-                                __html: isExpanded 
-                                  ? markdownToHtml(noteTurn.prompt) 
+                                __html: isExpanded
+                                  ? markdownToHtml(noteTurn.prompt)
                                   : markdownToHtml(truncateText(noteTurn.prompt))
                               }}
                             />
@@ -2131,26 +2081,24 @@ function App() {
                   const responseId = `response-${selectedChat.timestamp}-${index}`;
                   const promptCopied = !!copiedItems[promptId];
                   const responseCopied = !!copiedItems[responseId];
-                  
+
                   // Check if either prompt or response needs truncation (longer than 150 chars)
                   const maxLength = 150;
                   const promptNeedsTruncation = turn.prompt.length > maxLength;
                   const responseNeedsTruncation = turn.response.length > maxLength;
                   const needsExpansion = promptNeedsTruncation || responseNeedsTruncation;
-                  
+
                   const isEditingPrompt = editingTurn?.turnIndex === index && editingTurn?.field === 'prompt';
                   const isEditingResponse = editingTurn?.turnIndex === index && editingTurn?.field === 'response';
-                  
+
                   return (
-                    <div key={index} className={`space-y-2 p-4 rounded-lg border ${
-                      isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
-                    }`}>
+                    <div key={index} className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
+                      }`}>
                       {/* Prompt */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${
-                            isDarkMode ? "text-blue-400" : "text-blue-600"
-                          }`}>
+                          <div className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"
+                            }`}>
                             Prompt
                           </div>
                           <div className="flex items-center gap-1">
@@ -2162,11 +2110,10 @@ function App() {
                                     e.stopPropagation();
                                     copyToClipboard(turn.prompt, promptId);
                                   }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Copy prompt"
                                 >
                                   {promptCopied ? (
@@ -2181,11 +2128,10 @@ function App() {
                                     e.stopPropagation();
                                     handleStartEditTurn(index, 'prompt');
                                   }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Edit prompt"
                                 >
                                   <MdEdit className="w-3 h-3" />
@@ -2197,13 +2143,12 @@ function App() {
                                     handleDeleteTurn(index);
                                   }}
                                   disabled={editedTurns.length <= 1}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    editedTurns.length <= 1
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : isDarkMode
+                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
                                       ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                       : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                    }`}
                                   title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}
                                 >
                                   <MdDelete className="w-3 h-3" />
@@ -2213,11 +2158,10 @@ function App() {
                             {needsExpansion && !isEditingPrompt && (
                               <button
                                 onClick={() => toggleTurnExpansion(index)}
-                                className={`p-1 rounded ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
+                                className={`p-1 rounded ${isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
                                 title={isExpanded ? "Collapse" : "Expand"}
                               >
                                 {isExpanded ? (
@@ -2247,33 +2191,30 @@ function App() {
                                   }}
                                   autoFocus
                                   rows={4}
-                                  className={`flex-1 px-2 py-1 rounded border text-sm ${
-                                    isDarkMode
-                                      ? "bg-gray-700 border-gray-600 text-white"
-                                      : "bg-white border-gray-300 text-black"
-                                  } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                  className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode
+                                    ? "bg-gray-700 border-gray-600 text-white"
+                                    : "bg-white border-gray-300 text-black"
+                                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
                                 />
                                 <button
                                   onClick={() => handleSaveTurnEdit(index, 'prompt')}
                                   disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                    editingTurnValue.trim().length === 0
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : isDarkMode
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
                                       ? "bg-green-600 text-white hover:bg-green-700"
                                       : "bg-green-600 text-white hover:bg-green-700"
-                                  }`}
+                                    }`}
                                   title="Save (Ctrl+Enter)"
                                 >
                                   <MdCheck className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={handleCancelEditTurn}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Cancel (Esc)"
                                 >
                                   <MdClose className="w-3 h-3" />
@@ -2281,7 +2222,7 @@ function App() {
                               </div>
                             </div>
                           ) : (
-                            <div 
+                            <div
                               className={`${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
                               onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
                               onMouseDown={(e) => {
@@ -2295,21 +2236,20 @@ function App() {
                                 }
                               }}
                               dangerouslySetInnerHTML={{
-                                __html: isExpanded 
-                                  ? markdownToHtml(turn.prompt) 
+                                __html: isExpanded
+                                  ? markdownToHtml(turn.prompt)
                                   : markdownToHtml(truncateText(turn.prompt))
                               }}
                             />
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Response */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${
-                            isDarkMode ? "text-green-400" : "text-green-600"
-                          }`}>
+                          <div className={`text-xs font-medium ${isDarkMode ? "text-green-400" : "text-green-600"
+                            }`}>
                             Response
                           </div>
                           {!isEditingResponse && (
@@ -2320,11 +2260,10 @@ function App() {
                                   e.stopPropagation();
                                   copyToClipboard(turn.response, responseId);
                                 }}
-                                className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                  isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                }`}
+                                className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  }`}
                                 title="Copy response"
                               >
                                 {responseCopied ? (
@@ -2339,14 +2278,13 @@ function App() {
                                   e.stopPropagation();
                                   handleStartEditTurn(index, 'response');
                                 }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
-                                  title="Edit response"
-                                >
-                                  <MdEdit className="w-3 h-3" />
+                                title="Edit response"
+                              >
+                                <MdEdit className="w-3 h-3" />
                               </button>
                             </div>
                           )}
@@ -2369,33 +2307,30 @@ function App() {
                                   }}
                                   autoFocus
                                   rows={6}
-                                  className={`flex-1 px-2 py-1 rounded border text-sm ${
-                                    isDarkMode
-                                      ? "bg-gray-700 border-gray-600 text-white"
-                                      : "bg-white border-gray-300 text-black"
-                                  } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                  className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode
+                                    ? "bg-gray-700 border-gray-600 text-white"
+                                    : "bg-white border-gray-300 text-black"
+                                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
                                 />
                                 <button
                                   onClick={() => handleSaveTurnEdit(index, 'response')}
                                   disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                    editingTurnValue.trim().length === 0
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : isDarkMode
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
                                       ? "bg-green-600 text-white hover:bg-green-700"
                                       : "bg-green-600 text-white hover:bg-green-700"
-                                  }`}
+                                    }`}
                                   title="Save (Ctrl+Enter)"
                                 >
                                   <MdCheck className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={handleCancelEditTurn}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${
-                                    isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
+                                  className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
                                   title="Cancel (Esc)"
                                 >
                                   <MdClose className="w-3 h-3" />
@@ -2403,7 +2338,7 @@ function App() {
                               </div>
                             </div>
                           ) : (
-                            <div 
+                            <div
                               className={`${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
                               onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
                               onMouseDown={(e) => {
@@ -2417,8 +2352,8 @@ function App() {
                                 }
                               }}
                               dangerouslySetInnerHTML={{
-                                __html: isExpanded 
-                                  ? markdownToHtml(turn.response) 
+                                __html: isExpanded
+                                  ? markdownToHtml(turn.response)
                                   : markdownToHtml(truncateText(turn.response))
                               }}
                             />
@@ -2462,18 +2397,17 @@ function App() {
                     {chats.map((chat) => (
                       <div
                         key={chat.timestamp || chat.id}
-                        className={`w-full flex items-center gap-2 p-4 rounded-lg border transition-colors ${
-                          isDarkMode
-                            ? "bg-gray-800 border-gray-700"
-                            : "bg-gray-50 border-gray-200"
-                        }`}
+                        className={`w-full flex items-center gap-2 p-4 rounded-lg border transition-colors ${isDarkMode
+                          ? "bg-gray-800 border-gray-700"
+                          : "bg-gray-50 border-gray-200"
+                          }`}
                       >
                         <button
                           onClick={() => handleChatClick(chat)}
                           className="flex-1 text-left"
                         >
                           <div className="flex items-center gap-2 font-medium mb-1">
-                          
+
                             {chat.title}
                           </div>
                           <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
@@ -2496,11 +2430,10 @@ function App() {
                             e.stopPropagation();
                             handleDeleteChat(chat);
                           }}
-                          className={`p-0.5 rounded transition-colors flex-shrink-0 ${
-                            isDarkMode
-                              ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
-                              : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
-                          }`}
+                          className={`p-0.5 rounded transition-colors flex-shrink-0 ${isDarkMode
+                            ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                            : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
+                            }`}
                           title="Delete chat"
                         >
                           <MdDelete className="w-3 h-3" />
@@ -2509,12 +2442,10 @@ function App() {
                     ))}
                     {/* Loading overlay for pagination/search */}
                     {(paginationLoading || (searchLoading && chats.length > 0)) && (
-                      <div className={`absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
-                        isDarkMode ? "bg-black/50" : "bg-white/70"
-                      }`}>
-                        <div className={`px-4 py-2 rounded-lg font-medium ${
-                          isDarkMode ? "bg-gray-800 text-white" : "bg-white text-black shadow-lg"
+                      <div className={`absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${isDarkMode ? "bg-black/50" : "bg-white/70"
                         }`}>
+                        <div className={`px-4 py-2 rounded-lg font-medium ${isDarkMode ? "bg-gray-800 text-white" : "bg-white text-black shadow-lg"
+                          }`}>
                           Loading...
                         </div>
                       </div>
@@ -2551,13 +2482,12 @@ function App() {
                           }
                         }}
                         disabled={paginationLoading || searchLoading || currentPage === 0}
-                        className={`px-3 py-1.5 rounded text-sm font-medium ${
-                          paginationLoading || currentPage === 0
-                            ? "opacity-50 cursor-not-allowed"
-                            : isDarkMode
+                        className={`px-3 py-1.5 rounded text-sm font-medium ${paginationLoading || currentPage === 0
+                          ? "opacity-50 cursor-not-allowed"
+                          : isDarkMode
                             ? "bg-gray-800 text-white hover:bg-gray-700"
                             : "bg-gray-100 text-black hover:bg-gray-200"
-                        }`}
+                          }`}
                       >
                         Previous
                       </button>
@@ -2610,15 +2540,13 @@ function App() {
                               }
                             }
                           }}
-                          className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${
-                            paginationLoading || searchLoading
-                              ? "opacity-50 cursor-not-allowed"
-                              : ""
-                          } ${
-                            isDarkMode
+                          className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${paginationLoading || searchLoading
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                            } ${isDarkMode
                               ? "bg-gray-800 border-gray-600 text-white"
                               : "bg-white border-gray-300 text-black"
-                          }`}
+                            }`}
                           style={{ WebkitAppearance: "none", MozAppearance: "textfield" }}
                         />
                         <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
@@ -2653,13 +2581,12 @@ function App() {
                               }
                             }}
                             disabled={paginationLoading || searchLoading}
-                            className={`px-2 py-1 rounded text-xs font-medium ${
-                              paginationLoading || searchLoading
-                                ? "opacity-50 cursor-not-allowed"
-                                : isDarkMode
+                            className={`px-2 py-1 rounded text-xs font-medium ${paginationLoading || searchLoading
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
                                 ? "bg-gray-700 text-white hover:bg-gray-600"
                                 : "bg-gray-200 text-black hover:bg-gray-300"
-                            }`}
+                              }`}
                           >
                             Go
                           </button>
@@ -2693,13 +2620,12 @@ function App() {
                           }
                         }}
                         disabled={paginationLoading || searchLoading || !pagination.hasMore}
-                        className={`px-3 py-1.5 rounded text-sm font-medium ${
-                          paginationLoading || searchLoading || !pagination.hasMore
-                            ? "opacity-50 cursor-not-allowed"
-                            : isDarkMode
+                        className={`px-3 py-1.5 rounded text-sm font-medium ${paginationLoading || searchLoading || !pagination.hasMore
+                          ? "opacity-50 cursor-not-allowed"
+                          : isDarkMode
                             ? "bg-gray-800 text-white hover:bg-gray-700"
                             : "bg-gray-100 text-black hover:bg-gray-200"
-                        }`}
+                          }`}
                       >
                         Next
                       </button>
@@ -2707,31 +2633,30 @@ function App() {
                   )}
                   {pagination && pagination.totalPages <= 1 && chats.length > 0 && (
                     <div className={`pt-2 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
-                      {isSearching 
+                      {isSearching
                         ? `Showing all ${chats.length} result${chats.length !== 1 ? "s" : ""}`
                         : `Showing all ${pagination.total} chat${pagination.total !== 1 ? "s" : ""}`
                       }
                     </div>
                   )}
                   {userInfo?.message && (
-                    <div className={`mt-4 p-3 rounded-lg border ${
-                      userInfo.messageType === 'success'
-                        ? isDarkMode
-                          ? "bg-green-900/30 border-green-700/50 text-green-200"
-                          : "bg-green-50 border-green-200 text-green-800"
-                        : userInfo.messageType === 'error'
+                    <div className={`mt-4 p-3 rounded-lg border ${userInfo.messageType === 'success'
+                      ? isDarkMode
+                        ? "bg-green-900/30 border-green-700/50 text-green-200"
+                        : "bg-green-50 border-green-200 text-green-800"
+                      : userInfo.messageType === 'error'
                         ? isDarkMode
                           ? "bg-red-900/30 border-red-700/50 text-red-200"
                           : "bg-red-50 border-red-200 text-red-800"
                         : userInfo.messageType === 'alert'
-                        ? isDarkMode
-                          ? "bg-yellow-900/30 border-yellow-700/50 text-yellow-200"
-                          : "bg-yellow-50 border-yellow-200 text-yellow-800"
-                        : isDarkMode 
-                          ? "bg-gray-800/50 border-gray-700 text-gray-300" 
-                          : "bg-gray-50 border-gray-200 text-gray-700"
-                    }`}>
-                      <div 
+                          ? isDarkMode
+                            ? "bg-yellow-900/30 border-yellow-700/50 text-yellow-200"
+                            : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                          : isDarkMode
+                            ? "bg-gray-800/50 border-gray-700 text-gray-300"
+                            : "bg-gray-50 border-gray-200 text-gray-700"
+                      }`}>
+                      <div
                         className="text-sm"
                         dangerouslySetInnerHTML={{ __html: markdownToHtml(userInfo.message) }}
                       />
@@ -2745,9 +2670,8 @@ function App() {
 
         {/* Debug Panel - Toggle with Ctrl+Shift+D */}
         {showDebug && (
-          <div className={`mt-4 pt-4 border-t ${
-            isDarkMode ? "border-gray-700" : "border-black/5"
-          }`}>
+          <div className={`mt-4 pt-4 border-t ${isDarkMode ? "border-gray-700" : "border-black/5"
+            }`}>
             <button
               onClick={() => {
                 const newState = !showDebug;
@@ -2759,40 +2683,37 @@ function App() {
                   localStorage.removeItem("chatvault-debug-enabled");
                 }
               }}
-              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
-                isDarkMode
-                  ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${isDarkMode
+                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
             >
               {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
               <span className="ml-2 text-xs opacity-60">(Ctrl+Shift+D to toggle)</span>
             </button>
             {showDebug && (
-            <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
-              isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
-            }`}>
-              <div className={`mb-3 pb-3 border-b ${
-                isDarkMode ? "border-gray-700" : "border-gray-300"
-              }`}>
-                <div className="font-semibold mb-1">Widget Version: v{WIDGET_VERSION}</div>
+              <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
+                }`}>
+                <div className={`mb-3 pb-3 border-b ${isDarkMode ? "border-gray-700" : "border-gray-300"
+                  }`}>
+                  <div className="font-semibold mb-1">Widget Version: v{WIDGET_VERSION}</div>
+                </div>
+                {debugLogs.length === 0 ? (
+                  <div className="opacity-60">No logs yet</div>
+                ) : (
+                  debugLogs.map((log, idx) => (
+                    <div key={idx} className="mb-2 border-b border-gray-700 pb-2">
+                      <div className="opacity-60 text-xs">{log.timestamp}</div>
+                      <div className="mt-1">{log.message}</div>
+                      {log.data && (
+                        <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
+                          {log.data}
+                        </pre>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-              {debugLogs.length === 0 ? (
-                <div className="opacity-60">No logs yet</div>
-              ) : (
-                debugLogs.map((log, idx) => (
-                  <div key={idx} className="mb-2 border-b border-gray-700 pb-2">
-                    <div className="opacity-60 text-xs">{log.timestamp}</div>
-                    <div className="mt-1">{log.message}</div>
-                    {log.data && (
-                      <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
-                        {log.data}
-                      </pre>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
             )}
           </div>
         )}
@@ -2800,22 +2721,19 @@ function App() {
         {/* Manual Save Modal */}
         {showManualSaveModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`w-full max-w-2xl rounded-lg ${
-              isDarkMode ? "bg-gray-800" : "bg-white"
-            } p-6 max-h-[90vh] flex flex-col`}>
+            <div className={`w-full max-w-2xl rounded-lg ${isDarkMode ? "bg-gray-800" : "bg-white"
+              } p-6 max-h-[90vh] flex flex-col`}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-lg font-semibold ${
-                  isDarkMode ? "text-white" : "text-black"
-                }`}>
+                <h2 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
+                  }`}>
                   Save Chat Manually
                 </h2>
                 <button
                   onClick={handleCloseManualSaveModal}
-                  className={`p-1 rounded ${
-                    isDarkMode
-                      ? "hover:bg-gray-700 text-gray-300"
-                      : "hover:bg-gray-100 text-gray-600"
-                  }`}
+                  className={`p-1 rounded ${isDarkMode
+                    ? "hover:bg-gray-700 text-gray-300"
+                    : "hover:bg-gray-100 text-gray-600"
+                    }`}
                 >
                   <MdClose className="w-5 h-5" />
                 </button>
@@ -2824,9 +2742,8 @@ function App() {
               <div className="flex-1 overflow-y-auto px-2">
                 <div className="space-y-4">
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${
-                      isDarkMode ? "text-gray-300" : "text-gray-700"
-                    }`}>
+                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                      }`}>
                       Title (optional)
                     </label>
                     <input
@@ -2834,18 +2751,16 @@ function App() {
                       value={manualSaveTitle}
                       onChange={(e) => setManualSaveTitle(e.target.value)}
                       placeholder="manual"
-                      className={`w-full px-3 py-2 rounded-lg border ${
-                        isDarkMode
-                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                          : "bg-white border-gray-300 text-black placeholder-gray-500"
-                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      className={`w-full px-3 py-2 rounded-lg border ${isDarkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "bg-white border-gray-300 text-black placeholder-gray-500"
+                        } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${
-                      isDarkMode ? "text-gray-300" : "text-gray-700"
-                    }`}>
+                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                      }`}>
                       Paste Chat Conversation or Note
                     </label>
                     <textarea
@@ -2860,11 +2775,11 @@ function App() {
                       onPaste={(e) => {
                         e.preventDefault();
                         const clipboardData = e.clipboardData || window.clipboardData;
-                        
+
                         // Try to get HTML content first
                         const html = clipboardData.getData("text/html");
                         const plainText = clipboardData.getData("text/plain");
-                        
+
                         if (html && html.trim().length > 0) {
                           // HTML found - store it and display plain text in textarea
                           setManualSaveHtml(html);
@@ -2878,21 +2793,18 @@ function App() {
                       }}
                       placeholder="Paste the copied conversation here..."
                       rows={2}
-                      className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
-                        isDarkMode
-                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                          : "bg-white border-gray-300 text-black placeholder-gray-500"
-                      } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                      className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${isDarkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "bg-white border-gray-300 text-black placeholder-gray-500"
+                        } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
                     />
                   </div>
 
                   {manualSaveError && (
-                    <div className={`p-3 rounded-lg ${
-                      isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
-                    }`}>
-                      <p className={`text-sm ${
-                        isDarkMode ? "text-red-300" : "text-red-700"
+                    <div className={`p-3 rounded-lg ${isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
                       }`}>
+                      <p className={`text-sm ${isDarkMode ? "text-red-300" : "text-red-700"
+                        }`}>
                         {manualSaveError}
                       </p>
                     </div>
@@ -2903,11 +2815,10 @@ function App() {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={handleCloseManualSaveModal}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
-                    isDarkMode
-                      ? "bg-gray-700 text-white hover:bg-gray-600"
-                      : "bg-gray-100 text-black hover:bg-gray-200"
-                  }`}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${isDarkMode
+                    ? "bg-gray-700 text-white hover:bg-gray-600"
+                    : "bg-gray-100 text-black hover:bg-gray-200"
+                    }`}
                   disabled={isSaving}
                 >
                   Cancel
@@ -2915,13 +2826,12 @@ function App() {
                 <button
                   onClick={handleManualSave}
                   disabled={isSaving || !manualSaveContent.trim()}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
-                    isSaving || !manualSaveContent.trim()
-                      ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                      : isDarkMode
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${isSaving || !manualSaveContent.trim()
+                    ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                    : isDarkMode
                       ? "bg-blue-600 text-white hover:bg-blue-700"
                       : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
+                    }`}
                 >
                   {isSaving ? "Saving..." : "Save"}
                 </button>
@@ -2932,11 +2842,10 @@ function App() {
 
         {/* Error message at bottom */}
         {error && (
-          <div className={`mt-4 p-3 rounded-lg border ${
-            isDarkMode
-              ? "bg-red-900/30 border-red-700/50 text-red-300"
-              : "bg-red-50 border-red-200 text-red-700"
-          }`}>
+          <div className={`mt-4 p-3 rounded-lg border ${isDarkMode
+            ? "bg-red-900/30 border-red-700/50 text-red-300"
+            : "bg-red-50 border-red-200 text-red-700"
+            }`}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 text-sm">
                 <div className="font-medium mb-1">Error</div>
@@ -2944,11 +2853,10 @@ function App() {
               </div>
               <button
                 onClick={() => setError(null)}
-                className={`p-1 rounded flex-shrink-0 ${
-                  isDarkMode
-                    ? "text-red-300 hover:text-red-200 hover:bg-red-800/50"
-                    : "text-red-700 hover:text-red-800 hover:bg-red-100"
-                }`}
+                className={`p-1 rounded flex-shrink-0 ${isDarkMode
+                  ? "text-red-300 hover:text-red-200 hover:bg-red-800/50"
+                  : "text-red-700 hover:text-red-800 hover:bg-red-100"
+                  }`}
                 title="Dismiss error"
               >
                 <MdClose className="w-4 h-4" />
@@ -2961,11 +2869,10 @@ function App() {
         {!showHelp && (
           <button
             onClick={handleHelpClick}
-            className={`absolute bottom-4 right-4 w-6 h-6 mt-4 flex items-center justify-center transition-colors z-50 ${
-              isDarkMode
-                ? "text-gray-400 hover:text-gray-300"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`absolute bottom-4 right-4 w-6 h-6 mt-4 flex items-center justify-center transition-colors z-50 ${isDarkMode
+              ? "text-gray-400 hover:text-gray-300"
+              : "text-gray-500 hover:text-gray-700"
+              }`}
             title="Help"
           >
             <MdHelp className="w-5 h-5" />
@@ -2975,26 +2882,22 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed top-5 bottom-4 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${
-          isDarkMode
-            ? "bg-gray-800 border-gray-600 text-white"
-            : "bg-gray-50 border-gray-300 text-black"
-        }`}>
-          <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${
-            isDarkMode ? "border-gray-700" : "border-gray-200"
-          }`} style={{ minHeight: '40px', height: '40px' }}>
-            <h3 className={`text-lg font-semibold ${
-              isDarkMode ? "text-white" : "text-black"
-            }`}>
+        <div className={`fixed top-32 bottom-4 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
+          ? "bg-gray-800 border-gray-600 text-white"
+          : "bg-gray-50 border-gray-300 text-black"
+          }`}>
+          <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${isDarkMode ? "border-gray-700" : "border-gray-200"
+            }`} style={{ minHeight: '40px', height: '40px' }}>
+            <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
+              }`}>
               Help
             </h3>
             <button
               onClick={() => setShowHelp(false)}
-              className={`p-1.5 rounded flex-shrink-0 ${
-                isDarkMode
-                  ? "text-white hover:bg-gray-700"
-                  : "text-black hover:bg-gray-200"
-              }`}
+              className={`p-1.5 rounded flex-shrink-0 ${isDarkMode
+                ? "text-white hover:bg-gray-700"
+                : "text-black hover:bg-gray-200"
+                }`}
               title="Close help"
             >
               <MdClose className="w-5 h-5" />
@@ -3002,10 +2905,9 @@ function App() {
           </div>
           <div className="overflow-y-auto flex-1 px-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)' }}>
             {helpText ? (
-              <div 
-                className={`text-sm ${
-                  isDarkMode ? "text-gray-300" : "text-gray-700"
-                }`}
+              <div
+                className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}
                 dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText) }}
               />
             ) : (
