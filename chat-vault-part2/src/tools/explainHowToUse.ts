@@ -38,7 +38,14 @@ Use the '+' button in the ChatVault widget to manually add conversations or note
 
 Just ask Claude,ChatGPT or whatever the chatbot you are using to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
 To leverage the true power of Chat Vault, you can ask the chatbot to user the chat vault as your personal knowledge base and search it automatically to include in the context when researching or any other agentic tasks. 
-`;
+
+## Getting Started in ChatGPT
+
+The easiest way to start is to simply ask ChatGPT: "Save this conversation to my ChatVault" or "Add this chat about [topic] to my vault". ChatGPT will handle the rest!
+
+For manual saves, use the '+' button in the widget and paste your conversation. The widget will automatically format and save it.
+
+Need help? Ask ChatGPT or check the widget interface for more options!`;
 
 /**
  * Generate help text explaining how to use ChatVault
