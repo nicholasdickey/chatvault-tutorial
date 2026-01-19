@@ -58,6 +58,7 @@ function App() {
   const [helpText, setHelpText] = useState(null);
   const [helpTextLoading, setHelpTextLoading] = useState(false);
   const [subTitle, setSubTitle] = useState(null);
+  const [subTitleExpanded, setSubTitleExpanded] = useState(false);
   const [displayMode, setDisplayMode] = useState("normal"); // "normal" | "fullscreen" | "pip"
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
@@ -391,11 +392,18 @@ function App() {
     setError(null);
     try {
       if (window.openai?.callTool) {
+        addLog("Calling loadMyChats via skybridge");
+        addLog("loadMyChats parameters", {
+          page: 0,
+          size: 10,
+          widgetVersion: WIDGET_VERSION,
+        });
         const result = await window.openai.callTool("loadMyChats", {
           page: 0,
           size: 10,
           widgetVersion: WIDGET_VERSION,
         });
+        addLog("loadMyChats result", result);
         if (result?.structuredContent?.chats) {
           setChats(deduplicateChats(result.structuredContent.chats));
           setPagination(result.structuredContent.pagination);
@@ -1626,7 +1634,23 @@ function App() {
               The Chat Vault
             </div>
             <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-              {selectedChat ? selectedChat.title : contentMetadata?.subTitle}
+              {selectedChat ? (
+                selectedChat.title
+              ) : contentMetadata?.subTitle ? (
+                <span
+                  onClick={() => {
+                    if (contentMetadata.subTitle && contentMetadata.subTitle.length > 100) {
+                      setSubTitleExpanded(!subTitleExpanded);
+                    }
+                  }}
+                  className={contentMetadata.subTitle.length > 100 ? "cursor-pointer hover:opacity-80" : ""}
+                  title={contentMetadata.subTitle.length > 100 ? (subTitleExpanded ? "Click to collapse" : "Click to expand") : ""}
+                >
+                  {subTitleExpanded || contentMetadata.subTitle.length <= 100
+                    ? contentMetadata.subTitle
+                    : `${contentMetadata.subTitle.substring(0, 100)}...`}
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="flex gap-2">
