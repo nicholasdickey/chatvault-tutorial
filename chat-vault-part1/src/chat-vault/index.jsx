@@ -1561,7 +1561,7 @@ function App() {
           );
         })()}
         {/* Header */}
-        <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${isDarkMode ? "border-gray-700" : "border-black/5"
+        {!showHelp && <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${isDarkMode ? "border-gray-700" : "border-black/5"
           }`}>
           <div
             className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${selectedChat ? "cursor-pointer hover:opacity-80" : ""
@@ -1657,10 +1657,10 @@ function App() {
               </button>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* Search Box - Only show when not viewing a chat */}
-        {!selectedChat && (
+        {!selectedChat && !showHelp && (
           <div className={`border-b py-3 ${isDarkMode ? "border-gray-700" : "border-black/5"}`}>
             <div className="flex items-center gap-2">
               <div className="flex-1 relative">
