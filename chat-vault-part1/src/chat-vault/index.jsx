@@ -2886,7 +2886,7 @@ function App() {
           ? "bg-gray-900  text-white "
           : "bg-gray-200  text-black"
           }`} style={{ maxHeight: 'calc(100vh)' }}>
-          <div className={`flex items-center justify-between px-6 py-3 border-b dark:border-gray-700 border-gray-200 flex-shrink-0            }`} style={{ minHeight: '40px', height: '40px' }}>
+          <div className={`flex items-center justify-between px-6 py-3 border-b dark:border-gray-800 border-gray-300 flex-shrink-0            }`} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
               }`}>
               Help
