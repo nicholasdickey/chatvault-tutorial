@@ -2902,7 +2902,7 @@ function App() {
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 min-h-0 mx-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '80%' }}>
+          <div className="flex-1 min-h-0 mx-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '50%' }}>
             {helpText ? (
               <div
                 className={`overflow-y-auto text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
