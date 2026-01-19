@@ -2882,9 +2882,9 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={`fixed top-5 ml-4 mr-4 mb-4 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
-          ? "bg-gray-800 border-gray-600 text-white"
-          : "bg-gray-50 border-gray-300 text-black"
+        <div className={`fixed top-5 left-4 mr-4 bottom-8 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
+          ? "bg-gray-900 border-gray-600 text-white"
+          : "bg-gray-200 border-gray-300 text-black"
           }`} >
           <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${isDarkMode ? "border-gray-700" : "border-gray-200"
             }`} style={{ minHeight: '40px', height: '40px' }}>
