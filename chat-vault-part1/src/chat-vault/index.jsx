@@ -2885,7 +2885,7 @@ function App() {
         <div className={` fixed top-5 left-0 right-0 border-t rounded-t-lg z-40 flex flex-col ${isDarkMode
           ? "bg-gray-800 border-gray-600 text-white"
           : "bg-gray-50 border-gray-300 text-black"
-          }`} style={{ maxHeight: 'calc(100vh - 1.25rem - 200px)', bottom: '204px' }}>
+          }`} style={{ maxHeight: 'calc(100vh - 1.25rem - 600px)' }}>
           <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${isDarkMode ? "border-gray-700" : "border-gray-200"
             }`} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
