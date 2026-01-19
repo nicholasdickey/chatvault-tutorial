@@ -1743,7 +1743,7 @@ function App() {
         )}
 
         {/* Content */}
-        <div className="min-w-full text-sm flex flex-col py-8">
+        {!showHelp && <div className="min-w-full text-sm flex flex-col py-8">
           {selectedChat ? (
             // Chat detail view
             <div className="space-y-4 pb-20">
@@ -2666,7 +2666,7 @@ function App() {
               )}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Debug Panel - Toggle with Ctrl+Shift+D */}
         {showDebug && (
