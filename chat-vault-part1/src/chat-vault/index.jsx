@@ -2883,11 +2883,10 @@ function App() {
       {/* Help Area - Fixed bottom */}
       {showHelp && (
         <div className={` fixed top-0 left-0 right-0  rounded-t-lg z-40 flex flex-col ${isDarkMode
-          ? "bg-gray-800  text-white"
-          : "bg-gray-50  text-black"
-          }`} style={{ maxHeight: 'calc(50vh)' }}>
-          <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${isDarkMode ? "border-gray-700" : "border-gray-200"
-            }`} style={{ minHeight: '40px', height: '40px' }}>
+          ? "bg-gray-900  text-white "
+          : "bg-gray-200  text-black"
+          }`} style={{ maxHeight: 'calc(100vh)' }}>
+          <div className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0            }`} style={{ minHeight: '40px', height: '40px' }}>
             <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
               }`}>
               Help
