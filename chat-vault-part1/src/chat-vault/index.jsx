@@ -2905,7 +2905,7 @@ function App() {
           <div className="overflow-y-auto flex-1 min-h-0 mx-6 pt-6" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '80%' }}>
             {helpText ? (
               <div
-                className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
+                className={`overflow-y-auto text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
                   }`}
                 dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText) }}
               />
