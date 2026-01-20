@@ -147,7 +147,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChat",
-        description: "Save a chat conversation with embeddings for semantic search. To be used by LLM to save chats turn-by-turn verbatiminto the vault.",
+        description: "Save a chat. To be used by LLM to save chats turn-by-turn and verbatim into the vault. Not a summary but the original chat.",
         inputSchema: {
             type: "object",
             properties: {
@@ -161,7 +161,7 @@ const chatVaultTools: Tool[] = [
                 },
                 turns: {
                     type: "array",
-                    description: "Array of chat turns (prompt and response pairs)",
+                    description: "Array of  verbatim chat turns (prompt and response pairs)",
                     items: {
                         type: "object",
                         properties: {
