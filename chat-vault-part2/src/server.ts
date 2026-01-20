@@ -95,8 +95,8 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: false,
-            destructiveHint: true,
+            openWorldHint: true,
+            destructiveHint: true
         },
 
     },
@@ -141,7 +141,7 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: false,
+            openWorldHint: true,
             destructiveHint: false,
         },
     },
@@ -176,7 +176,7 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: false,
+            openWorldHint: true,
             destructiveHint: false,
         }
     },
@@ -212,7 +212,7 @@ const chatVaultTools: Tool[] = [
 
         annotations: {
             readOnlyHint: true,
-            openWorldHint: false,
+            openWorldHint: true,
             destructiveHint: false,
         }
     },
@@ -243,7 +243,7 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: true,
-            openWorldHint: false,
+            openWorldHint: true,
             destructiveHint: false,
         }
     },
@@ -274,7 +274,7 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: false,
+            openWorldHint: true,
             destructiveHint: false,
         }
     },
