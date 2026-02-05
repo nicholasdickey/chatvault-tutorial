@@ -52,14 +52,14 @@ export function createMcpAppsServer(): McpServer {
     },
   );
 
-  // Register the MCP App UI resource, which will be built to dist/mcp-app.html
+  // Register the MCP App UI resource, which will be built to assets/mcp-app.html
   registerAppResource(
     server,
     resourceUri,
     resourceUri,
     { mimeType: RESOURCE_MIME_TYPE },
     async () => {
-      const htmlPath = path.join(process.cwd(), "dist", "mcp-app.html");
+      const htmlPath = path.join(process.cwd(), "assets", "mcp-app.html");
       const html = await fs.readFile(htmlPath, "utf-8");
       return {
         contents: [

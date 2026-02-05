@@ -66,9 +66,9 @@ pnpm run build:mcp-app
 
 This uses `vite.mcp-app.config.mts` with `vite-plugin-singlefile` to bundle `mcp-app.html` (and the React widget it imports) into a single HTML file at:
 
-- `dist/mcp-app.html`
+- `assets/mcp-app.html`
 
-The MCP App server in `server.ts` reads this file when serving the `ui://chat-vault/mcp-app.html` resource.
+The MCP App server reads this file when serving the `ui://chat-vault/mcp-app.html` resource.
 
 ### Run the MCP App server
 
@@ -96,7 +96,7 @@ You can change the port by setting the `PORT` environment variable before runnin
 2. **Connect an MCP Apps-capable host** (for example, the basic host in the `ext-apps` repo or a client like Claude / VS Code that supports MCP Apps) to `http://localhost:3001/mcp`.  
    When the host calls the `browseMySavedChats` tool, it will:
    - load the `ui://chat-vault/mcp-app.html` resource,
-   - render the bundled `dist/mcp-app.html` inside a sandboxed iframe,
+   - render the bundled `assets/mcp-app.html` inside a sandboxed iframe,
    - allow the React ChatVault widget to call tools via `window.openai.callTool`, which is bridged to `app.callServerTool(...)`.
 
 3. **Static widget behavior** remains available via the original Part 1 build:
