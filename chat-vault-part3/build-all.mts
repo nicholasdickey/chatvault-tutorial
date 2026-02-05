@@ -6,6 +6,7 @@ import fs from "fs";
 import crypto from "crypto";
 import pkg from "./package.json" with { type: "json" };
 import tailwindcss from "@tailwindcss/vite";
+import { viteSingleFile } from "vite-plugin-singlefile";
 
 const entries = fg.sync("src/**/index.{tsx,jsx}");
 const outDir = "assets";
@@ -14,9 +15,8 @@ const PER_ENTRY_CSS_GLOB = "**/*.{css,pcss,scss,sass}";
 const PER_ENTRY_CSS_IGNORE = "**/*.module.*".split(",").map((s) => s.trim());
 const GLOBAL_CSS_LIST = [path.resolve("src/index.css")];
 
-const targets: string[] = [
-  "chat-vault",
-];
+// Part 3: only build the MCP App widget (mcp-app.html). No chat-vault build.
+const targets: string[] = [];
 const builtNames: string[] = [];
 
 function wrapEntryPlugin(
@@ -55,7 +55,7 @@ fs.rmSync(outDir, { recursive: true, force: true });
 
 for (const file of entries) {
   const name = path.basename(path.dirname(file));
-  if (targets.length && !targets.includes(name)) {
+  if (targets.length === 0 || !targets.includes(name)) {
     continue;
   }
 
@@ -131,43 +131,44 @@ for (const file of entries) {
   console.log(`Built ${name}`);
 }
 
-const outputs = fs
-  .readdirSync("assets")
-  .filter((f) => f.endsWith(".js") || f.endsWith(".css"))
-  .map((f) => path.join("assets", f))
-  .filter((p) => fs.existsSync(p));
+if (builtNames.length > 0) {
+  const outputs = fs
+    .readdirSync("assets")
+    .filter((f) => f.endsWith(".js") || f.endsWith(".css"))
+    .map((f) => path.join("assets", f))
+    .filter((p) => fs.existsSync(p));
 
-const h = crypto
-  .createHash("sha256")
-  .update(pkg.version, "utf8")
-  .digest("hex")
-  .slice(0, 4);
+  const h = crypto
+    .createHash("sha256")
+    .update(pkg.version, "utf8")
+    .digest("hex")
+    .slice(0, 4);
 
-console.group("Hashing outputs");
-for (const out of outputs) {
-  const dir = path.dirname(out);
-  const ext = path.extname(out);
-  const base = path.basename(out, ext);
-  const newName = path.join(dir, `${base}-${h}${ext}`);
+  console.group("Hashing outputs");
+  for (const out of outputs) {
+    const dir = path.dirname(out);
+    const ext = path.extname(out);
+    const base = path.basename(out, ext);
+    const newName = path.join(dir, `${base}-${h}${ext}`);
 
-  fs.renameSync(out, newName);
-  console.log(`${out} -> ${newName}`);
-}
-console.groupEnd();
+    fs.renameSync(out, newName);
+    console.log(`${out} -> ${newName}`);
+  }
+  console.groupEnd();
 
-console.log("new hash: ", h);
+  console.log("new hash: ", h);
 
-const defaultBaseUrl = "http://localhost:4444";
-const baseUrlCandidate = process.env.BASE_URL?.trim() ?? "";
-const baseUrlRaw = baseUrlCandidate.length > 0 ? baseUrlCandidate : defaultBaseUrl;
-const normalizedBaseUrl = baseUrlRaw.replace(/\/+$/, "") || defaultBaseUrl;
-console.log(`Using BASE_URL ${normalizedBaseUrl} for generated HTML`);
+  const defaultBaseUrl = "http://localhost:4444";
+  const baseUrlCandidate = process.env.BASE_URL?.trim() ?? "";
+  const baseUrlRaw = baseUrlCandidate.length > 0 ? baseUrlCandidate : defaultBaseUrl;
+  const normalizedBaseUrl = baseUrlRaw.replace(/\/+$/, "") || defaultBaseUrl;
+  console.log(`Using BASE_URL ${normalizedBaseUrl} for generated HTML`);
 
-for (const name of builtNames) {
-  const dir = outDir;
-  const hashedHtmlPath = path.join(dir, `${name}-${h}.html`);
-  const liveHtmlPath = path.join(dir, `${name}.html`);
-  const html = `<!doctype html>
+  for (const name of builtNames) {
+    const dir = outDir;
+    const hashedHtmlPath = path.join(dir, `${name}-${h}.html`);
+    const liveHtmlPath = path.join(dir, `${name}.html`);
+    const html = `<!doctype html>
 <html>
 <head>
   <script type="module" src="${normalizedBaseUrl}/${name}-${h}.js"></script>
@@ -178,7 +179,31 @@ for (const name of builtNames) {
 </body>
 </html>
 `;
-  fs.writeFileSync(hashedHtmlPath, html, { encoding: "utf8" });
-  fs.writeFileSync(liveHtmlPath, html, { encoding: "utf8" });
-  console.log(`${liveHtmlPath}`);
+    fs.writeFileSync(hashedHtmlPath, html, { encoding: "utf8" });
+    fs.writeFileSync(liveHtmlPath, html, { encoding: "utf8" });
+    console.log(`${liveHtmlPath}`);
+  }
 }
+
+// Build mcp-app.html as a single-file bundle (MCP Apps version — Part 3's only widget)
+console.group("Building mcp-app (single-file)");
+const mcpAppHtmlPath = path.resolve("mcp-app.html");
+if (fs.existsSync(mcpAppHtmlPath)) {
+  await build({
+    plugins: [viteSingleFile()],
+    build: {
+      outDir,
+      emptyOutDir: false,
+      rollupOptions: {
+        input: mcpAppHtmlPath,
+        output: {
+          entryFileNames: "mcp-app.html",
+        },
+      },
+    },
+  });
+  console.log("Built assets/mcp-app.html");
+} else {
+  console.warn(`Warning: ${mcpAppHtmlPath} not found, skipping mcp-app build`);
+}
+console.groupEnd();
