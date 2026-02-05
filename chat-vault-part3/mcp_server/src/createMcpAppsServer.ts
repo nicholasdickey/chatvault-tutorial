@@ -56,12 +56,13 @@ export function createMcpAppsServer(): McpServer {
         },
       },
     },
-    async () => {
+    async (args) => {
+      console.log("[MCP] browseMySavedChats handler called", { argsKeys: args ? Object.keys(args) : [] });
       const text =
         "Opened ChatVault! Use the widget to browse, search, and manage your saved chats.";
-      return {
-        content: [{ type: "text", text }],
-      };
+      const result = { content: [{ type: "text", text }] };
+      console.log("[MCP] browseMySavedChats returning", { textLength: text.length });
+      return result;
     },
   );
 

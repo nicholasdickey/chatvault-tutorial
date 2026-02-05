@@ -66,3 +66,12 @@ Try these prompts:
 ## Stop Services
 
 Press `Ctrl+C` in both terminals to stop ngrok and the MCP server.
+
+## Part 3 – Vercel deployment
+
+This app requires **Zod 3** (see `package.json`: `"zod": "^3.25.0"`). The MCP SDK is incompatible with Zod 4 for `tools/call`.
+
+- **Commit and push** `package.json` and `pnpm-lock.yaml` so the lockfile (zod 3.25.76) is in the repo.
+- **Redeploy** Part 3 on Vercel so the new build uses the lockfile. If the live app was built before the zod change, it will still return `v3Schema.safeParseAsync is not a function`.
+- In Vercel project settings, set **Root Directory** to this folder (e.g. `chat-vault-part3` if the repo is the whole tutorial).
+- Optional: set **Install Command** to `pnpm install --frozen-lockfile` so the exact lockfile is used and the build fails if it’s out of sync.
