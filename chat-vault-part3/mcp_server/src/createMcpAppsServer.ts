@@ -6,6 +6,11 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT_DIR = path.resolve(__dirname, "..", "..");
+const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 
 /**
  * Create and configure the MCP Apps server for ChatVault Part 3.
@@ -59,7 +64,7 @@ export function createMcpAppsServer(): McpServer {
     resourceUri,
     { mimeType: RESOURCE_MIME_TYPE },
     async () => {
-      const htmlPath = path.join(process.cwd(), "assets", "mcp-app.html");
+      const htmlPath = path.join(ASSETS_DIR, "mcp-app.html");
       const html = await fs.readFile(htmlPath, "utf-8");
       return {
         contents: [
