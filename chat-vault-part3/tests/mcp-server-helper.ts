@@ -1,0 +1,292 @@
+/**
+ * Helper utilities for starting/stopping the MCP server in tests
+ */
+
+import { spawn, execSync, type ChildProcess } from "node:child_process";
+import { createServer, type Server } from "node:http";
+import { request as httpRequest } from "node:http";
+
+let serverProcess: ChildProcess | null = null;
+let serverPort: number = 8000;
+
+/**
+ * Kill any process using a specific port
+ */
+export function killProcessOnPort(port: number): void {
+    try {
+        // Find process using the port (works on Linux/Mac)
+        const result = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf-8' });
+        const pids = result.trim().split('\n').filter(pid => pid);
+        pids.forEach(pid => {
+            try {
+                execSync(`kill -9 ${pid} 2>/dev/null || true`);
+            } catch (e) {
+                // Ignore errors
+            }
+        });
+    } catch (e) {
+        // Ignore errors - port might not be in use
+    }
+}
+
+/**
+ * Check if a port is available
+ */
+function isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+        const testServer: Server = createServer();
+        let resolved = false;
+
+        const cleanup = (result: boolean) => {
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                testServer.removeAllListeners();
+                testServer.close(() => {
+                    resolve(result);
+                });
+            }
+        };
+
+        const timeout = setTimeout(() => {
+            cleanup(false);
+        }, 500); // Reduced timeout
+
+        testServer.listen(port, () => {
+            cleanup(true);
+        });
+
+        testServer.on("error", (err: NodeJS.ErrnoException) => {
+            cleanup(false);
+        });
+    });
+}
+
+/**
+ * Start the MCP server on a given port
+ */
+export async function startMcpServer(port: number = 8000): Promise<void> {
+    serverPort = port;
+
+    // Stop any existing server first
+    if (serverProcess) {
+        await stopMcpServer();
+    }
+
+    const portAvailable = await isPortAvailable(port);
+    if (!portAvailable) {
+        throw new Error(
+            `[MCP Server] Port ${port} is in use. Prompt0 requires a single fixed port with no fallback.`
+        );
+    }
+
+    return new Promise((resolve, reject) => {
+        // Start the server
+        const serverPath = process.cwd() + "/mcp_server";
+        console.log(`[MCP Server] Starting server on port ${port}...`);
+        serverProcess = spawn("pnpm", ["start"], {
+            cwd: serverPath,
+            env: {
+                ...process.env,
+                PORT: String(port),
+            },
+            stdio: "pipe",
+            shell: true,
+            detached: false, // Ensure process is part of the test process group
+        });
+
+        let serverReady = false;
+        let outputBuffer = "";
+        let pollInterval: NodeJS.Timeout | null = null;
+        let startupTimeout: NodeJS.Timeout | null = null;
+
+        const checkServerReady = (): void => {
+            if (serverReady) return;
+
+            // Try to connect to the server
+            const testReq = httpRequest(
+                {
+                    hostname: "localhost",
+                    port: port,
+                    path: "/mcp",
+                    method: "OPTIONS",
+                    timeout: 1000,
+                },
+                () => {
+                    // Server is responding
+                    if (!serverReady) {
+                        serverReady = true;
+                        if (pollInterval) clearInterval(pollInterval);
+                        if (startupTimeout) {
+                            clearTimeout(startupTimeout);
+                            startupTimeout = null;
+                        }
+                        console.log(`[MCP Server] Server is ready on port ${port}`);
+                        setTimeout(() => resolve(), 200);
+                    }
+                }
+            );
+
+            testReq.on("error", () => {
+                // Server not ready yet, will retry
+            });
+            testReq.on("timeout", () => {
+                testReq.destroy();
+            });
+            testReq.end();
+        };
+
+        const stdoutHandler = (data: Buffer) => {
+            const output = data.toString();
+            outputBuffer += output;
+            if (!serverReady) {
+                console.log(`[MCP Server] ${output}`);
+            }
+            // Check for server ready message
+            if (output.includes("listening on") || output.includes("MCP endpoint")) {
+                // Start checking if server is actually responding
+                setTimeout(checkServerReady, 500);
+            }
+        };
+
+        const stderrHandler = (data: Buffer) => {
+            const output = data.toString();
+            outputBuffer += output;
+            if (!serverReady) {
+                console.error(`[MCP Server Error] ${output}`);
+            }
+            // Also check stderr for server ready message
+            if (output.includes("listening on") || output.includes("MCP endpoint")) {
+                setTimeout(checkServerReady, 500);
+            }
+        };
+
+        serverProcess.stdout?.on("data", stdoutHandler);
+        serverProcess.stderr?.on("data", stderrHandler);
+
+        // Poll for server readiness every 500ms (start immediately, don't wait for output)
+        // This handles cases where server starts but output is buffered
+        checkServerReady(); // Try immediately
+        pollInterval = setInterval(() => {
+            if (!serverReady) {
+                checkServerReady();
+            } else {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            }
+        }, 500);
+
+        serverProcess.on("error", (error) => {
+            reject(error);
+        });
+
+        serverProcess.on("exit", (code) => {
+            // Only reject if server wasn't ready yet
+            // If server was ready and exits, it's likely being stopped by cleanup
+            if (code !== 0 && code !== null && !serverReady) {
+                if (startupTimeout) {
+                    clearTimeout(startupTimeout);
+                    startupTimeout = null;
+                }
+                reject(new Error(`Server exited with code ${code} before becoming ready`));
+            }
+            // If server exits after being ready, don't reject (it might be cleanup)
+        });
+
+        // Timeout after 15 seconds
+        startupTimeout = setTimeout(() => {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            if (!serverReady) {
+                // Clean up before rejecting
+                if (serverProcess) {
+                    serverProcess.stdout?.removeAllListeners();
+                    serverProcess.stderr?.removeAllListeners();
+                    serverProcess.stdout?.destroy();
+                    serverProcess.stderr?.destroy();
+                    try {
+                        serverProcess.kill("SIGKILL");
+                    } catch (e) {
+                        // Ignore
+                    }
+                    serverProcess = null;
+                }
+                reject(new Error(`Server failed to start within 15 seconds. Last output: ${outputBuffer.slice(-500)}`));
+            }
+        }, 15000);
+    });
+}
+
+/**
+ * Stop the MCP server
+ */
+export async function stopMcpServer(): Promise<void> {
+    if (serverProcess) {
+        return new Promise((resolve) => {
+            const proc = serverProcess;
+            serverProcess = null;
+
+            if (proc) {
+                // Remove all listeners immediately to prevent logging after test completion
+                proc.stdout?.removeAllListeners();
+                proc.stderr?.removeAllListeners();
+                proc.removeAllListeners();
+
+                // Destroy streams to prevent further I/O
+                proc.stdout?.destroy();
+                proc.stderr?.destroy();
+
+                // Kill the process
+                let resolved = false;
+                let forceKillTimeout: NodeJS.Timeout | null = null;
+                const cleanup = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        if (forceKillTimeout) {
+                            clearTimeout(forceKillTimeout);
+                            forceKillTimeout = null;
+                        }
+                        resolve();
+                    }
+                };
+
+                try {
+                    proc.kill("SIGTERM");
+                } catch (e) {
+                    // Process may already be dead
+                    cleanup();
+                    return;
+                }
+
+                // Wait for exit
+                proc.once("exit", cleanup);
+
+                // Force kill after 500ms if still running
+                forceKillTimeout = setTimeout(() => {
+                    if (!resolved) {
+                        try {
+                            proc.kill("SIGKILL");
+                        } catch (e) {
+                            // Ignore errors
+                        }
+                        cleanup();
+                    }
+                }, 500);
+            } else {
+                resolve();
+            }
+        });
+    }
+}
+
+/**
+ * Get the server port
+ */
+export function getServerPort(): number {
+    return serverPort;
+}
+
