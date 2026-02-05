@@ -1,10 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createMcpAppsServer } from "../mcp_server/src/createMcpAppsServer.js";
-
-// Lazily created, shared MCP Apps server instance for all invocations
-const server = createMcpAppsServer();
 
 function getBearerTokenFromAuthHeader(
   header: string | string[] | undefined,
@@ -127,6 +123,10 @@ export default async function handler(
   }
 
   try {
+    // Dynamic import to ensure __dirname resolves correctly in Vercel serverless functions
+    const mod = await import("../mcp_server/src/createMcpAppsServer.js");
+    const server = mod.createMcpAppsServer();
+
     const requestBody = await readRequestBody(req);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
