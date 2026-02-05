@@ -1,0 +1,24 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A"></rect>
+
+  <!-- vault outer ring -->
+  <circle cx="512" cy="512" r="300" fill="none" stroke="#E5E7EB" stroke-width="80"></circle>
+
+  <!-- vault spokes -->
+  <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB"></rect>
+  <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB"></rect>
+  <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB"></rect>
+  <rect x="692" y="492" width="120" height="40" rx="20" fill="#E5E7EB"></rect>
+
+  <!-- center dial -->
+  <circle cx="512" cy="512" r="40" fill="#E5E7EB"></circle>
+
+  <!-- chat bubble (overlay) -->
+  <rect x="590" y="350" width="220" height="140" rx="40" fill="#3B82F6"></rect>
+  <path d="M650 490 L620 560 L700 500 Z" fill="#3B82F6"></path>
+
+  <!-- chat lines -->
+  <rect x="630" y="385" width="140" height="16" rx="8" fill="#E5E7EB"></rect>
+  <rect x="630" y="420" width="100" height="16" rx="8" fill="#E5E7EB"></rect>
+</svg>
