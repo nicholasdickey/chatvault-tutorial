@@ -122,24 +122,51 @@ export default async function handler(
     return;
   }
 
+  console.log("[MCP] Auth OK, starting request handling");
+
   try {
     // Dynamic import to ensure __dirname resolves correctly in Vercel serverless functions
+    console.log("[MCP] Dynamic import createMcpAppsServer...");
     const mod = await import("../mcp_server/src/createMcpAppsServer.js");
+    console.log("[MCP] createMcpAppsServer imported, creating server");
     const server = mod.createMcpAppsServer();
+    console.log("[MCP] Server created");
 
+    console.log("[MCP] Reading request body...");
     const requestBody = await readRequestBody(req);
+    const bodyStr =
+      typeof requestBody === "object" && requestBody !== null
+        ? JSON.stringify(requestBody)
+        : String(requestBody);
+    const bodyPreview = bodyStr.slice(0, 200) + (bodyStr.length > 200 ? "..." : "");
+    console.log("[MCP] Request body read", {
+      hasBody: Boolean(requestBody),
+      bodyKeys:
+        typeof requestBody === "object" && requestBody !== null
+          ? Object.keys(requestBody as object)
+          : [],
+      bodyLength: bodyStr.length,
+      bodyPreview,
+    });
+
+    console.log("[MCP] Creating StreamableHTTPServerTransport");
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
+    console.log("[MCP] Transport created, connecting server...");
 
     res.on("close", () => transport.close());
     await server.connect(transport);
+    console.log("[MCP] Server connected, calling transport.handleRequest");
     await transport.handleRequest(req, res, requestBody);
+    console.log("[MCP] handleRequest completed");
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown internal error";
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error("[MCP] Internal error in api/mcp handler:", message);
+    if (stack) console.error("[MCP] Stack:", stack);
     if (!res.headersSent) {
       res.writeHead(500);
     }
