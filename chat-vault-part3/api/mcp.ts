@@ -173,12 +173,35 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
     const body = Buffer.concat(chunks).toString("utf8");
     const preview =
       body.slice(0, 500) + (body.length > 500 ? "..." : "");
+    
+    // Try to parse JSON to check for _meta in tools/call responses
+    let parsedBody: any = null;
+    let hasMeta = false;
+    let metaInfo: any = null;
+    try {
+      parsedBody = JSON.parse(body);
+      if (parsedBody?.result && typeof parsedBody.result === "object") {
+        hasMeta = "_meta" in parsedBody.result;
+        if (hasMeta) {
+          metaInfo = {
+            hasMeta: true,
+            metaKeys: Object.keys(parsedBody.result._meta || {}),
+            hasUiResourceUri: Boolean(parsedBody.result._meta?.ui?.resourceUri),
+            resourceUri: parsedBody.result._meta?.ui?.resourceUri,
+          };
+        }
+      }
+    } catch (e) {
+      // Not JSON or parse error - ignore
+    }
+    
     console.log("[MCP] Response sent", {
       statusCode,
       totalChunks: chunks.length,
       endChunkLength: endChunkLen,
       bodyLength: body.length,
       bodyPreview: preview,
+      ...(hasMeta ? { _meta: metaInfo } : { hasMeta: false }),
     });
 
     return originalEnd(...args);
