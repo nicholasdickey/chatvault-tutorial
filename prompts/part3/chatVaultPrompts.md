@@ -4,23 +4,23 @@ project name - chat-vault-part3
 
 This project uses the **generic Vercel MCP App prompts** defined in:
 
-- `prompts/part3/openai-AppsSDK-prompt.md`
+- `prompts/part3/mcp-AppsSDK-prompt.md`
 
 Use that file for:
 
 - **Prompt0**: Scaffold Vercel MCP App project
-- **Prompt1**: Implement simple HTTP JSON-RPC MCP server for Vercel
-- **Prompt2**: Build the MCP App widget HTML bundle
-- **Prompt3**: Wire MCP App UI resources and browse tool (plain MCP style)
+- **Prompt1**: Implement HTTP JSON-RPC MCP server for Vercel (with ext-apps)
+- **Prompt2**: Build the MCP App widget as a single-file HTML bundle (Vite + React + Tailwind + vite-plugin-singlefile)
+- **Prompt3**: Wire MCP App UI resources and browse tool (registerAppTool, registerAppResource)
 - **Prompt4**: Deployment, logging, and end-to-end verification
 
 This file defines the **ChatVault-specific MCP App behavior** starting from Prompt5.
 
 ## Engineering Principles (ChatVault-specific)
 
-- **Reuse Part 1 and Part 2 behavior, not their plumbing**: The Part 3 MCP App should feel like a natural extension of Part 1 (widget) and Part 2 (backend), but implemented with the simpler, plain-MCP server pattern from the generic Part 3 prompts. Don’t reintroduce extra wrapper layers (`registerAppTool`, ext‑apps helpers) unless there is a clear, documented benefit.
-- **Simple, explicit tools**: Treat `browseMySavedChats` as a regular MCP tool whose job is to open the ChatVault widget and hand it enough context to know which user/team to show. Prefer a flat, well-documented input schema over clever validation logic.
-- **Vibe-first UX**: The widget is for humans, not test harnesses. Prioritize fast feedback (loading states, clear empty/error messages, obvious “open portal” actions) over protocol cleverness.
+- **Reuse Part 1 and Part 2 behavior, not their plumbing**: The Part 3 MCP App should feel like a natural extension of Part 1 (widget) and Part 2 (backend), implemented with the MCP Apps SDK (ext-apps) as in the generic Part 3 prompts. Use `registerAppTool` and `registerAppResource` for correct tool/resource shape and widget iframe behavior.
+- **Simple, explicit tools**: Treat `browseMySavedChats` as an MCP App tool whose job is to open the ChatVault widget and hand it enough context to know which user/team to show. Use a flat input schema (raw Zod shape: optional `shortAnonId`, `portalLink`, `loginLink`, `isAnon`) and a handler that returns text plus `_meta.ui.resourceUri`.
+- **Vibe-first UX**: The widget is for humans, not test harnesses. Prioritize fast feedback (loading states, clear empty/error messages, obvious "open portal" actions) over protocol cleverness.
 - **Traceability across layers**: From A6/ChatGPT down to the Part 3 MCP server and widget, you should be able to trace a single tool call via logs and UI states. When in doubt, add a small, well-scoped log with a unique tag and keep the log volume bounded.
 
 ---
@@ -33,8 +33,8 @@ Requirements:
 
 - Tool contract:
   - `name: "browseMySavedChats"`.
-  - `inputSchema`: keep it as simple as possible (for example, an object with optional fields for identifiers and URLs).
-  - Avoid complex validation logic—treat this as a “routing” tool that opens the widget, not as a heavy business-logic endpoint.
+  - `inputSchema`: use a **raw Zod shape** (plain object of optional fields), e.g. `shortAnonId`, `portalLink`, `loginLink`, `isAnon`, as in the generic Part 3 prompt. Avoid `z.object({...}).passthrough()` for ext-apps type compatibility.
+  - Treat this as a routing tool that opens the widget; keep validation minimal.
 - Expected inputs:
   - A short anon/user ID (for example, `shortAnonId` or equivalent) to identify the viewer.
   - A `portalLink` URL where the full ChatVault web app lives.
@@ -44,9 +44,9 @@ Requirements:
   - On `tools/call` for `browseMySavedChats`, the server should:
     - Log the incoming arguments (keys only; avoid dumping secrets).
     - Return a result that:
-      - Contains friendly text explaining what’s happening (for example, “Opened ChatVault! Use the widget to browse your saved chats.”).
+      - Contains friendly text explaining what's happening (for example, "Opened ChatVault! Use the widget to browse your saved chats.").
       - Includes `_meta` or structured content pointing the host at the widget resource URI (for example, `ui://chat-vault/mcp-app.html`) and, if appropriate, echoing the `portalLink`/`loginLink` in a safe, clear way that the widget can read via `result.meta`.
-- The focus here is on **shape clarity**: the tool should be trivially understandable by “vibe engineers” looking only at the JSON schema and a couple of log lines.
+- The focus here is on **shape clarity**: the tool should be trivially understandable by "vibe engineers" looking only at the JSON schema and a couple of log lines.
 
 ---
 
@@ -57,16 +57,14 @@ Goal: Implement the Part 3 widget UI so it can be used as an MCP App iframe insi
 Requirements:
 
 - Visual behavior:
-  - Reuse the high-level layout from Part 1 (a chat history browser), but simplify wherever it makes sense for “portal-style” usage.
-  - Show a **header** with the user/team name (if available) and a clear title like “ChatVault – Saved Chats”.
+  - Reuse the high-level layout from Part 1 (a chat history browser), but simplify wherever it makes sense for "portal-style" usage.
+  - Show a **header** with the user/team name (if available) and a clear title like "ChatVault – Saved Chats".
   - Provide obvious actions:
-    - “Open full app” button linking to `portalLink` (in a new tab) when available.
-    - “Sign in / create account” button linking to `loginLink` when appropriate.
+    - "Open full app" button linking to `portalLink` (in a new tab) when available.
+    - "Sign in / create account" button linking to `loginLink` when appropriate.
 - Data behavior:
-  - For Part 3, you can treat the widget as **read-only** with respect to saved chats:
-    - It can either:
-      - Call back into the existing MCP backend (from Part 2) via `window.openai.callTool("loadMyChats", ...)`, or
-      - Rely on host-provided data (if you choose to pass some pre-baked `_meta` from the server).
+  - For Part 3, treat the widget as **read-only** with respect to saved chats:
+    - The widget talks to the host via the MCP Apps SDK (e.g. `app.callServerTool("loadMyChats", ...)` or the host's `window.openai.callTool`), so it can load chats through the same MCP server that served the widget (or via host-provided `_meta`).
   - When no chats are available, show a friendly empty state with a link to the portal.
 - Debug panel:
   - Include a collapsible debug panel (similar to Part 1) that shows:
@@ -99,5 +97,4 @@ Requirements:
     - The debug panel logs the same IDs/URLs that A6 logged.
     - Error paths (missing portal link, invalid token, rate limiting) are visible in both the widget and the Part 3 logs.
 
-The outcome of Part 3 should be a **boring, predictable MCP App**: it uses plain MCP tools under the hood, but feels delightful at the surface and is easy for vibe engineers to debug and extend.
-
+The outcome of Part 3 should be a **boring, predictable MCP App**: it uses the MCP Apps SDK (ext-apps) for tools and resources, a single-file widget build (Vite + vite-plugin-singlefile), and feels delightful at the surface while remaining easy for vibe engineers to debug and extend.
