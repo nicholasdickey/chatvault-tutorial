@@ -235,16 +235,6 @@ export default async function handler(
     const server = createMcpAppsServer();
     console.log("[MCP] MCP Apps server created");
 
-    console.log("[MCP] Reading request body...");
-    const requestBody = await readRequestBody(req);
-    const bodyPreview =
-      requestBody.slice(0, 200) + (requestBody.length > 200 ? "..." : "");
-    console.log("[MCP] Request body read", {
-      hasBody: Boolean(requestBody),
-      bodyLength: requestBody.length,
-      bodyPreview,
-    });
-
     console.log("[MCP] Creating StreamableHTTPServerTransport");
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -269,7 +259,9 @@ export default async function handler(
 
     try {
       console.log("[MCP] Server connected, calling transport.handleRequest");
-      await transport.handleRequest(req, resToLog, requestBody);
+      // Let handleRequest read the body from req stream itself
+      // Pass undefined for body parameter so transport reads from req
+      await transport.handleRequest(req, resToLog, undefined);
       console.log("[MCP] handleRequest completed");
     } catch (handleErr) {
       const message =
