@@ -1,3 +1,6 @@
+// Global Tailwind + base styles so the single-file bundle includes CSS (otherwise widget is unstyled in ChatGPT iframe).
+import "./index.css";
+
 import { App } from "@modelcontextprotocol/ext-apps";
 
 declare global {
