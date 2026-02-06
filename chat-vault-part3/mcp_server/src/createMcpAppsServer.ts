@@ -7,6 +7,7 @@ import {
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -36,6 +37,18 @@ export function createMcpAppsServer(): McpServer {
   // UI resource for the ChatVault widget as an MCP App
   const resourceUri = "ui://chat-vault/mcp-app.html";
 
+  // Zod schema for browseMySavedChats tool arguments
+  // Accepts fields that A6/ChatGPT may send, plus any extras via passthrough()
+  const browseMySavedChatsInputSchema = z
+    .object({
+      shortAnonId: z.string().optional(),
+      isAnon: z.boolean().optional(),
+      portalLink: z.string().url().optional(),
+      loginLink: z.string().url().optional(),
+      // Allow any other fields A6 or ChatGPT might inject (serviceUserKey, refUuid, etc.)
+    })
+    .passthrough();
+
   // Minimal browseMySavedChats tool that opens the widget UI.
   registerAppTool(
     server,
@@ -44,12 +57,7 @@ export function createMcpAppsServer(): McpServer {
       title: "Browse Saved Chats",
       description:
         "Open the ChatVault widget to browse, search, and manage saved chats.",
-      inputSchema: {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
+      inputSchema: browseMySavedChatsInputSchema,
       _meta: {
         ui: {
           resourceUri,
