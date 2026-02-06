@@ -83,6 +83,59 @@ async function readRequestBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
+/** Wrap res to log final status and body for debugging */
+function wrapResponseToLog(res: ServerResponse): ServerResponse {
+  let statusCode: number | undefined;
+  const chunks: Buffer[] = [];
+  const originalWriteHead = res.writeHead.bind(res);
+  const originalWrite = res.write.bind(res);
+  const originalEnd = res.end.bind(res);
+
+  res.writeHead = function (
+    ...args: Parameters<ServerResponse["writeHead"]>
+  ): ServerResponse {
+    statusCode = typeof args[0] === "number" ? args[0] : undefined;
+    console.log("[MCP] res.writeHead", { statusCode });
+    return originalWriteHead(...args);
+  };
+
+  res.write = function (
+    ...args: Parameters<ServerResponse["write"]>
+  ): boolean {
+    const chunk = args[0];
+    if (typeof chunk === "string") {
+      chunks.push(Buffer.from(chunk));
+    } else if (chunk && Buffer.isBuffer(chunk)) {
+      chunks.push(chunk);
+    }
+    return originalWrite(...args);
+  };
+
+  res.end = function (
+    ...args: Parameters<ServerResponse["end"]>
+  ): ServerResponse {
+    const chunk = args[0];
+    if (typeof chunk === "string") {
+      chunks.push(Buffer.from(chunk));
+    } else if (chunk && Buffer.isBuffer(chunk)) {
+      chunks.push(chunk);
+    }
+
+    const body = Buffer.concat(chunks).toString("utf8");
+    const preview =
+      body.slice(0, 500) + (body.length > 500 ? "..." : "");
+    console.log("[MCP] Response sent", {
+      statusCode,
+      bodyLength: body.length,
+      bodyPreview: preview,
+    });
+
+    return originalEnd(...args);
+  };
+
+  return res;
+}
+
 /**
  * Vercel Serverless Function: /api/mcp
  * - Also supports /mcp via vercel.json rewrite
@@ -158,8 +211,9 @@ export default async function handler(
 
     res.on("close", () => transport.close());
     await server.connect(transport);
+    const resToLog = wrapResponseToLog(res);
     console.log("[MCP] Server connected, calling transport.handleRequest");
-    await transport.handleRequest(req, res, requestBody);
+    await transport.handleRequest(req, resToLog, requestBody);
     console.log("[MCP] handleRequest completed");
   } catch (error) {
     const message =
