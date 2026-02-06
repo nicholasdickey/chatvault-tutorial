@@ -37,17 +37,14 @@ export function createMcpAppsServer(): McpServer {
   // UI resource for the ChatVault widget as an MCP App
   const resourceUri = "ui://chat-vault/mcp-app.html";
 
-  // Zod schema for browseMySavedChats tool arguments
-  // Accepts fields that A6/ChatGPT may send, plus any extras via passthrough()
-  const browseMySavedChatsInputSchema = z
-    .object({
-      shortAnonId: z.string().optional(),
-      isAnon: z.boolean().optional(),
-      portalLink: z.string().url().optional(),
-      loginLink: z.string().url().optional(),
-      // Allow any other fields A6 or ChatGPT might inject (serviceUserKey, refUuid, etc.)
-    })
-    .passthrough();
+  // Raw shape for browseMySavedChats tool arguments (ext-apps expects ZodRawShapeCompat or AnySchema).
+  // Hosts may send extra fields (serviceUserKey, refUuid, etc.); the handler receives whatever is passed.
+  const browseMySavedChatsInputSchema = {
+    shortAnonId: z.string().optional(),
+    isAnon: z.boolean().optional(),
+    portalLink: z.string().url().optional(),
+    loginLink: z.string().url().optional(),
+  };
 
   // Minimal browseMySavedChats tool that opens the widget UI.
   registerAppTool(
@@ -69,7 +66,7 @@ export function createMcpAppsServer(): McpServer {
       const text =
         "Opened ChatVault! Use the widget to browse, search, and manage your saved chats.";
       const result = {
-        content: [{ type: "text", text }],
+        content: [{ type: "text" as const, text }],
         _meta: {
           ui: {
             resourceUri,
@@ -91,8 +88,9 @@ export function createMcpAppsServer(): McpServer {
   // Register the MCP App UI resource, which will be built to assets/mcp-app.html
   // Try __dirname-based path first (matches Part 1), then fallback to process.cwd()
   // because Vercel's includeFiles puts assets at /var/task/assets/, not under project dir
+  // Cast server: ext-apps expects registerResource(uri: string); our SDK may use ResourceTemplate.
   registerAppResource(
-    server,
+    server as unknown as Parameters<typeof registerAppResource>[0],
     resourceUri,
     resourceUri,
     { mimeType: RESOURCE_MIME_TYPE },
@@ -133,7 +131,7 @@ export function createMcpAppsServer(): McpServer {
         throw new Error(errorMsg);
       }
 
-      console.log(`[createMcpAppsServer] Successfully loaded mcp-app.html from: ${successfulPath}`);
+      console.log(`[createMcpAppsServer] Successfully loaded mcp-app.html from: ${successfulPath} (${html.length} bytes; expected single-file bundle ~500k+, not ~327 stub)`);
 
       // Include CSP hints so the host (e.g. ChatGPT) can render the widget iframe with correct permissions.
       // Without these, a restrictive default CSP can block scripts/fetch and loadMyChats never runs.
