@@ -86,16 +86,18 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
   const originalWrite = res.write.bind(res);
   const originalEnd = res.end.bind(res);
 
+  // @ts-expect-error - wrapper signature conflicts with ServerResponse overloads
   res.writeHead = function (
-    ...args: Parameters<ServerResponse["writeHead"]>
+    ...args: Parameters<typeof originalWriteHead>
   ): ServerResponse {
     statusCode = typeof args[0] === "number" ? args[0] : undefined;
     console.log("[MCP] res.writeHead", { statusCode });
     return originalWriteHead(...args);
   };
 
+  // @ts-expect-error - wrapper signature conflicts with ServerResponse overloads
   res.write = function (
-    ...args: Parameters<ServerResponse["write"]>
+    ...args: Parameters<typeof originalWrite>
   ): boolean {
     const chunk = args[0];
     let len = 0;
@@ -131,8 +133,9 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
     return originalWrite(...args);
   };
 
+  // @ts-expect-error - wrapper signature conflicts with ServerResponse overloads
   res.end = function (
-    ...args: Parameters<ServerResponse["end"]>
+    ...args: Parameters<typeof originalEnd>
   ): ServerResponse {
     const chunk = args[0];
     let endChunkLen = 0;
@@ -240,7 +243,7 @@ export default async function handler(
   }
 
   const auth = isAuthorized(req);
-  if (!auth.ok) {
+  if (auth.ok === false) {
     console.log("[MCP] Auth failed:", {
       status: auth.status,
       message: auth.message,
