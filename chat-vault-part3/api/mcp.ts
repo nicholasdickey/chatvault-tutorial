@@ -65,19 +65,14 @@ function isAuthorized(
   return { ok: true };
 }
 
-async function readRequestBody(req: IncomingMessage): Promise<unknown> {
+async function readRequestBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk.toString();
     });
     req.on("end", () => {
-      try {
-        const parsed = body.length ? JSON.parse(body) : {};
-        resolve(parsed);
-      } catch (error) {
-        reject(error);
-      }
+      resolve(body);
     });
     req.on("error", reject);
   });
@@ -104,22 +99,35 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
   ): boolean {
     const chunk = args[0];
     let len = 0;
+    let preview: string | undefined;
+
     if (typeof chunk === "string") {
       len = Buffer.byteLength(chunk);
-      chunks.push(Buffer.from(chunk));
+      const buf = Buffer.from(chunk);
+      chunks.push(buf);
+      preview = chunk.slice(0, 100);
     } else if (chunk && Buffer.isBuffer(chunk)) {
       len = chunk.length;
       chunks.push(chunk);
+      preview = chunk.toString("utf8").slice(0, 100);
+    } else if (chunk && chunk instanceof Uint8Array) {
+      const buf = Buffer.from(chunk);
+      len = buf.length;
+      chunks.push(buf);
+      preview = buf.toString("utf8").slice(0, 100);
     }
+
     console.log("[MCP] res.write called", {
       chunkLength: len,
       chunkPreview:
-        typeof chunk === "string"
-          ? chunk.slice(0, 100)
-          : chunk && Buffer.isBuffer(chunk)
-            ? chunk.toString("utf8").slice(0, 100)
-            : "non-string/buffer",
+        preview ??
+        "non-string/buffer",
+      chunkType: chunk === null ? "null" : typeof chunk,
+      chunkConstructor: chunk && (chunk as any).constructor
+        ? (chunk as any).constructor.name
+        : undefined,
     });
+
     return originalWrite(...args);
   };
 
@@ -128,6 +136,7 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
   ): ServerResponse {
     const chunk = args[0];
     let endChunkLen = 0;
+
     if (typeof chunk === "string") {
       endChunkLen = Buffer.byteLength(chunk);
       chunks.push(Buffer.from(chunk));
@@ -142,10 +151,22 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
         length: endChunkLen,
         preview: chunk.toString("utf8").slice(0, 200),
       });
+    } else if (chunk && chunk instanceof Uint8Array) {
+      const buf = Buffer.from(chunk);
+      endChunkLen = buf.length;
+      chunks.push(buf);
+      console.log("[MCP] res.end called with Uint8Array chunk", {
+        length: endChunkLen,
+        preview: buf.toString("utf8").slice(0, 200),
+      });
     } else {
-      console.log("[MCP] res.end called with no chunk", {
+      console.log("[MCP] res.end called with no chunk or unrecognized chunk", {
         argsLength: args.length,
         firstArgType: typeof args[0],
+        chunkType: chunk === null ? "null" : typeof chunk,
+        chunkConstructor: chunk && (chunk as any).constructor
+          ? (chunk as any).constructor.name
+          : undefined,
       });
     }
 
@@ -216,19 +237,11 @@ export default async function handler(
 
     console.log("[MCP] Reading request body...");
     const requestBody = await readRequestBody(req);
-    const bodyStr =
-      typeof requestBody === "object" && requestBody !== null
-        ? JSON.stringify(requestBody)
-        : String(requestBody);
     const bodyPreview =
-      bodyStr.slice(0, 200) + (bodyStr.length > 200 ? "..." : "");
+      requestBody.slice(0, 200) + (requestBody.length > 200 ? "..." : "");
     console.log("[MCP] Request body read", {
       hasBody: Boolean(requestBody),
-      bodyKeys:
-        typeof requestBody === "object" && requestBody !== null
-          ? Object.keys(requestBody as object)
-          : [],
-      bodyLength: bodyStr.length,
+      bodyLength: requestBody.length,
       bodyPreview,
     });
 
@@ -239,12 +252,40 @@ export default async function handler(
     });
     console.log("[MCP] Transport created, connecting server...");
 
-    res.on("close", () => transport.close());
-    await server.connect(transport);
+    // Wrap response before connecting server so the transport always sees
+    // the wrapped instance (for logging) and we can track all writes.
     const resToLog = wrapResponseToLog(res);
-    console.log("[MCP] Server connected, calling transport.handleRequest");
-    await transport.handleRequest(req, resToLog, requestBody);
-    console.log("[MCP] handleRequest completed");
+
+    resToLog.on("close", () => transport.close());
+
+    console.log("[MCP] Connecting server to transport");
+    await server.connect(transport);
+
+    console.log("[MCP] Before handleRequest", {
+      headersSent: resToLog.headersSent,
+      writableEnded: resToLog.writableEnded,
+      writable: resToLog.writable,
+    });
+
+    try {
+      console.log("[MCP] Server connected, calling transport.handleRequest");
+      await transport.handleRequest(req, resToLog, requestBody);
+      console.log("[MCP] handleRequest completed");
+    } catch (handleErr) {
+      const message =
+        handleErr instanceof Error ? handleErr.message : String(handleErr);
+      console.error("[MCP] Error during transport.handleRequest:", message);
+      if (handleErr instanceof Error && handleErr.stack) {
+        console.error("[MCP] handleRequest stack:", handleErr.stack);
+      }
+      throw handleErr;
+    }
+
+    console.log("[MCP] After handleRequest", {
+      headersSent: resToLog.headersSent,
+      writableEnded: resToLog.writableEnded,
+      writable: resToLog.writable,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown internal error";
