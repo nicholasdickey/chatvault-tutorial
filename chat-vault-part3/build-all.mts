@@ -185,19 +185,27 @@ if (builtNames.length > 0) {
   }
 }
 
-// Build mcp-app.html as a single-file bundle (MCP Apps version — Part 3's only widget)
+// Build mcp-app.html as a single-file bundle (MCP Apps version — Part 3's only widget).
+// Uses React + Tailwind so /src/mcp-app.ts (and its JSX/CSS) compile; viteSingleFile inlines everything.
 console.group("Building mcp-app (single-file)");
 const mcpAppHtmlPath = path.resolve("mcp-app.html");
 if (fs.existsSync(mcpAppHtmlPath)) {
   await build({
-    plugins: [viteSingleFile()],
+    root: path.resolve("."),
+    plugins: [react(), tailwindcss(), viteSingleFile()],
+    esbuild: { jsx: "automatic", jsxImportSource: "react", target: "es2022" },
     build: {
       outDir,
       emptyOutDir: false,
+      target: "es2022",
+      minify: "esbuild",
+      cssCodeSplit: false,
       rollupOptions: {
         input: mcpAppHtmlPath,
         output: {
-          entryFileNames: "mcp-app.html",
+          // JS chunk must have a different name so single-file can inline it (not "mcp-app.html")
+          entryFileNames: "mcp-app.js",
+          assetFileNames: "mcp-app.[ext]",
         },
       },
     },
