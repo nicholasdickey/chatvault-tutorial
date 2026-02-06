@@ -135,12 +135,26 @@ export function createMcpAppsServer(): McpServer {
 
       console.log(`[createMcpAppsServer] Successfully loaded mcp-app.html from: ${successfulPath}`);
 
+      // Include CSP hints so the host (e.g. ChatGPT) can render the widget iframe with correct permissions.
+      // Without these, a restrictive default CSP can block scripts/fetch and loadMyChats never runs.
+      const widgetDomain = "https://chatvault-mcp-app.vercel.app";
+      const widgetCSP = {
+        connect_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
+        resource_domains: [widgetDomain, "https://*.agentsyx.com"],
+      };
+
       return {
         contents: [
           {
             uri: resourceUri,
             mimeType: RESOURCE_MIME_TYPE,
             text: html,
+            _meta: {
+              "openai/outputTemplate": resourceUri,
+              "openai/widgetPrefersBorder": true,
+              "openai/widgetDomain": widgetDomain,
+              "openai/widgetCSP": widgetCSP,
+            },
           },
         ],
       };
