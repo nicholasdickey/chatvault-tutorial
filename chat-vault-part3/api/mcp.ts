@@ -259,9 +259,33 @@ export default async function handler(
 
     try {
       console.log("[MCP] Server connected, calling transport.handleRequest");
-      // Let handleRequest read the body from req stream itself
-      // Pass undefined for body parameter so transport reads from req
-      await transport.handleRequest(req, resToLog, undefined);
+      // Read body as string for logging and parsing
+      console.log("[MCP] Reading request body...");
+      const requestBodyStr = await readRequestBody(req);
+      const bodyPreview =
+        requestBodyStr.slice(0, 200) +
+        (requestBodyStr.length > 200 ? "..." : "");
+      console.log("[MCP] Request body read", {
+        hasBody: Boolean(requestBodyStr),
+        bodyLength: requestBodyStr.length,
+        bodyPreview,
+      });
+
+      // Parse to JSON object for handleRequest, matching Express's req.body
+      let requestBody: unknown = undefined;
+      if (requestBodyStr.length > 0) {
+        try {
+          requestBody = JSON.parse(requestBodyStr);
+        } catch (parseErr) {
+          const msg =
+            parseErr instanceof Error ? parseErr.message : String(parseErr);
+          console.error("[MCP] Failed to parse request body as JSON:", msg);
+          // Let the transport still see the raw string if parsing fails
+          requestBody = requestBodyStr;
+        }
+      }
+
+      await transport.handleRequest(req, resToLog, requestBody);
       console.log("[MCP] handleRequest completed");
     } catch (handleErr) {
       const message =
