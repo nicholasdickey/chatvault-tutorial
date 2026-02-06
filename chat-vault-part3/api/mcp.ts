@@ -103,11 +103,23 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
     ...args: Parameters<ServerResponse["write"]>
   ): boolean {
     const chunk = args[0];
+    let len = 0;
     if (typeof chunk === "string") {
+      len = Buffer.byteLength(chunk);
       chunks.push(Buffer.from(chunk));
     } else if (chunk && Buffer.isBuffer(chunk)) {
+      len = chunk.length;
       chunks.push(chunk);
     }
+    console.log("[MCP] res.write called", {
+      chunkLength: len,
+      chunkPreview:
+        typeof chunk === "string"
+          ? chunk.slice(0, 100)
+          : chunk && Buffer.isBuffer(chunk)
+            ? chunk.toString("utf8").slice(0, 100)
+            : "non-string/buffer",
+    });
     return originalWrite(...args);
   };
 
@@ -115,10 +127,26 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
     ...args: Parameters<ServerResponse["end"]>
   ): ServerResponse {
     const chunk = args[0];
+    let endChunkLen = 0;
     if (typeof chunk === "string") {
+      endChunkLen = Buffer.byteLength(chunk);
       chunks.push(Buffer.from(chunk));
+      console.log("[MCP] res.end called with string chunk", {
+        length: endChunkLen,
+        preview: chunk.slice(0, 200),
+      });
     } else if (chunk && Buffer.isBuffer(chunk)) {
+      endChunkLen = chunk.length;
       chunks.push(chunk);
+      console.log("[MCP] res.end called with Buffer chunk", {
+        length: endChunkLen,
+        preview: chunk.toString("utf8").slice(0, 200),
+      });
+    } else {
+      console.log("[MCP] res.end called with no chunk", {
+        argsLength: args.length,
+        firstArgType: typeof args[0],
+      });
     }
 
     const body = Buffer.concat(chunks).toString("utf8");
@@ -126,6 +154,8 @@ function wrapResponseToLog(res: ServerResponse): ServerResponse {
       body.slice(0, 500) + (body.length > 500 ? "..." : "");
     console.log("[MCP] Response sent", {
       statusCode,
+      totalChunks: chunks.length,
+      endChunkLength: endChunkLen,
       bodyLength: body.length,
       bodyPreview: preview,
     });
