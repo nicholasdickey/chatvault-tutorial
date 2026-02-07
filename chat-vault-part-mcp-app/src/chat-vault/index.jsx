@@ -1444,12 +1444,7 @@ function App() {
         <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${isDarkMode ? "border-gray-700" : "border-black/5"
           }`}>
           <div className="flex items-center gap-2">
-            <span
-              className={`px-2 py-0.5 rounded text-xs font-medium ${isDarkMode ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}
-              title="MCP App · Ctrl+Shift+D to open debug panel"
-            >
-              MCP App
-            </span>
+
             {selectedChat ? (
               <button
                 onClick={handleBackClick}
