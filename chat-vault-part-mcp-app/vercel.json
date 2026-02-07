@@ -1,0 +1,1 @@
+{"version":2,"outputDirectory":"assets","rewrites":[{"source":"/mcp","destination":"/api/mcp"}],"functions":{"api/mcp.ts":{"includeFiles":"assets/**"}}}
