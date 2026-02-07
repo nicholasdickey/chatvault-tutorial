@@ -1444,7 +1444,12 @@ function App() {
         <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${isDarkMode ? "border-gray-700" : "border-black/5"
           }`}>
           <div className="flex items-center gap-2">
-
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium ${isDarkMode ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}
+              title="MCP App · Ctrl+Shift+D to open debug panel"
+            >
+              MCP App
+            </span>
             {selectedChat ? (
               <button
                 onClick={handleBackClick}
@@ -2755,6 +2760,7 @@ function App() {
                 <div className={`mb-3 pb-3 border-b ${isDarkMode ? "border-gray-700" : "border-gray-300"
                   }`}>
                   <div className="font-semibold mb-1">Widget Version: v{WIDGET_VERSION}</div>
+                  <div className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}>Mode: MCP App</div>
                 </div>
                 {debugLogs.length === 0 ? (
                   <div className="opacity-60">No logs yet</div>
