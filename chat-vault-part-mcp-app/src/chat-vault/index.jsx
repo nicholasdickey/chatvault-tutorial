@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
+import { app } from "../app-instance.js";
 
 // Chat data structure (no TypeScript types in .jsx file)
 
@@ -168,46 +169,34 @@ function App() {
           }
         }
 
-        // Fallback: call loadMyChats via skybridge
-        if (window.openai?.callTool) {
-          addLog("Calling loadMyChats via skybridge");
-          try {
-            const result = await window.openai.callTool("loadMyChats", {
-              page: 0,
-              size: 10,
-              widgetVersion: WIDGET_VERSION,
-            });
-            addLog("loadMyChats result", result);
+        // Fallback: call loadMyChats
+        try {
+          const result = await app.callServerTool({
+            name: "loadMyChats",
+            arguments: { page: 0, size: 10, widgetVersion: WIDGET_VERSION },
+          });
+          addLog("loadMyChats result", result);
 
-            if (result?.structuredContent?.chats) {
-              setChats(deduplicateChats(result.structuredContent.chats));
-              setPagination(result.structuredContent.pagination);
-              setCurrentPage(0);
-              setPageInputValue("1");
-              // Extract userInfo if present
-              if (result.structuredContent.userInfo) {
-                setUserInfo(result.structuredContent.userInfo);
-                addLog("User info extracted", result.structuredContent.userInfo);
-              }
-              // Extract content metadata if present
-              if (result.structuredContent.content) {
-                setContentMetadata(result.structuredContent.content);
-                addLog("Content metadata extracted", result.structuredContent.content);
-              }
-            } else if (result?.content?.[0]?.text) {
-              addLog("Unexpected result format", result);
+          if (result?.structuredContent?.chats) {
+            setChats(deduplicateChats(result.structuredContent.chats));
+            setPagination(result.structuredContent.pagination);
+            setCurrentPage(0);
+            setPageInputValue("1");
+            if (result.structuredContent.userInfo) {
+              setUserInfo(result.structuredContent.userInfo);
+              addLog("User info extracted", result.structuredContent.userInfo);
             }
-          } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            addLog("Error calling loadMyChats via skybridge", { error: errorMessage });
-            setError(`Failed to load chats: ${errorMessage}`);
+            if (result.structuredContent.content) {
+              setContentMetadata(result.structuredContent.content);
+              addLog("Content metadata extracted", result.structuredContent.content);
+            }
+          } else if (result?.content?.[0]?.text) {
+            addLog("Unexpected result format", result);
           }
-        } else {
-          addLog("window.openai.callTool not available - using empty state");
-          addLog("Widget is running in isolation mode (no skybridge)");
-          // In isolation mode, show a message but don't set error
-          // The widget should still be functional for UI testing
-          setChats([]);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          addLog("Error calling loadMyChats", { error: errorMessage });
+          setError(`Failed to load chats: ${errorMessage}`);
         }
 
         setLoading(false);
@@ -332,21 +321,12 @@ function App() {
 
   const handleFullscreen = async () => {
     try {
-      if (!window.openai?.requestDisplayMode) {
-        addLog("requestDisplayMode not available");
-        setAlertMessage("Fullscreen mode not available in this environment");
-        setAlertPortalLink(null);
-        return;
-      }
-
       if (displayMode === "fullscreen") {
-        // Exit fullscreen - return to normal
-        const response = await window.openai.requestDisplayMode({ mode: "normal" });
+        const response = await app.requestDisplayMode({ mode: "normal" });
         setDisplayMode(response.mode || "normal");
         addLog("Exited fullscreen", response);
       } else {
-        // Enter fullscreen
-        const response = await window.openai.requestDisplayMode({ mode: "fullscreen" });
+        const response = await app.requestDisplayMode({ mode: "fullscreen" });
         setDisplayMode(response.mode || "fullscreen");
         addLog("Entered fullscreen", response);
       }
@@ -360,21 +340,12 @@ function App() {
 
   const handlePipMode = async () => {
     try {
-      if (!window.openai?.requestDisplayMode) {
-        addLog("requestDisplayMode not available");
-        setAlertMessage("Picture-in-Picture mode not available in this environment");
-        setAlertPortalLink(null);
-        return;
-      }
-
       if (displayMode === "pip") {
-        // Exit PiP - return to normal
-        const response = await window.openai.requestDisplayMode({ mode: "normal" });
+        const response = await app.requestDisplayMode({ mode: "normal" });
         setDisplayMode(response.mode || "normal");
         addLog("Exited PiP mode", response);
       } else {
-        // Enter PiP
-        const response = await window.openai.requestDisplayMode({ mode: "pip" });
+        const response = await app.requestDisplayMode({ mode: "pip" });
         setDisplayMode(response.mode || "pip");
         addLog("Entered PiP mode", response);
       }
@@ -391,27 +362,28 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      if (window.openai?.callTool) {
-        addLog("Calling loadMyChats via skybridge");
-        addLog("loadMyChats parameters", {
+      addLog("Calling loadMyChats");
+      addLog("loadMyChats parameters", {
+        page: 0,
+        size: 10,
+        widgetVersion: WIDGET_VERSION,
+      });
+      const result = await app.callServerTool({
+        name: "loadMyChats",
+        arguments: {
           page: 0,
           size: 10,
           widgetVersion: WIDGET_VERSION,
-        });
-        const result = await window.openai.callTool("loadMyChats", {
-          page: 0,
-          size: 10,
-          widgetVersion: WIDGET_VERSION,
-        });
-        addLog("loadMyChats result", result);
-        if (result?.structuredContent?.chats) {
-          setChats(deduplicateChats(result.structuredContent.chats));
-          setPagination(result.structuredContent.pagination);
-          setCurrentPage(0);
-          setPageInputValue("1");
-          if (result.structuredContent.userInfo) {
-            setUserInfo(result.structuredContent.userInfo);
-          }
+        },
+      });
+      addLog("loadMyChats result", result);
+      if (result?.structuredContent?.chats) {
+        setChats(deduplicateChats(result.structuredContent.chats));
+        setPagination(result.structuredContent.pagination);
+        setCurrentPage(0);
+        setPageInputValue("1");
+        if (result.structuredContent.userInfo) {
+          setUserInfo(result.structuredContent.userInfo);
         }
       }
     } catch (err) {
@@ -426,7 +398,7 @@ function App() {
   const handleOpenWebsite = () => {
     if (userInfo?.portalLink) {
       addLog("Open on website clicked", { portalLink: userInfo.portalLink });
-      window.open(userInfo.portalLink, "_blank");
+      app.openLink({ url: userInfo.portalLink });
     } else {
       addLog("Open on website clicked but no portal link available");
     }
@@ -435,7 +407,7 @@ function App() {
   const handleSignIn = () => {
     if (userInfo?.loginLink) {
       addLog("Sign in clicked", { loginLink: userInfo.loginLink });
-      window.open(userInfo.loginLink, "_blank");
+      app.openLink({ url: userInfo.loginLink });
     } else {
       addLog("Sign in clicked but no login link available");
     }
@@ -468,7 +440,7 @@ function App() {
 
   const handleAlertPortalClick = () => {
     if (alertPortalLink) {
-      window.open(alertPortalLink, "_blank");
+      app.openLink({ url: alertPortalLink });
       handleCloseAlert();
     }
   };
@@ -498,18 +470,14 @@ function App() {
     setPaginationLoading(true);
 
     try {
-      if (!window.openai?.callTool) {
-        throw new Error("deleteChat tool not available");
-      }
-
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
       addLog("Calling deleteChat tool", { chatId, userId });
-      const result = await window.openai.callTool("deleteChat", {
-        chatId,
-        userId,
+      const result = await app.callServerTool({
+        name: "deleteChat",
+        arguments: { chatId, userId },
       });
 
       addLog("Delete chat result", result);
@@ -595,21 +563,20 @@ function App() {
     const currentTitle = selectedChat.title;
 
     try {
-      if (!window.openai?.callTool) {
-        throw new Error("updateChat tool not available");
-      }
-
       const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
       addLog("Calling updateChat tool", { chatId, userId, title: trimmedTitle });
-      const result = await window.openai.callTool("updateChat", {
-        chatId,
-        userId,
-        chat: {
-          title: trimmedTitle,
+      const result = await app.callServerTool({
+        name: "updateChat",
+        arguments: {
+          chatId,
+          userId,
+          chat: {
+            title: trimmedTitle,
+          },
         },
       });
 
@@ -726,21 +693,20 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      if (!window.openai?.callTool) {
-        throw new Error("updateChat tool not available");
-      }
-
       const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
       addLog("Calling updateChat tool with turns", { chatId, userId, turnsCount: editedTurns.length });
-      const result = await window.openai.callTool("updateChat", {
-        chatId,
-        userId,
-        chat: {
-          turns: editedTurns,
+      const result = await app.callServerTool({
+        name: "updateChat",
+        arguments: {
+          chatId,
+          userId,
+          chat: {
+            turns: editedTurns,
+          },
         },
       });
 
@@ -910,11 +876,6 @@ function App() {
     setHelpTextLoading(true);
 
     try {
-      if (!window.openai?.callTool) {
-        throw new Error("explainHowToUse tool not available");
-      }
-
-      // Get userId from chats
       const userId = selectedChat?.userId || (chats.length > 0 && chats[0].userId) || "";
 
       if (!userId) {
@@ -922,8 +883,9 @@ function App() {
       }
 
       addLog("Calling explainHowToUse tool", { userId });
-      const result = await window.openai.callTool("explainHowToUse", {
-        userId,
+      const result = await app.callServerTool({
+        name: "explainHowToUse",
+        arguments: { userId },
       });
 
       addLog("explainHowToUse result", result);
@@ -1109,10 +1071,6 @@ function App() {
     });
 
     try {
-      if (!window.openai?.callTool) {
-        throw new Error("widgetAdd tool not available");
-      }
-
       const toolArgs = {
         htmlContent: contentToSend,
         title: titleToSend,
@@ -1133,7 +1091,7 @@ function App() {
         setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
       });
 
-      const callToolPromise = window.openai.callTool("widgetAdd", toolArgs);
+      const callToolPromise = app.callServerTool({ name: "widgetAdd", arguments: toolArgs });
 
       addLog("⏳ [WIDGET] Waiting for response...");
       const result = await Promise.race([callToolPromise, timeoutPromise]);
@@ -1365,16 +1323,14 @@ function App() {
     addLog("Searching chats", { query, page });
 
     try {
-      if (!window.openai?.callTool) {
-        throw new Error("loadMyChats tool not available");
-      }
-
-      // Use loadMyChats with query parameter (free, no credits)
-      const result = await window.openai.callTool("loadMyChats", {
-        query: query.trim(),
-        page,
-        size: 10,
-        widgetVersion: WIDGET_VERSION,
+      const result = await app.callServerTool({
+        name: "loadMyChats",
+        arguments: {
+          query: query.trim(),
+          page,
+          size: 10,
+          widgetVersion: WIDGET_VERSION,
+        },
       });
 
       addLog("Search result", result);
@@ -1404,17 +1360,15 @@ function App() {
     addLog("Clearing search, reloading chats");
 
     try {
-      if (window.openai?.callTool) {
-        const result = await window.openai.callTool("loadMyChats", {
-          page: 0,
-          size: 10,
-        });
-        if (result?.structuredContent?.chats) {
-          setChats(deduplicateChats(result.structuredContent.chats));
-          setPagination(result.structuredContent.pagination);
-          setCurrentPage(0);
-          setPageInputValue("1");
-        }
+      const result = await app.callServerTool({
+        name: "loadMyChats",
+        arguments: { page: 0, size: 10 },
+      });
+      if (result?.structuredContent?.chats) {
+        setChats(deduplicateChats(result.structuredContent.chats));
+        setPagination(result.structuredContent.pagination);
+        setCurrentPage(0);
+        setPageInputValue("1");
       }
     } catch (err) {
       addLog("Error reloading chats", { error: err.message });
@@ -1431,15 +1385,15 @@ function App() {
     addLog("Loading more chats", { page: nextPage, isSearching });
 
     try {
-      if (!window.openai?.callTool) return;
-
       if (isSearching && searchQuery) {
-        // Load more search results using loadMyChats with query (free)
-        const result = await window.openai.callTool("loadMyChats", {
-          query: searchQuery.trim(),
-          page: nextPage,
-          size: 10,
-          widgetVersion: WIDGET_VERSION,
+        const result = await app.callServerTool({
+          name: "loadMyChats",
+          arguments: {
+            query: searchQuery.trim(),
+            page: nextPage,
+            size: 10,
+            widgetVersion: WIDGET_VERSION,
+          },
         });
         if (result?.structuredContent?.chats) {
           setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
@@ -1448,11 +1402,13 @@ function App() {
           setPageInputValue(String(nextPage + 1));
         }
       } else {
-        // Load more regular chats
-        const result = await window.openai.callTool("loadMyChats", {
-          page: nextPage,
-          size: 10,
-          widgetVersion: WIDGET_VERSION,
+        const result = await app.callServerTool({
+          name: "loadMyChats",
+          arguments: {
+            page: nextPage,
+            size: 10,
+            widgetVersion: WIDGET_VERSION,
+          },
         });
         if (result?.structuredContent?.chats) {
           setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
@@ -1460,7 +1416,6 @@ function App() {
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
-
       }
     } catch (err) {
       addLog("Error loading more chats", { error: err.message });
@@ -1603,10 +1558,8 @@ function App() {
               className={`p-2 rounded-lg transition-colors ${isDarkMode
                 ? "hover:bg-gray-800 text-gray-300"
                 : "hover:bg-gray-100 text-gray-600"
-                } ${!window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
                 }`}
               title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
-              disabled={!window.openai?.requestDisplayMode}
             >
               {displayMode === "fullscreen" ? (
                 <MdFullscreenExit className="w-5 h-5" />
@@ -1743,11 +1696,8 @@ function App() {
                   : isDarkMode
                   ? "bg-gray-800 text-white hover:bg-gray-700"
                   : "bg-gray-100 text-black hover:bg-gray-200"
-              } ${
-                !window.openai?.requestDisplayMode ? "opacity-50 cursor-not-allowed" : ""
               }`}
               title={displayMode === "pip" ? "Exit picture-in-picture" : "Enter picture-in-picture"}
-              disabled={!window.openai?.requestDisplayMode}
             >
               <MdPictureInPicture className="w-5 h-5" />
             </button> */}
@@ -2698,9 +2648,9 @@ function App() {
                                 } else {
                                   setPaginationLoading(true);
                                   try {
-                                    const res = await window.openai?.callTool("loadMyChats", {
-                                      page,
-                                      size: 10,
+                                    const res = await app.callServerTool({
+                                      name: "loadMyChats",
+                                      arguments: { page, size: 10 },
                                     });
                                     if (res?.structuredContent?.chats) {
                                       setChats(deduplicateChats(res.structuredContent.chats));
@@ -2737,9 +2687,9 @@ function App() {
                             } else {
                               setPaginationLoading(true);
                               try {
-                                const res = await window.openai?.callTool("loadMyChats", {
-                                  page: targetPage,
-                                  size: 10,
+                                const res = await app.callServerTool({
+                                  name: "loadMyChats",
+                                  arguments: { page: targetPage, size: 10 },
                                 });
                                 if (res?.structuredContent?.chats) {
                                   setChats(deduplicateChats(res.structuredContent.chats));
