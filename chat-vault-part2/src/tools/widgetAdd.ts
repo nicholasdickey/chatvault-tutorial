@@ -8,6 +8,7 @@ import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { saveChatCore, checkForExistingChat } from "../utils/saveChatCore.js";
+import { parsePastedChatWithLLM } from "../utils/parsePastedChatWithLLM.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 
@@ -447,11 +448,16 @@ export async function widgetAdd(
             }
         }
 
-        // Parse the content to extract turns
-        // If parsing fails, it will be saved as a note (single turn with text as prompt)
+        // Parse the content to extract turns: try LLM first, fall back to heuristic parsing
         console.log("[widgetAdd] Parsing content...");
         console.log("[widgetAdd] Content preview (first 500 chars):", htmlContent.substring(0, 500));
-        const turns = parseChatContent(htmlContent);
+        let turns: Array<{ prompt: string; response: string }> | null =
+            process.env.OPENAI_API_KEY
+                ? await parsePastedChatWithLLM(htmlContent)
+                : null;
+        if (turns == null || turns.length === 0) {
+            turns = parseChatContent(htmlContent);
+        }
         console.log("[widgetAdd] Parsed turns count:", turns.length);
         if (turns.length > 0) {
             console.log("[widgetAdd] First turn preview:", {
