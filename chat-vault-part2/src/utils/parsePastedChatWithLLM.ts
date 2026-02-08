@@ -53,7 +53,7 @@ export async function parsePastedChatWithLLM(
     console.log("[parsePastedChatWithLLM] ========== INPUT TO LLM ==========");
     console.log("[parsePastedChatWithLLM] Original length:", htmlOrText.length, "chars");
     console.log("[parsePastedChatWithLLM] Sent length:", input.length, "chars", wasTruncated ? "(TRUNCATED)" : "(full)");
-    console.log("[parsePastedChatWithLLM] Input (full):", input);
+    // console.log("[parsePastedChatWithLLM] Input (full):", input);
     console.log("[parsePastedChatWithLLM] Instructions length:", PARSE_INSTRUCTIONS.length, "chars");
 
     const openai = new OpenAI({ apiKey });
