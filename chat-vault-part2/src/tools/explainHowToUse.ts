@@ -36,7 +36,7 @@ Use the '+' button in the ChatVault widget to manually add conversations or note
 
 ## Accessing Your Vault
 
-Just ask Claude,ChatGPT or whatever the chatbot you are using to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
+Just ask Claude, ChatGPT or whatever the chatbot you are using to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
 To leverage the true power of Chat Vault, you can ask the chatbot to user the chat vault as your personal knowledge base and search it automatically to include in the context when researching or any other agentic tasks. 
 
 ## Getting Started in ChatGPT
