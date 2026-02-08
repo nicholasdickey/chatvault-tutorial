@@ -10,7 +10,7 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const DEFAULT_MAX_INPUT_LENGTH = 80_000;
+const DEFAULT_MAX_INPUT_LENGTH = 1_000_000;
 
 const ChatTurnsSchema = z.object({
     turns: z.array(
@@ -37,14 +37,21 @@ export async function parsePastedChatWithLLM(
         return null;
     }
 
-    const input =
-        htmlOrText.length > maxInputLength
-            ? htmlOrText.slice(0, maxInputLength) + "\n\n[Content truncated for context limit.]"
-            : htmlOrText;
+    const wasTruncated = htmlOrText.length > maxInputLength;
+    const input = wasTruncated
+        ? htmlOrText.slice(0, maxInputLength) + "\n\n[Content truncated for context limit.]"
+        : htmlOrText;
+
+    console.log("[parsePastedChatWithLLM] ========== INPUT TO LLM ==========");
+    console.log("[parsePastedChatWithLLM] Original length:", htmlOrText.length, "chars");
+    console.log("[parsePastedChatWithLLM] Sent length:", input.length, "chars", wasTruncated ? "(TRUNCATED)" : "(full)");
+    console.log("[parsePastedChatWithLLM] Input (full):", input);
+    console.log("[parsePastedChatWithLLM] Instructions length:", PARSE_INSTRUCTIONS.length, "chars");
 
     const openai = new OpenAI({ apiKey });
 
     try {
+        console.log("[parsePastedChatWithLLM] Calling openai.responses.parse (model: gpt-4.1-nano)...");
         const response = await openai.responses.parse({
             model: "gpt-4.1-nano",
             instructions: PARSE_INSTRUCTIONS,
@@ -53,6 +60,30 @@ export async function parsePastedChatWithLLM(
                 format: zodTextFormat(ChatTurnsSchema, "chat_turns"),
             },
         });
+
+        console.log("[parsePastedChatWithLLM] ========== RAW RESPONSE FROM LLM ==========");
+        console.log("[parsePastedChatWithLLM] response.status:", response.status);
+        if (response.error) console.log("[parsePastedChatWithLLM] response.error:", response.error);
+        console.log("[parsePastedChatWithLLM] response.output (item count):", response.output?.length ?? 0);
+        if (response.output?.length) {
+            response.output.forEach((item, i) => {
+                const content = "content" in item ? item.content : null;
+                console.log("[parsePastedChatWithLLM] response.output[" + i + "] type:", item.type ?? "unknown");
+                if (content && Array.isArray(content)) {
+                    content.forEach((c: { type?: string; text?: string }, j: number) => {
+                        const full = "text" in c && typeof (c as { text?: string }).text === "string"
+                            ? String((c as { text?: string }).text)
+                            : JSON.stringify(c);
+                        console.log("[parsePastedChatWithLLM]   content[" + j + "] type:", c.type, "full:", full);
+                    });
+                }
+            });
+        }
+        console.log("[parsePastedChatWithLLM] response.output_parsed is null?", response.output_parsed == null);
+        if (response.output_parsed != null) {
+            const p = response.output_parsed as { turns?: unknown[] };
+            console.log("[parsePastedChatWithLLM] output_parsed.turns length:", p.turns?.length ?? "n/a");
+        }
 
         if (response.status !== "completed") {
             console.warn("[parsePastedChatWithLLM] Response not completed:", response.status, response.error);
@@ -91,7 +122,13 @@ export async function parsePastedChatWithLLM(
             return null;
         }
 
+        console.log("[parsePastedChatWithLLM] ========== PARSED TURNS (what we return) ==========");
         console.log("[parsePastedChatWithLLM] Parsed", validTurns.length, "turns via LLM");
+        validTurns.forEach((t, i) => {
+            console.log("[parsePastedChatWithLLM] Turn", i + 1, "prompt length:", t.prompt.length, "| prompt (full):", t.prompt);
+            console.log("[parsePastedChatWithLLM] Turn", i + 1, "response length:", t.response.length, "| response (full):", t.response);
+        });
+        console.log("[parsePastedChatWithLLM] ========== END LLM DEBUG ==========");
         return validTurns;
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
