@@ -790,6 +790,22 @@ function App() {
     if (!markdown) return "";
 
     let html = markdown;
+    const codeBlocks = [];
+
+    // Extract fenced code blocks (```tsx, ```json, etc.) first so paragraph split doesn't break them
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, content) => {
+      const escaped = content
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+      const langClass = lang ? ` language-${lang}` : "";
+      const index = codeBlocks.length;
+      codeBlocks.push(
+        `<pre class="mb-3 overflow-x-auto rounded bg-gray-100 dark:bg-gray-800 p-3 text-sm"><code class="${langClass}">${escaped}</code></pre>`
+      );
+      return `\n\n%%%CODEBLOCK${index}%%%\n\n`;
+    });
 
     // Convert headers (do this first before paragraph processing)
     html = html.replace(/^### (.*$)/gim, '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>');
@@ -801,6 +817,13 @@ function App() {
 
     // Convert bold
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic (after bold so ** is already consumed)
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+    // Inline code (after fenced blocks so ``` is gone; no newlines in inline code)
+    html = html.replace(/`([^`\n]+)`/g, '<code class="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-1 rounded">$1</code>');
+    // Strikethrough
+    html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
 
     // Parse a markdown table block into header row and body rows
     const parseMarkdownTable = (block) => {
@@ -827,6 +850,7 @@ function App() {
     html = paragraphs.map(p => {
       const trimmed = p.trim();
       if (!trimmed) return '';
+      if (/^%%%CODEBLOCK\d+%%%$/.test(trimmed)) return trimmed;
       const lines = trimmed.split(/\n/).map((l) => l.trim());
       const looksLikeTable = lines.length >= 1 && lines.every((line) => tableRowPattern.test(line));
       if (looksLikeTable) {
@@ -841,11 +865,31 @@ function App() {
         const tbody = tbodyRows.length ? `<tbody>${tbodyRows.join('')}</tbody>` : '';
         return `<table class="mb-3 table-auto border-collapse border border-gray-300 dark:border-gray-600 text-sm">${thead}${tbody}</table>`;
       }
+      const ulPattern = /^\s*[-*+]\s+.+$/;
+      const looksLikeUl = lines.length >= 1 && lines.every((line) => ulPattern.test(line.trim()));
+      if (looksLikeUl) {
+        const items = lines.map((line) => line.replace(/^\s*[-*+]\s+/, '').trim());
+        return `<ul class="mb-3 list-disc list-inside space-y-1">${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+      }
+      const olPattern = /^\d+\.\s+.+$/;
+      const looksLikeOl = lines.length >= 1 && lines.every((line) => olPattern.test(line.trim()));
+      if (looksLikeOl) {
+        const items = lines.map((line) => line.replace(/^\d+\.\s+/, '').trim());
+        return `<ol class="mb-3 list-decimal list-inside space-y-1">${items.map((item) => `<li>${item}</li>`).join('')}</ol>`;
+      }
+      const looksLikeBlockquote = lines.length >= 1 && lines.every((line) => line.startsWith('> ') || line === '>');
+      if (looksLikeBlockquote) {
+        const content = lines.map((line) => (line.startsWith('> ') ? line.slice(2) : line === '>' ? '' : line)).join('<br />');
+        return `<blockquote class="mb-3 border-l-4 border-gray-300 dark:border-gray-600 pl-4 text-gray-700 dark:text-gray-300">${content}</blockquote>`;
+      }
       // Replace single newlines with <br> within paragraphs
       const withBreaks = trimmed.replace(/\n/g, '<br />');
       return `<p class="mb-3">${withBreaks}</p>`;
     }).join('');
 
+    codeBlocks.forEach((block, i) => {
+      html = html.replace(`%%%CODEBLOCK${i}%%%`, block);
+    });
     return html;
   };
 
