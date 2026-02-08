@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
 import { app } from "../app-instance.js";
 
-// Chat data structure (no TypeScript types in .jsx file)
+// Chat data structure (TSX; types can be added later)
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
 const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.1";
@@ -1243,35 +1243,28 @@ function App() {
       setPaginationLoading(true);
 
       // Reload chats and update userInfo with loading indicator
-      if (window.openai?.callTool) {
-        try {
-          const loadResult = await window.openai.callTool("loadMyChats", {
-            page: 0,
-            size: 10,
-          });
-          if (loadResult?.structuredContent?.chats) {
-            setChats(deduplicateChats(loadResult.structuredContent.chats));
-            setPagination(loadResult.structuredContent.pagination);
-            setCurrentPage(0);
-            setPageInputValue("1");
-            // Update userInfo to refresh counter
-            if (loadResult.structuredContent.userInfo) {
-              setUserInfo(loadResult.structuredContent.userInfo);
-              addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
-            }
-            // Update content metadata if present
-            if (loadResult.structuredContent.content) {
-              setContentMetadata(loadResult.structuredContent.content);
-            }
+      try {
+        const loadResult = await app.callServerTool({
+          name: "loadMyChats",
+          arguments: { page: 0, size: 10 },
+        });
+        if (loadResult?.structuredContent?.chats) {
+          setChats(deduplicateChats(loadResult.structuredContent.chats));
+          setPagination(loadResult.structuredContent.pagination);
+          setCurrentPage(0);
+          setPageInputValue("1");
+          if (loadResult.structuredContent.userInfo) {
+            setUserInfo(loadResult.structuredContent.userInfo);
+            addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
           }
-
-        } catch (err) {
-          addLog("Error reloading chats after manual save", { error: err.message });
-          setError(`Failed to reload chats: ${err.message}`);
-        } finally {
-          setPaginationLoading(false);
+          if (loadResult.structuredContent.content) {
+            setContentMetadata(loadResult.structuredContent.content);
+          }
         }
-      } else {
+      } catch (err) {
+        addLog("Error reloading chats after manual save", { error: err.message });
+        setError(`Failed to reload chats: ${err.message}`);
+      } finally {
         setPaginationLoading(false);
       }
     } catch (err) {
@@ -1492,13 +1485,20 @@ function App() {
             ) :
               <button
                 onClick={handleRefresh}
-                className={`p-2 rounded-lg transition-colors ${isDarkMode
-                  ? "hover:bg-gray-800 text-gray-300"
-                  : "hover:bg-gray-100 text-gray-600"
+                disabled={loading}
+                className={`p-2 rounded-lg transition-colors ${loading
+                  ? "opacity-50 cursor-not-allowed"
+                  : isDarkMode
+                    ? "hover:bg-gray-800 text-gray-300"
+                    : "hover:bg-gray-100 text-gray-600"
                   }`}
                 title="Refresh chats"
               >
-                <MdRefresh className="w-5 h-5" />
+                {loading ? (
+                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${isDarkMode ? "border-gray-300" : "border-gray-600"}`} />
+                ) : (
+                  <MdRefresh className="w-5 h-5" />
+                )}
               </button>}
           </div>
           <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import "./index.css";
 
 import { app } from "./app-instance.js";
 
-app.connect();
-
-import "./chat-vault/index.jsx";
+// Wait for MCP connection before loading the chat UI so tool calls (e.g. loadMyChats on mount) don't get "Not connected".
+app.connect().then(() => {
+  import("./chat-vault/index.tsx");
+});
