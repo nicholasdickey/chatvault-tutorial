@@ -802,11 +802,45 @@ function App() {
     // Convert bold
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
+    // Parse a markdown table block into header row and body rows
+    const parseMarkdownTable = (block) => {
+      const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
+      if (lines.length === 0) return { header: [], body: [] };
+      const rowToCells = (line) => {
+        const cells = line.split('|').map((c) => c.trim());
+        while (cells.length && cells[0] === '') cells.shift();
+        while (cells.length && cells[cells.length - 1] === '') cells.pop();
+        return cells;
+      };
+      const rows = lines.map(rowToCells);
+      const header = rows[0] || [];
+      const isSeparator = (cells) => cells.every((c) => /^[\s\-:]+$/.test(c));
+      const body = rows.length > 1 && isSeparator(rows[1]) ? rows.slice(2) : rows.slice(1);
+      return { header, body };
+    };
+
     // Convert line breaks to paragraphs (double newline = paragraph, single = br)
     const paragraphs = html.split(/\n\s*\n/);
+    const tableRowPattern = /^\|.+\|$/;
+    const tableCellClasses = "px-2 py-1 border border-gray-300 dark:border-gray-600";
+    const tableHeaderClasses = "px-2 py-1 border border-gray-300 dark:border-gray-600 font-semibold bg-gray-100 dark:bg-gray-700 text-left";
     html = paragraphs.map(p => {
       const trimmed = p.trim();
       if (!trimmed) return '';
+      const lines = trimmed.split(/\n/).map((l) => l.trim());
+      const looksLikeTable = lines.length >= 1 && lines.every((line) => tableRowPattern.test(line));
+      if (looksLikeTable) {
+        const { header, body } = parseMarkdownTable(trimmed);
+        const colCount = header.length;
+        const thead = header.length
+          ? `<thead><tr>${header.map((c) => `<th class="${tableHeaderClasses}">${c}</th>`).join('')}</tr></thead>`
+          : '';
+        const tbodyRows = body.map(
+          (row) => `<tr>${Array.from({ length: colCount }, (_, i) => `<td class="${tableCellClasses}">${row[i] ?? ''}</td>`).join('')}</tr>`
+        );
+        const tbody = tbodyRows.length ? `<tbody>${tbodyRows.join('')}</tbody>` : '';
+        return `<table class="mb-3 table-auto border-collapse border border-gray-300 dark:border-gray-600 text-sm">${thead}${tbody}</table>`;
+      }
       // Replace single newlines with <br> within paragraphs
       const withBreaks = trimmed.replace(/\n/g, '<br />');
       return `<p class="mb-3">${withBreaks}</p>`;

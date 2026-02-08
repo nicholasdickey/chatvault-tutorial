@@ -152,7 +152,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     }
     const contentMetadata = {
 
-      subTitle: `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save.`,
+      subTitle: `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save to the right.`,
 
       limits: {
         counterTooltip: "Click to learn about chat limits",
