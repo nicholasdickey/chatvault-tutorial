@@ -28,10 +28,20 @@ Your job is to EXTRACT and COPY the exact text—verbatim—from the input. Do N
 CRITICAL: If the input contains multiple user/assistant exchanges (multiple back-and-forth message pairs), you MUST output EVERY exchange as a separate object in the \`turns\` array. Do NOT collapse or summarize multiple pairs into a single turn. One user message plus its following assistant reply = one turn. Scan the entire input and include every such pair.
 
 For each turn:
-- \`prompt\`: copy the EXACT text of the user message as it appears in the input (strip HTML tags but keep the raw message text unchanged).
-- \`response\`: copy the EXACT text of the assistant reply as it appears in the input (strip HTML tags but keep the raw reply text unchanged).
+- \`prompt\`: copy the EXACT text of the user message. If the input is HTML, output the content as markdown (see FORMATTING below), not raw HTML or plain text with formatting lost.
+- \`response\`: copy the EXACT text of the assistant reply. If the input is HTML, output the content as markdown (see FORMATTING below), not raw HTML or plain text with formatting lost.
 
-Output JSON with one key \`turns\`: an array of objects with \`prompt\` and \`response\` strings. Preserve markdown and line breaks from the original. Only if the input genuinely contains a single message or no distinguishable user/assistant pairs, output a single turn (with the other field as empty string). Do not add any commentary—only valid JSON matching the schema.`;
+FORMATTING — preserve structure as markdown:
+- Bold: <strong>, <b> → **text**
+- Italic: <em>, <i> → *text*
+- Code: <code> → \`code\`; <pre> (or code blocks) → \`\`\`lang\\n...\`\`\`
+- Lists: <ul>/<ol> and <li> → markdown bullet or numbered lists (- item or 1. item)
+- Tables: <table>, <tr>, <th>, <td> → markdown table (| col | col |, header separator ---)
+- Headings: <h1>–<h6> → # to ######
+- Line breaks and paragraphs: preserve with newlines; <br> → newline, block elements → newline between blocks
+Do not strip formatting away: convert HTML to equivalent markdown so the output looks the same when rendered.
+
+Output JSON with one key \`turns\`: an array of objects with \`prompt\` and \`response\` strings (markdown). Only if the input genuinely contains a single message or no distinguishable user/assistant pairs, output a single turn (with the other field as empty string). Do not add any commentary—only valid JSON matching the schema.`;
 
 /**
  * Strip only <script> and <style> (and their contents). Pass the rest of the HTML to the LLM so it can use structure (tags, attributes) to parse turns.
