@@ -21,15 +21,17 @@ const ChatTurnsSchema = z.object({
     ),
 });
 
-const PARSE_INSTRUCTIONS = `You are a parser. The user will paste HTML or text from a chat (e.g. ChatGPT, Claude, Gemini).
+const PARSE_INSTRUCTIONS = `You are a parser. The user will paste HTML or text from a chat (from any AI chat client: ChatGPT, Claude, Gemini, etc.).
 
 Your job is to EXTRACT and COPY the exact text—verbatim—from the input. Do NOT summarize, paraphrase, interpret, or describe the content. Do NOT output meta-descriptions (e.g. "extract user messages...", "The provided HTML contains...", "The key questions include...").
+
+CRITICAL: If the input contains multiple user/assistant exchanges (multiple back-and-forth message pairs), you MUST output EVERY exchange as a separate object in the \`turns\` array. Do NOT collapse or summarize multiple pairs into a single turn. One user message plus its following assistant reply = one turn. Scan the entire input and include every such pair.
 
 For each turn:
 - \`prompt\`: copy the EXACT text of the user message as it appears in the input (strip HTML tags but keep the raw message text unchanged).
 - \`response\`: copy the EXACT text of the assistant reply as it appears in the input (strip HTML tags but keep the raw reply text unchanged).
 
-Output JSON with one key \`turns\`: an array of objects with \`prompt\` and \`response\` strings. Preserve markdown and line breaks from the original. If there is only one block of text or no clear back-and-forth, output one turn with the other field as empty string. Do not add any commentary—only valid JSON matching the schema.`;
+Output JSON with one key \`turns\`: an array of objects with \`prompt\` and \`response\` strings. Preserve markdown and line breaks from the original. Only if the input genuinely contains a single message or no distinguishable user/assistant pairs, output a single turn (with the other field as empty string). Do not add any commentary—only valid JSON matching the schema.`;
 
 /**
  * Parse pasted HTML or text into structured chat turns using the OpenAI Responses API (gpt-4.1-nano, structured output).
