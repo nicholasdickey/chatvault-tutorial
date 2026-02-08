@@ -34,7 +34,27 @@ For each turn:
 Output JSON with one key \`turns\`: an array of objects with \`prompt\` and \`response\` strings. Preserve markdown and line breaks from the original. Only if the input genuinely contains a single message or no distinguishable user/assistant pairs, output a single turn (with the other field as empty string). Do not add any commentary—only valid JSON matching the schema.`;
 
 /**
- * Parse pasted HTML or text into structured chat turns using the OpenAI Responses API (gpt-4.1-nano, structured output).
+ * Convert HTML to plain text preserving block/message boundaries so the LLM can see turn structure.
+ * Strips script/style, replaces block elements with newlines, removes remaining tags, normalizes whitespace.
+ */
+function htmlToPlainText(html: string): string {
+    let text = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    text = text
+        .replace(/<\/?(div|p|br|h[1-6]|li|ul|ol|blockquote|article|section)[^>]*>/gi, "\n")
+        .replace(/<[^>]*>/g, "")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n\s*\n\s*\n/g, "\n\n")
+        .trim();
+    return text;
+}
+
+/** Model for responses.parse. Set PARSE_CHAT_LLM_MODEL=gpt-4.1-mini if nano still collapses to one turn. */
+const PARSE_CHAT_LLM_MODEL = process.env.PARSE_CHAT_LLM_MODEL?.trim() || "gpt-4.1-nano";
+
+/**
+ * Parse pasted HTML or text into structured chat turns using the OpenAI Responses API (structured output).
  * Returns null if OPENAI_API_KEY is missing, the API errors, the model refuses, or the parsed result is empty/invalid.
  */
 export async function parsePastedChatWithLLM(
@@ -47,13 +67,17 @@ export async function parsePastedChatWithLLM(
         return null;
     }
 
-    const wasTruncated = htmlOrText.length > maxInputLength;
+    const looksLikeHtml = /<[a-zA-Z]/.test(htmlOrText);
+    const textForLLM = looksLikeHtml ? htmlToPlainText(htmlOrText) : htmlOrText;
+
+    const wasTruncated = textForLLM.length > maxInputLength;
     const input = wasTruncated
-        ? htmlOrText.slice(0, maxInputLength) + "\n\n[Content truncated for context limit.]"
-        : htmlOrText;
+        ? textForLLM.slice(0, maxInputLength) + "\n\n[Content truncated for context limit.]"
+        : textForLLM;
 
     console.log("[parsePastedChatWithLLM] ========== INPUT TO LLM ==========");
     console.log("[parsePastedChatWithLLM] Original length:", htmlOrText.length, "chars");
+    if (looksLikeHtml) console.log("[parsePastedChatWithLLM] Preprocessed HTML to plain text, length:", textForLLM.length, "chars");
     console.log("[parsePastedChatWithLLM] Sent length:", input.length, "chars", wasTruncated ? "(TRUNCATED)" : "(full)");
     // console.log("[parsePastedChatWithLLM] Input (full):", input);
     console.log("[parsePastedChatWithLLM] Instructions length:", PARSE_INSTRUCTIONS.length, "chars");
@@ -61,9 +85,9 @@ export async function parsePastedChatWithLLM(
     const openai = new OpenAI({ apiKey });
 
     try {
-        console.log("[parsePastedChatWithLLM] Calling openai.responses.parse (model: gpt-4.1-nano)...");
+        console.log("[parsePastedChatWithLLM] Calling openai.responses.parse (model:", PARSE_CHAT_LLM_MODEL, ")...");
         const response = await openai.responses.parse({
-            model: "gpt-4.1-nano",
+            model: PARSE_CHAT_LLM_MODEL,
             instructions: PARSE_INSTRUCTIONS,
             input,
             text: {
