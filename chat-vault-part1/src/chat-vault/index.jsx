@@ -1537,13 +1537,20 @@ function App() {
             ) :
               <button
                 onClick={handleRefresh}
-                className={`p-2 rounded-lg transition-colors ${isDarkMode
-                  ? "hover:bg-gray-800 text-gray-300"
-                  : "hover:bg-gray-100 text-gray-600"
+                disabled={loading}
+                className={`p-2 rounded-lg transition-colors ${loading
+                  ? "opacity-50 cursor-not-allowed"
+                  : isDarkMode
+                    ? "hover:bg-gray-800 text-gray-300"
+                    : "hover:bg-gray-100 text-gray-600"
                   }`}
                 title="Refresh chats"
               >
-                <MdRefresh className="w-5 h-5" />
+                {loading ? (
+                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${isDarkMode ? "border-gray-300" : "border-gray-600"}`} />
+                ) : (
+                  <MdRefresh className="w-5 h-5" />
+                )}
               </button>}
           </div>
           <div className="flex items-center gap-2">
