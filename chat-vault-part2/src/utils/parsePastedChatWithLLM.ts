@@ -34,20 +34,12 @@ For each turn:
 Output JSON with one key \`turns\`: an array of objects with \`prompt\` and \`response\` strings. Preserve markdown and line breaks from the original. Only if the input genuinely contains a single message or no distinguishable user/assistant pairs, output a single turn (with the other field as empty string). Do not add any commentary—only valid JSON matching the schema.`;
 
 /**
- * Convert HTML to plain text preserving block/message boundaries so the LLM can see turn structure.
- * Strips script/style, replaces block elements with newlines, removes remaining tags, normalizes whitespace.
+ * Strip only <script> and <style> (and their contents). Pass the rest of the HTML to the LLM so it can use structure (tags, attributes) to parse turns.
  */
-function htmlToPlainText(html: string): string {
-    let text = html
+function stripScriptAndStyle(html: string): string {
+    return html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-    text = text
-        .replace(/<\/?(div|p|br|h[1-6]|li|ul|ol|blockquote|article|section)[^>]*>/gi, "\n")
-        .replace(/<[^>]*>/g, "")
-        .replace(/[ \t]+/g, " ")
-        .replace(/\n\s*\n\s*\n/g, "\n\n")
-        .trim();
-    return text;
 }
 
 /** Model for responses.parse. Set PARSE_CHAT_LLM_MODEL=gpt-4.1-mini if nano still collapses to one turn. */
@@ -68,7 +60,7 @@ export async function parsePastedChatWithLLM(
     }
 
     const looksLikeHtml = /<[a-zA-Z]/.test(htmlOrText);
-    const textForLLM = looksLikeHtml ? htmlToPlainText(htmlOrText) : htmlOrText;
+    const textForLLM = looksLikeHtml ? stripScriptAndStyle(htmlOrText) : htmlOrText;
 
     const wasTruncated = textForLLM.length > maxInputLength;
     const input = wasTruncated
@@ -77,7 +69,7 @@ export async function parsePastedChatWithLLM(
 
     console.log("[parsePastedChatWithLLM] ========== INPUT TO LLM ==========");
     console.log("[parsePastedChatWithLLM] Original length:", htmlOrText.length, "chars");
-    if (looksLikeHtml) console.log("[parsePastedChatWithLLM] Preprocessed HTML to plain text, length:", textForLLM.length, "chars");
+    if (looksLikeHtml) console.log("[parsePastedChatWithLLM] Stripped script/style only, length:", textForLLM.length, "chars");
     console.log("[parsePastedChatWithLLM] Sent length:", input.length, "chars", wasTruncated ? "(TRUNCATED)" : "(full)");
     // console.log("[parsePastedChatWithLLM] Input (full):", input);
     console.log("[parsePastedChatWithLLM] Instructions length:", PARSE_INSTRUCTIONS.length, "chars");
