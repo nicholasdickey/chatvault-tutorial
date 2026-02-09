@@ -12,7 +12,7 @@ export interface ExplainHowToUseResult {
 }
 export const helpText = `# How to Use The Chat Vault App
 
-Chat Vault helps you save, organize, and search your Claude, Gemini, ChatGPT, etc. "aha! moments" and knowledge-building conversations. Think of it as a personal archive for your most valuable chats. Your knowldge base. Your AI chatbot's long-term memory. That you can own and can take with you to any new platform or AI environment.
+Chat Vault helps you save, organize, and search your Claude, Gemini, ChatGPT, etc. "aha! moments" and knowledge-building conversations. Think of it as a secure personal archive for your most valuable chats. Your knowldge base. Your AI chatbots' long-term memory. That you own and can take with you to any new platform or AI environment.
 
 ## Saving Conversations
 
@@ -26,7 +26,10 @@ Simply ask ChatGPT or the chatbot you are using to save the current conversation
 Note, in works best when the start is from a fresh chat, and the chatbot is not already in the middle of a long conversation.
 If the chatbot is having trouble saving a verbatim chat - you can copy the chat manually, start a new chat, paste the chat into the new chat, and ask the chatbot to parse and save the chat turn-by-turn into the vault.
 
-### 2. Manual Save via Widget
+### 2. Paste the copied chat into the connected chat and ask the host to parse it turn-by-turn and save it into the vault.
+Simply ask ChatGPT or the chatbot you are using to parse and save the pasted conversation to your vault. 
+
+### 3. Manual Save via Widget
 Use the '+' button in the ChatVault widget to manually add conversations or notes:
 1. Copy a conversation from Claude, ChatGPT, Gemini, etc. (or anywhere)
 2. Click the '+' button in the ChatVault widget header
