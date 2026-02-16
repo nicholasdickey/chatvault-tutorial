@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index, integer, primaryKey } from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
 // Define vector type for pgvector
@@ -39,3 +39,29 @@ export const chats = pgTable("chats", {
 
 export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
+
+// Iterative save: temporary storage for turn-by-turn chat saves
+export const chatSaveJobs = pgTable("chat_save_jobs", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const chatSaveJobTurns = pgTable(
+    "chat_save_job_turns",
+    {
+        jobId: uuid("job_id")
+            .notNull()
+            .references(() => chatSaveJobs.id, { onDelete: "cascade" }),
+        turnIndex: integer("turn_index").notNull(),
+        prompt: text("prompt").notNull(),
+        response: text("response").notNull(),
+    },
+    (table) => [primaryKey({ columns: [table.jobId, table.turnIndex] })]
+);
+
+export type ChatSaveJob = typeof chatSaveJobs.$inferSelect;
+export type NewChatSaveJob = typeof chatSaveJobs.$inferInsert;
+export type ChatSaveJobTurn = typeof chatSaveJobTurns.$inferSelect;
+export type NewChatSaveJobTurn = typeof chatSaveJobTurns.$inferInsert;

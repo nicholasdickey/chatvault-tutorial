@@ -18,6 +18,9 @@ import * as dotenv from "dotenv";
 import { testConnection, db } from "./db/index.js";
 import { sql } from "drizzle-orm";
 import { saveChat } from "./tools/saveChat.js";
+import { saveChatTurnsBegin } from "./tools/saveChatTurnsBegin.js";
+import { saveChatTurn } from "./tools/saveChatTurn.js";
+import { saveChatTurnsFinalize } from "./tools/saveChatTurnsFinalize.js";
 import { widgetAdd } from "./tools/widgetAdd.js";
 import { loadMyChats } from "./tools/loadMyChats.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
@@ -181,6 +184,88 @@ const chatVaultTools: Tool[] = [
         }
     },
     {
+        name: "saveChatTurnsBegin",
+        description: "Begin an iterative chat save session for large conversations. Call this FIRST when the chat has many turns that would exceed context limits. Returns a jobId — pass this to every saveChatTurn call and finally to saveChatTurnsFinalize. Saves the full verbatim chat without summarizing. Flow: 1) saveChatTurnsBegin 2) saveChatTurn for each turn in order 3) saveChatTurnsFinalize.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: {
+                    type: "string",
+                    description: "User ID (required, injected by A6 connector)",
+                },
+                title: {
+                    type: "string",
+                    description: "Chat title (required)",
+                },
+            },
+            required: ["userId", "title"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        },
+    },
+    {
+        name: "saveChatTurn",
+        description: "Add one turn to a chat save session. Call after saveChatTurnsBegin, once per turn, with turnIndex 0, 1, 2, ... in order. Pass the jobId from saveChatTurnsBegin. Do not skip indices. Call saveChatTurnsFinalize after the last turn.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: {
+                    type: "string",
+                    description: "User ID (required, injected by A6 connector)",
+                },
+                jobId: {
+                    type: "string",
+                    description: "Job ID from saveChatTurnsBegin (required)",
+                },
+                turnIndex: {
+                    type: "number",
+                    description: "0-based turn index (0, 1, 2, ...)",
+                },
+                turn: {
+                    type: "object",
+                    description: "Turn with prompt and response",
+                    properties: {
+                        prompt: { type: "string" },
+                        response: { type: "string" },
+                    },
+                    required: ["prompt", "response"],
+                },
+            },
+            required: ["userId", "jobId", "turnIndex", "turn"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        },
+    },
+    {
+        name: "saveChatTurnsFinalize",
+        description: "Finalize a chat save session. Call AFTER all turns have been added via saveChatTurn. Generates embeddings and persists the chat to the vault. Removes temporary data. The chat will appear in loadMyChats and searchMyChats.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: {
+                    type: "string",
+                    description: "User ID (required, injected by A6 connector)",
+                },
+                jobId: {
+                    type: "string",
+                    description: "Job ID from saveChatTurnsBegin (required)",
+                },
+            },
+            required: ["userId", "jobId"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        },
+    },
+    {
         name: "loadMyChats",
         description: "USED INSIDE THE WIDGET. Load paginated chat data for a user with optional text search filter",
         inputSchema: {
@@ -339,6 +424,42 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
         if (toolName === "saveChat") {
             const result = await saveChat(args as { userId: string; title: string; turns: Array<{ prompt: string; response: string }> });
             console.log("[MCP Handler] handleCallTool - saveChat result:", JSON.stringify(result));
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Chat saved successfully with ID: ${result.chatId}`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "saveChatTurnsBegin") {
+            const result = await saveChatTurnsBegin(args as { userId: string; title: string });
+            console.log("[MCP Handler] handleCallTool - saveChatTurnsBegin result:", result.jobId);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Save session started. Job ID: ${result.jobId}. Call saveChatTurn for each turn, then saveChatTurnsFinalize when done.`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "saveChatTurn") {
+            const result = await saveChatTurn(args as { userId: string; jobId: string; turnIndex: number; turn: { prompt: string; response: string } });
+            console.log("[MCP Handler] handleCallTool - saveChatTurn result:", result.turnIndex);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Turn ${result.turnIndex} saved.`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "saveChatTurnsFinalize") {
+            const result = await saveChatTurnsFinalize(args as { userId: string; jobId: string });
+            console.log("[MCP Handler] handleCallTool - saveChatTurnsFinalize result:", result.chatId);
             return {
                 content: [
                     {

@@ -15,6 +15,13 @@
       "when": 1766757979473,
       "tag": "0001_cute_harpoon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771257466187,
+      "tag": "0002_careful_maria_hill",
+      "breakpoints": true
     }
   ]
 }
