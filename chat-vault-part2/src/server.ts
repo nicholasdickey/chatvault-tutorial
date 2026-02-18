@@ -185,7 +185,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChatTurnsBegin",
-        description: "Begin an iterative chat save session for large conversations. Call this FIRST when the chat has many turns that would exceed context limits. Returns a jobId — pass this to every saveChatTurn call and finally to saveChatTurnsFinalize. Saves the full verbatim chat without summarizing. Flow: 1) saveChatTurnsBegin 2) saveChatTurn for each turn in order 3) saveChatTurnsFinalize.",
+        description: "Primary tool for saving chats by LLM.Begin an iterative chat save session for large conversations. Call this FIRST when the chat has many turns that would exceed context limits. Returns a jobId — pass this to every saveChatTurn call and finally to saveChatTurnsFinalize. Saves the full verbatim chat without summarizing. Flow: 1) saveChatTurnsBegin 2) saveChatTurn for each turn in order 3) saveChatTurnsFinalize.",
         inputSchema: {
             type: "object",
             properties: {
@@ -334,7 +334,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "widgetAdd",
-        description: "NOT TO BE USED OUTSIDE OF THE WIDGET!!! In-widget save a manually pasted Claude, Gemini, ChatGPT, etc. conversation by parsing HTML/text content",
+        description: "NOT TO BE USED OUTSIDE OF THE WIDGET!!! LLM should not use it directly. Use saveChatTurnsBegin, saveChatTurn, and saveChatTurnsFinalize instead. In-widget save a manually pasted Claude, Gemini, ChatGPT, etc. conversation by parsing HTML/text content",
         inputSchema: {
             type: "object",
             properties: {
