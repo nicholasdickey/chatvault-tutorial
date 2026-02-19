@@ -38,7 +38,7 @@ function App() {
   const [paginationLoading, setPaginationLoading] = useState(false);
   const [expandedTurns, setExpandedTurns] = useState(new Set());
   const [copiedItems, setCopiedItems] = useState({});
-  // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
+  // Debug panel hidden by default, can be toggled with Ctrl+Alt+D (avoids browser Ctrl+Shift+D = Bookmark all tabs)
   const [showDebug, setShowDebug] = useState(() => {
     // Check localStorage for previously enabled debug panel
     return localStorage.getItem("chatvault-debug-enabled") === "true";
@@ -70,11 +70,11 @@ function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingChat, setIsSavingChat] = useState(false);
 
-  // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
+  // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+Shift+D (or Cmd+Shift+D on Mac)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "D") {
+      // Ctrl+Alt+D (or Cmd+Alt+D on Mac) - not used by browsers
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === "D") {
         e.preventDefault();
         const newState = !showDebug;
         setShowDebug(newState);
@@ -2754,7 +2754,7 @@ function App() {
           )}
         </div>}
 
-        {/* Debug Panel - Toggle with Ctrl+Shift+D */}
+        {/* Debug Panel - Toggle with Ctrl+Alt+D */}
         {showDebug && (
           <div className={`mt-4 pt-4 border-t ${isDarkMode ? "border-gray-700" : "border-black/5"
             }`}>
@@ -2775,7 +2775,7 @@ function App() {
                 }`}
             >
               {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-              <span className="ml-2 text-xs opacity-60">(Ctrl+Shift+D to toggle)</span>
+              <span className="ml-2 text-xs opacity-60">(Ctrl+Alt+D to toggle)</span>
             </button>
             {showDebug && (
               <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
