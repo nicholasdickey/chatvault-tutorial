@@ -27,7 +27,7 @@ Note, in works best when the start is from a fresh chat, and the chatbot is not 
 If the chatbot is having trouble saving a verbatim chat - you can copy the chat manually, start a new chat, paste the chat into the new chat, and ask the chatbot to parse and save the chat turn-by-turn into the vault.
 
 ### 2. Paste the copied chat into the connected chat and ask the host to parse it turn-by-turn and save into the vault.
-Simply ask ChatGPT or the chatbot you are using to parse and save the pasted conversation to your vault. 
+Simply ask ChatGPT or the chatbot you are using to parse and save the pasted conversation to your vault turn by turn..
 
 ### 3. Manual Save via Widget
 Use the '+' button in the ChatVault widget to manually add conversations or notes:
