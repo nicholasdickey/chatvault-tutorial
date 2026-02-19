@@ -73,9 +73,10 @@ function App() {
   // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+Alt+D (or Cmd+Alt+D on Mac) - not used by browsers
-      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === "D") {
+      // Ctrl+Alt+D (or Cmd+Alt+D on Mac) - case-insensitive, capture phase
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d") {
         e.preventDefault();
+        e.stopPropagation();
         const newState = !showDebug;
         setShowDebug(newState);
         // Persist in localStorage
@@ -88,9 +89,9 @@ function App() {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true); // capture phase
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [showDebug]);
 
