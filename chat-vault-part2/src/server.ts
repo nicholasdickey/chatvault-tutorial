@@ -150,7 +150,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChat",
-        description: "Save a chat. To be used by LLM to save chats turn-by-turn and verbatim into the vault. Not a summary but the original chat.",
+        description: "Save a short chat with up to 3 short turns. To be used by LLM to save chats turn-by-turn and verbatim into the vault. Not a summary but the original chat. For longer chats, use saveChatTurnsBegin, saveChatTurn, and saveChatTurnsFinalize instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -334,7 +334,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "widgetAdd",
-        description: "NOT TO BE USED OUTSIDE OF THE WIDGET!!! LLM should not use it directly. Use saveChatTurnsBegin, saveChatTurn, and saveChatTurnsFinalize instead. In-widget save a manually pasted Claude, Gemini, ChatGPT, etc. conversation by parsing HTML/text content",
+        description: "INTERNAL USE ONLY: This tool is strictly for in-widget operations.",
         inputSchema: {
             type: "object",
             properties: {
