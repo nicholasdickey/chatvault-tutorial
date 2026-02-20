@@ -319,7 +319,8 @@ function App() {
     addLog("Refresh clicked");
     setLoading(true);
     setError(null);
-    try {
+
+    const doRefresh = async () => {
       addLog("Calling loadMyChats");
       addLog("loadMyChats parameters", {
         page: 0,
@@ -327,7 +328,7 @@ function App() {
         aboveTheFoldOnly: true,
         widgetVersion: WIDGET_VERSION,
       });
-      const result = await app.callServerTool({
+      return (await app.callServerTool({
         name: "loadMyChats",
         arguments: {
           page: 0,
@@ -335,7 +336,10 @@ function App() {
           aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
         },
-      }) as ChatVaultToolResult | null;
+      })) as ChatVaultToolResult | null;
+    };
+
+    const applyResult = (result: ChatVaultToolResult | null) => {
       addLog("loadMyChats result", result);
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
@@ -346,10 +350,31 @@ function App() {
           setUserInfo(result.structuredContent.userInfo);
         }
       }
+    };
+
+    try {
+      const result = await doRefresh();
+      applyResult(result);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       addLog("Error refreshing chats", { error: errorMessage });
-      setError(`Failed to refresh: ${errorMessage}`);
+
+      if (errorMessage.includes("Not connected")) {
+        try {
+          addLog("Attempting reconnect");
+          await app.connect();
+          addLog("Reconnected, retrying loadMyChats");
+          const result = await doRefresh();
+          applyResult(result);
+        } catch (reconnectErr) {
+          const reconnectMsg =
+            reconnectErr instanceof Error ? reconnectErr.message : String(reconnectErr);
+          addLog("Reconnect failed", { error: reconnectMsg });
+          setError("Connection lost. Reopen the chat to reconnect.");
+        }
+      } else {
+        setError(`Failed to refresh: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
