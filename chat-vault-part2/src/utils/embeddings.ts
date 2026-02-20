@@ -69,11 +69,17 @@ export function splitTurnsForEmbedding(
 ): Array<Array<{ prompt: string; response: string }>> {
     if (turns.length === 0) return [];
     const combined = combineChatText(turns);
-    if (combined.length <= maxChars) return [turns];    const chunks: Array<Array<{ prompt: string; response: string }>> = [];
+    if (combined.length <= maxChars) return [turns];
+
+    const chunks: Array<Array<{ prompt: string; response: string }>> = [];
     let currentChunk: Array<{ prompt: string; response: string }> = [];
-    let currentLen = 0;    for (const turn of turns) {
+    let currentLen = 0;
+
+    for (const turn of turns) {
         const turnText = `${turn.prompt}\n${turn.response}`;
-        const turnLen = turnText.length + (currentChunk.length > 0 ? 2 : 0); // +2 for "\n\n"        if (currentLen + turnLen > maxChars && currentChunk.length > 0) {
+        const turnLen = turnText.length + (currentChunk.length > 0 ? 2 : 0); // +2 for "\n\n"
+
+        if (currentLen + turnLen > maxChars && currentChunk.length > 0) {
             chunks.push(currentChunk);
             currentChunk = [];
             currentLen = 0;
