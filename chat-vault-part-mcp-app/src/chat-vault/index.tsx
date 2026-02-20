@@ -1,4 +1,3 @@
-import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
@@ -62,11 +61,13 @@ function App() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
-  const [editedTurns, setEditedTurns] = useState<{ prompt: string; response: string }[]>([]);
+  const [editedTurns, setEditedTurns] = useState<Array<{ prompt: string; response: string; truncated?: boolean }>>([]);
   const [editingTurn, setEditingTurn] = useState<EditingTurn | null>(null);
   const [editingTurnValue, setEditingTurnValue] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingChat, setIsSavingChat] = useState(false);
+  const [fullTurnContent, setFullTurnContent] = useState<Record<string, { prompt: string; response: string }>>({});
+  const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
@@ -172,7 +173,7 @@ function App() {
         try {
           const result = await app.callServerTool({
             name: "loadMyChats",
-            arguments: { page: 0, size: 10, widgetVersion: WIDGET_VERSION },
+            arguments: { page: 0, size: 10, aboveTheFoldOnly: true, widgetVersion: WIDGET_VERSION },
           }) as ChatVaultToolResult | null;
           addLog("loadMyChats result", result);
 
@@ -248,62 +249,38 @@ function App() {
     };
   }, [showHelp]);
 
-  // Deduplicate chats based on title and content
-  // Keeps the most recent chat (by timestamp) when duplicates are found
+  // Deduplicate chats by id (server already dedupes; this guards against client-side merges)
   const deduplicateChats = (chatList: Chat[]) => {
     const seen = new Map<string, Chat>();
-    const deduplicated: Chat[] = [];
-
     for (const chat of chatList) {
-      // Create a signature based on title and content (different for notes vs chats)
-      let signature;
-      if (chat.type === "note") {
-        // For notes, use title and content
-        signature = `${chat.title || ""}|${chat.content || ""}`;
-      } else {
-        // For chats, use title and first turn content
-        const firstTurn = chat.turns?.[0];
-        signature = `${chat.title || ""}|${firstTurn?.prompt || ""}|${firstTurn?.response || ""}`;
-      }
-
-      if (!seen.has(signature)) {
-        seen.set(signature, chat);
-        deduplicated.push(chat);
-      } else {
-        // If we've seen this before, keep the one with the latest timestamp
-        const existing = seen.get(signature);
-        if (existing && chat.timestamp && existing.timestamp) {
-          const existingTime = new Date(existing.timestamp).getTime();
-          const currentTime = new Date(chat.timestamp).getTime();
-
-          if (currentTime > existingTime) {
-            const index = deduplicated.indexOf(existing);
-            if (index !== -1) {
-              deduplicated[index] = chat;
-              seen.set(signature, chat);
-            }
-          }
+      const key = chat.id ?? `${chat.title || ""}|${chat.timestamp || ""}`;
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, chat);
+      } else if (chat.timestamp && existing.timestamp) {
+        const existingTime = new Date(existing.timestamp).getTime();
+        const currentTime = new Date(chat.timestamp).getTime();
+        if (currentTime > existingTime) {
+          seen.set(key, chat);
         }
       }
     }
-
-    return deduplicated;
+    return Array.from(seen.values());
   };
 
   const handleChatClick = (chat: Chat) => {
     addLog("Chat clicked", { title: chat.title });
-    // Create a fresh copy of the chat object to avoid reference issues
-    setSelectedChat({ ...chat });
     setExpandedTurns(new Set());
-    // Reset editing state when switching chats
+    setLoadingTurnIds(new Set());
     setIsEditingTitle(false);
     setEditedTitle("");
-    // Initialize editedTurns from selected chat (deep copy to avoid reference issues)
-    setEditedTurns(chat.turns ? chat.turns.map(turn => ({ ...turn })) : []);
     setEditingTurn(null);
     setEditingTurnValue("");
     setHasUnsavedChanges(false);
-    // Search state persists - don't clear it
+
+    // Chats always come from loadMyChats (with truncated or full turns)
+    setSelectedChat({ ...chat });
+    setEditedTurns((chat.turns ?? []).map(turn => ({ ...turn })));
   };
 
   const handleBackClick = () => {
@@ -347,6 +324,7 @@ function App() {
       addLog("loadMyChats parameters", {
         page: 0,
         size: 10,
+        aboveTheFoldOnly: true,
         widgetVersion: WIDGET_VERSION,
       });
       const result = await app.callServerTool({
@@ -354,6 +332,7 @@ function App() {
         arguments: {
           page: 0,
           size: 10,
+          aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
         },
       }) as ChatVaultToolResult | null;
@@ -593,11 +572,36 @@ function App() {
     }
   };
 
-  const handleStartEditTurn = (turnIndex: number, field: "prompt" | "response") => {
+  const handleStartEditTurn = async (turnIndex: number, field: "prompt" | "response") => {
     if (!selectedChat || !editedTurns[turnIndex]) return;
     const turn = editedTurns[turnIndex];
+    const turnId = `${selectedChat.id}-${turnIndex}`;
+    let value = field === 'prompt' ? turn.prompt : turn.response;
+
+    if (turn.truncated && !fullTurnContent[turnId]) {
+      try {
+        const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+        if (!userId) throw new Error("User ID not available");
+        const result = await app.callServerTool({
+          name: "loadFullTurn",
+          arguments: { chatId: selectedChat.id, userId, turnIndex },
+        }) as ChatVaultToolResult | null;
+        const turnData = result?.structuredContent?.turn as { prompt: string; response: string } | undefined;
+        if (turnData) {
+          setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
+          value = field === 'prompt' ? turnData.prompt : turnData.response;
+        }
+      } catch (err) {
+        addLog("Error loading full turn for edit", { error: err instanceof Error ? err.message : String(err) });
+        setAlertMessage(`Failed to load turn: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+    } else if (fullTurnContent[turnId]) {
+      value = field === 'prompt' ? fullTurnContent[turnId].prompt : fullTurnContent[turnId].response;
+    }
+
     setEditingTurn({ turnIndex, field });
-    setEditingTurnValue(field === 'prompt' ? turn.prompt : turn.response);
+    setEditingTurnValue(value);
     addLog("Started editing turn", { turnIndex, field });
   };
 
@@ -890,17 +894,90 @@ function App() {
     }
   };
 
-  const toggleTurnExpansion = (index: number) => {
+  const toggleTurnExpansion = async (index: number) => {
     addLog("Toggle turn expansion", { index });
+    if (!selectedChat) return;
+
+    const turnId = `${selectedChat.id}-${index}`;
+    const turn = editedTurns[index];
+    const isCurrentlyExpanded = expandedTurns.has(index);
+
+    if (isCurrentlyExpanded) {
+      setExpandedTurns((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+      return;
+    }
+
+    // Expanding: if truncated and not cached, fetch full content
+    const needsFetch = turn?.truncated && !fullTurnContent[turnId];
+    if (needsFetch) {
+      setLoadingTurnIds((prev) => new Set(prev).add(turnId));
+      try {
+        const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+        if (!userId) {
+          throw new Error("User ID not available");
+        }
+        const result = await app.callServerTool({
+          name: "loadFullTurn",
+          arguments: { chatId: selectedChat.id, userId, turnIndex: index },
+        }) as ChatVaultToolResult | null;
+        const turnData = result?.structuredContent?.turn as { prompt: string; response: string } | undefined;
+        if (turnData) {
+          setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
+        }
+      } catch (err) {
+        addLog("Error loading full turn", { error: err instanceof Error ? err.message : String(err) });
+        setAlertMessage(`Failed to load turn: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setLoadingTurnIds((prev) => {
+          const next = new Set(prev);
+          next.delete(turnId);
+          return next;
+        });
+      }
+    }
+
     setExpandedTurns((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
+      next.add(index);
       return next;
     });
+  };
+
+  const ensureFullTurnContent = async (turnIndex: number): Promise<{ prompt: string; response: string } | null> => {
+    if (!selectedChat) return null;
+    const turn = editedTurns[turnIndex];
+    const turnId = `${selectedChat.id}-${turnIndex}`;
+    if (!turn?.truncated) return { prompt: turn.prompt, response: turn.response };
+    if (fullTurnContent[turnId]) return fullTurnContent[turnId];
+    try {
+      const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+      if (!userId) return null;
+      const result = await app.callServerTool({
+        name: "loadFullTurn",
+        arguments: { chatId: selectedChat.id, userId, turnIndex },
+      }) as ChatVaultToolResult | null;
+      const turnData = result?.structuredContent?.turn as { prompt: string; response: string } | undefined;
+      if (turnData) {
+        setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
+        return turnData;
+      }
+    } catch (err) {
+      addLog("Error loading full turn for copy", { error: err instanceof Error ? err.message : String(err) });
+    }
+    return null;
+  };
+
+  const handleCopyTurnField = async (turnIndex: number, field: "prompt" | "response", id: string) => {
+    const full = await ensureFullTurnContent(turnIndex);
+    const turn = editedTurns[turnIndex];
+    const text = full
+      ? (field === "prompt" ? full.prompt : full.response)
+      : (field === "prompt" ? turn?.prompt ?? "" : turn?.response ?? "");
+    await copyToClipboard(text, id);
   };
 
   const copyToClipboard = async (text: string, id: string) => {
@@ -1232,7 +1309,7 @@ function App() {
       try {
         const loadResult = await app.callServerTool({
           name: "loadMyChats",
-          arguments: { page: 0, size: 10 },
+          arguments: { page: 0, size: 10, aboveTheFoldOnly: true },
         }) as ChatVaultToolResult | null;
         if (loadResult?.structuredContent?.chats) {
           setChats(deduplicateChats(loadResult.structuredContent.chats as Chat[]));
@@ -1308,6 +1385,7 @@ function App() {
           query: query.trim(),
           page,
           size: 10,
+          aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
         },
       }) as ChatVaultToolResult | null;
@@ -1341,7 +1419,7 @@ function App() {
     try {
       const result = await app.callServerTool({
         name: "loadMyChats",
-        arguments: { page: 0, size: 10 },
+        arguments: { page: 0, size: 10, aboveTheFoldOnly: true, widgetVersion: WIDGET_VERSION },
       }) as ChatVaultToolResult | null;
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
@@ -1349,7 +1427,7 @@ function App() {
         setCurrentPage(0);
         setPageInputValue("1");
       }
-      } catch (err) {
+    } catch (err) {
         addLog("Error reloading chats", { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setPaginationLoading(false);
@@ -1371,6 +1449,7 @@ function App() {
             query: searchQuery.trim(),
             page: nextPage,
             size: 10,
+            aboveTheFoldOnly: true,
             widgetVersion: WIDGET_VERSION,
           },
         }) as ChatVaultToolResult | null;
@@ -1387,6 +1466,7 @@ function App() {
           arguments: {
             page: nextPage,
             size: 10,
+            aboveTheFoldOnly: true,
             widgetVersion: WIDGET_VERSION,
           },
         }) as ChatVaultToolResult | null;
@@ -1957,26 +2037,111 @@ function App() {
                     </button>
                   )}
                 </div>
-              </div>
 
-              {(selectedChat.turns?.length ?? 0) === 1 && !selectedChat.turns?.[0]?.response ? (
-                // Note rendering - single card with prompt (same style as turn prompt)
-                (() => {
-                  const noteTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
-                  const noteTurn = noteTurns[0];
+              {(() => {
+                const chat = selectedChat!;
+                const isNoteView = (chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response;
+                const turns = (editedTurns.length > 0 ? editedTurns : (chat.turns ?? [])) ?? [];
+                const chatTurnsJsx = turns.map((turn, index) => {
+                  const isExpanded = expandedTurns.has(index);
+                  const turnId = `${chat.id}-${index}`;
+                  const promptId = `prompt-${chat.timestamp}-${index}`;
+                  const responseId = `response-${chat.timestamp}-${index}`;
+                  const promptCopied = !!copiedItems[promptId];
+                  const responseCopied = !!copiedItems[responseId];
+                  const maxLength = 150;
+                  const promptNeedsTruncation = !turn.truncated && turn.prompt.length > maxLength;
+                  const responseNeedsTruncation = !turn.truncated && turn.response.length > maxLength;
+                  const needsExpansion = turn.truncated || promptNeedsTruncation || responseNeedsTruncation;
+                  const isLoadingTurn = loadingTurnIds.has(turnId);
+                  const fullContent = fullTurnContent[turnId];
+                  const displayPrompt = isExpanded && fullContent ? fullContent.prompt : (isExpanded ? turn.prompt : (turn.truncated ? turn.prompt : truncateText(turn.prompt)));
+                  const displayResponse = isExpanded && fullContent ? fullContent.response : (isExpanded ? turn.response : (turn.truncated ? turn.response : truncateText(turn.response)));
+                  const isEditingPrompt = editingTurn?.turnIndex === index && editingTurn?.field === 'prompt';
+                  const isEditingResponse = editingTurn?.turnIndex === index && editingTurn?.field === 'response';
+                  return (
+                    <div key={index} className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"}`}>
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}>Prompt</div>
+                          <div className="flex items-center gap-1">
+                            {!isEditingPrompt && (
+                              <>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyTurnField(index, "prompt", promptId); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Copy prompt">
+                                  {promptCopied ? <MdCheck className="w-3 h-3 text-green-500" /> : <MdContentCopy className="w-3 h-3" />}
+                                </button>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartEditTurn(index, 'prompt'); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Edit prompt"><MdEdit className="w-3 h-3" /></button>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTurn(index); }} disabled={editedTurns.length <= 1} className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}><MdDelete className="w-3 h-3" /></button>
+                              </>
+                            )}
+                            {needsExpansion && !isEditingPrompt && (
+                              <button onClick={() => toggleTurnExpansion(index)} disabled={isLoadingTurn} className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={isExpanded ? "Collapse" : "Expand"}>
+                                {isLoadingTurn ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : (isExpanded ? <MdExpandLess className="w-3 h-3" /> : <MdExpandMore className="w-3 h-3" />)}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
+                          {isEditingPrompt ? (
+                            <div className="flex-1"><div className="flex items-center gap-2">
+                              <textarea value={editingTurnValue} onChange={(e) => setEditingTurnValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSaveTurnEdit(index, 'prompt'); } else if (e.key === "Escape") { e.preventDefault(); handleCancelEditTurn(); } }} autoFocus rows={4} className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`} />
+                              <button onClick={() => handleSaveTurnEdit(index, 'prompt')} disabled={editingTurnValue.trim().length === 0} className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`} title="Save (Ctrl+Enter)"><MdCheck className="w-3 h-3" /></button>
+                              <button onClick={handleCancelEditTurn} className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Cancel (Esc)"><MdClose className="w-3 h-3" /></button>
+                            </div></div>
+                          ) : (
+                            <div className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`} onClick={needsExpansion && !isExpanded && !isLoadingTurn ? () => toggleTurnExpansion(index) : undefined} onMouseDown={(e) => { if (isExpanded) return; if (needsExpansion) e.preventDefault(); }} dangerouslySetInnerHTML={{ __html: markdownToHtml(displayPrompt) }} />
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className={`text-xs font-medium ${isDarkMode ? "text-green-400" : "text-green-600"}`}>Response</div>
+                          <div className="flex items-center gap-1">
+                            {!isEditingResponse && (
+                              <>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyTurnField(index, "response", responseId); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Copy response">
+                                  {responseCopied ? <MdCheck className="w-3 h-3 text-green-500" /> : <MdContentCopy className="w-3 h-3" />}
+                                </button>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartEditTurn(index, 'response'); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Edit response"><MdEdit className="w-3 h-3" /></button>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTurn(index); }} disabled={editedTurns.length <= 1} className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}><MdDelete className="w-3 h-3" /></button>
+                              </>
+                            )}
+                            {needsExpansion && !isEditingResponse && (
+                              <button onClick={() => toggleTurnExpansion(index)} disabled={isLoadingTurn} className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={isExpanded ? "Collapse" : "Expand"}>{isLoadingTurn ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : (isExpanded ? <MdExpandLess className="w-3 h-3" /> : <MdExpandMore className="w-3 h-3" />)}</button>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
+                          {isEditingResponse ? (
+                            <div className="flex-1"><div className="flex items-center gap-2">
+                              <textarea value={editingTurnValue} onChange={(e) => setEditingTurnValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSaveTurnEdit(index, 'response'); } else if (e.key === "Escape") { e.preventDefault(); handleCancelEditTurn(); } }} autoFocus rows={4} className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`} />
+                              <button onClick={() => handleSaveTurnEdit(index, 'response')} disabled={editingTurnValue.trim().length === 0} className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`} title="Save (Ctrl+Enter)"><MdCheck className="w-3 h-3" /></button>
+                              <button onClick={handleCancelEditTurn} className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Cancel (Esc)"><MdClose className="w-3 h-3" /></button>
+                            </div></div>
+                          ) : (
+                            <div className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`} onClick={needsExpansion && !isExpanded && !isLoadingTurn ? () => toggleTurnExpansion(index) : undefined} onMouseDown={(e) => { if (isExpanded) return; if (needsExpansion) e.preventDefault(); }} dangerouslySetInnerHTML={{ __html: markdownToHtml(displayResponse) }} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+                if (isNoteView) {
+                  const noteTurns = turns;
+                  const noteTurn = noteTurns[0] as { prompt: string; response: string; truncated?: boolean };
                   const noteIndex = 0;
+                  const noteTurnId = `${chat.id}-${noteIndex}`;
                   const isExpanded = expandedTurns.has(noteIndex);
-                  const noteId = `note-${selectedChat.timestamp}`;
+                  const noteFullContent = fullTurnContent[noteTurnId];
+                  const noteLoading = loadingTurnIds.has(noteTurnId);
+                  const noteId = `note-${chat.timestamp}`;
                   const noteCopied = !!copiedItems[noteId];
                   const isEditingNote = editingTurn?.turnIndex === noteIndex && editingTurn?.field === 'prompt';
-
-                  // Check if note needs truncation (longer than 150 chars)
                   const maxLength = 150;
-                  const noteNeedsTruncation = noteTurn.prompt.length > maxLength;
-
+                  const noteNeedsTruncation = noteTurn.truncated || (!noteTurn.truncated && noteTurn.prompt.length > maxLength);
+                  const noteDisplayPrompt = isExpanded && noteFullContent ? noteFullContent.prompt : (isExpanded ? noteTurn.prompt : (noteTurn.truncated ? noteTurn.prompt : truncateText(noteTurn.prompt)));
                   return (
-                    <div className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
-                      }`}>
+                    <div key="note" className={"space-y-2 p-4 rounded-lg border " + (isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
                       {/* Note */}
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
@@ -1991,7 +2156,7 @@ function App() {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    copyToClipboard(noteTurn.prompt, noteId);
+                                    handleCopyTurnField(noteIndex, "prompt", noteId);
                                   }}
                                   className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
                                     ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -2041,13 +2206,16 @@ function App() {
                             {noteNeedsTruncation && !isEditingNote && (
                               <button
                                 onClick={() => toggleTurnExpansion(noteIndex)}
+                                disabled={noteLoading}
                                 className={`p-1 rounded ${isDarkMode
                                   ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                   : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                   }`}
                                 title={isExpanded ? "Collapse" : "Expand"}
                               >
-                                {isExpanded ? (
+                                {noteLoading ? (
+                                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                ) : isExpanded ? (
                                   <MdExpandLess className="w-3 h-3" />
                                 ) : (
                                   <MdExpandMore className="w-3 h-3" />
@@ -2106,8 +2274,8 @@ function App() {
                             </div>
                           ) : (
                             <div
-                              className={`${noteNeedsTruncation && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                              onClick={noteNeedsTruncation && !isExpanded ? () => toggleTurnExpansion(noteIndex) : undefined}
+                              className={`${noteNeedsTruncation && !isExpanded && !noteLoading ? "cursor-pointer hover:opacity-80" : ""}`}
+                              onClick={noteNeedsTruncation && !isExpanded && !noteLoading ? () => toggleTurnExpansion(noteIndex) : undefined}
                               onMouseDown={(e) => {
                                 // If expanded, allow text selection by not preventing default
                                 if (isExpanded) {
@@ -2119,9 +2287,7 @@ function App() {
                                 }
                               }}
                               dangerouslySetInnerHTML={{
-                                __html: isExpanded
-                                  ? markdownToHtml(noteTurn.prompt)
-                                  : markdownToHtml(truncateText(noteTurn.prompt))
+                                __html: markdownToHtml(noteDisplayPrompt)
                               }}
                             />
                           )}
@@ -2129,300 +2295,17 @@ function App() {
                       </div>
                     </div>
                   );
-                })()
-              ) : (
-                // Chat rendering - turns with prompt/response
-                (editedTurns.length > 0 ? editedTurns : selectedChat.turns)?.map((turn, index) => {
-                  const isExpanded = expandedTurns.has(index);
-                  const promptId = `prompt-${selectedChat.timestamp}-${index}`;
-                  const responseId = `response-${selectedChat.timestamp}-${index}`;
-                  const promptCopied = !!copiedItems[promptId];
-                  const responseCopied = !!copiedItems[responseId];
-
-                  // Check if either prompt or response needs truncation (longer than 150 chars)
-                  const maxLength = 150;
-                  const promptNeedsTruncation = turn.prompt.length > maxLength;
-                  const responseNeedsTruncation = turn.response.length > maxLength;
-                  const needsExpansion = promptNeedsTruncation || responseNeedsTruncation;
-
-                  const isEditingPrompt = editingTurn?.turnIndex === index && editingTurn?.field === 'prompt';
-                  const isEditingResponse = editingTurn?.turnIndex === index && editingTurn?.field === 'response';
-
+                } else {
                   return (
-                    <div key={index} className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"
-                      }`}>
-                      {/* Prompt */}
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"
-                            }`}>
-                            Prompt
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {!isEditingPrompt && (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    copyToClipboard(turn.prompt, promptId);
-                                  }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Copy prompt"
-                                >
-                                  {promptCopied ? (
-                                    <MdCheck className="w-3 h-3 text-green-500" />
-                                  ) : (
-                                    <MdContentCopy className="w-3 h-3" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleStartEditTurn(index, 'prompt');
-                                  }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Edit prompt"
-                                >
-                                  <MdEdit className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleDeleteTurn(index);
-                                  }}
-                                  disabled={editedTurns.length <= 1}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}
-                                >
-                                  <MdDelete className="w-3 h-3" />
-                                </button>
-                              </>
-                            )}
-                            {needsExpansion && !isEditingPrompt && (
-                              <button
-                                onClick={() => toggleTurnExpansion(index)}
-                                className={`p-1 rounded ${isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
-                                title={isExpanded ? "Collapse" : "Expand"}
-                              >
-                                {isExpanded ? (
-                                  <MdExpandLess className="w-3 h-3" />
-                                ) : (
-                                  <MdExpandMore className="w-3 h-3" />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
-                          {isEditingPrompt ? (
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <textarea
-                                  value={editingTurnValue}
-                                  onChange={(e) => setEditingTurnValue(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                      e.preventDefault();
-                                      handleSaveTurnEdit(index, 'prompt');
-                                    } else if (e.key === "Escape") {
-                                      e.preventDefault();
-                                      handleCancelEditTurn();
-                                    }
-                                  }}
-                                  autoFocus
-                                  rows={4}
-                                  className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode
-                                    ? "bg-gray-700 border-gray-600 text-white"
-                                    : "bg-white border-gray-300 text-black"
-                                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
-                                />
-                                <button
-                                  onClick={() => handleSaveTurnEdit(index, 'prompt')}
-                                  disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : isDarkMode
-                                      ? "bg-green-600 text-white hover:bg-green-700"
-                                      : "bg-green-600 text-white hover:bg-green-700"
-                                    }`}
-                                  title="Save (Ctrl+Enter)"
-                                >
-                                  <MdCheck className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={handleCancelEditTurn}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Cancel (Esc)"
-                                >
-                                  <MdClose className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              className={`${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                              onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                              onMouseDown={(e) => {
-                                // If expanded, allow text selection by not preventing default
-                                if (isExpanded) {
-                                  return; // Allow normal text selection
-                                }
-                                // If not expanded and clickable, prevent text selection on click
-                                if (needsExpansion) {
-                                  e.preventDefault();
-                                }
-                              }}
-                              dangerouslySetInnerHTML={{
-                                __html: isExpanded
-                                  ? markdownToHtml(turn.prompt)
-                                  : markdownToHtml(truncateText(turn.prompt))
-                              }}
-                            />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Response */}
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${isDarkMode ? "text-green-400" : "text-green-600"
-                            }`}>
-                            Response
-                          </div>
-                          {!isEditingResponse && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  copyToClipboard(turn.response, responseId);
-                                }}
-                                className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
-                                title="Copy response"
-                              >
-                                {responseCopied ? (
-                                  <MdCheck className="w-3.5 h-3.5 text-green-500" />
-                                ) : (
-                                  <MdContentCopy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleStartEditTurn(index, 'response');
-                                }}
-                                className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
-                                title="Edit response"
-                              >
-                                <MdEdit className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
-                          {isEditingResponse ? (
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <textarea
-                                  value={editingTurnValue}
-                                  onChange={(e) => setEditingTurnValue(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                      e.preventDefault();
-                                      handleSaveTurnEdit(index, 'response');
-                                    } else if (e.key === "Escape") {
-                                      e.preventDefault();
-                                      handleCancelEditTurn();
-                                    }
-                                  }}
-                                  autoFocus
-                                  rows={6}
-                                  className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode
-                                    ? "bg-gray-700 border-gray-600 text-white"
-                                    : "bg-white border-gray-300 text-black"
-                                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
-                                />
-                                <button
-                                  onClick={() => handleSaveTurnEdit(index, 'response')}
-                                  disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : isDarkMode
-                                      ? "bg-green-600 text-white hover:bg-green-700"
-                                      : "bg-green-600 text-white hover:bg-green-700"
-                                    }`}
-                                  title="Save (Ctrl+Enter)"
-                                >
-                                  <MdCheck className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={handleCancelEditTurn}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Cancel (Esc)"
-                                >
-                                  <MdClose className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              className={`${needsExpansion && !isExpanded ? "cursor-pointer hover:opacity-80" : ""}`}
-                              onClick={needsExpansion && !isExpanded ? () => toggleTurnExpansion(index) : undefined}
-                              onMouseDown={(e) => {
-                                // If expanded, allow text selection by not preventing default
-                                if (isExpanded) {
-                                  return; // Allow normal text selection
-                                }
-                                // If not expanded and clickable, prevent text selection on click
-                                if (needsExpansion) {
-                                  e.preventDefault();
-                                }
-                              }}
-                              dangerouslySetInnerHTML={{
-                                __html: isExpanded
-                                  ? markdownToHtml(turn.response)
-                                  : markdownToHtml(truncateText(turn.response))
-                              }}
-                            />
-                          )}
-                        </div>
-                      </div>
+                    <div className="contents">
+                      {chatTurnsJsx}
                     </div>
                   );
-                })
-              )}
+                }
+          })()}
             </div>
-          ) : (
+          </div>
+        ) : (
             // Chat list view
             <div className="space-y-2 relative pb-4">
               {loading && chats.length === 0 ? (
@@ -2437,7 +2320,7 @@ function App() {
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
                   {isSearching ? (
                     `No chats found matching "${searchQuery}"`
-                  ) : (typeof window !== "undefined" && window.openai && "callTool" in window.openai) ? (
+                  ) : (typeof window !== "undefined" && (window as any).openai && "callTool" in (window as any).openai) ? (
                     "No chats found. Start a conversation to save it here."
                   ) : (
                     <div>
@@ -2468,16 +2351,16 @@ function App() {
                             {chat.title}
                           </div>
                           <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {(chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response ? (
+                            {(chat.isNote ?? ((chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response)) ? (
                               <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
                             ) : (
                               <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
                             )}
                             {formatDate(chat.timestamp ?? "")}
-                            {(chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response ? (
+                            {(chat.isNote ?? ((chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response)) ? (
                               " • Note"
                             ) : (
-                              ` • ${chat.turns?.length || 0} turn${(chat.turns?.length || 0) !== 1 ? "s" : ""}`
+                              ` • ${chat.turnsCount ?? chat.turns?.length ?? 0} turn${(chat.turnsCount ?? chat.turns?.length ?? 0) !== 1 ? "s" : ""}`
                             )}
                           </div>
                         </button>
@@ -2520,10 +2403,10 @@ function App() {
                             } else {
                               setPaginationLoading(true);
                               try {
-                                const res = await window.openai?.callTool("loadMyChats", {
-                                  page: targetPage,
-                                  size: 10,
-                                }) as ChatVaultToolResult | undefined;
+                                const res = await app.callServerTool({
+                                  name: "loadMyChats",
+                                  arguments: { page: targetPage, size: 10, aboveTheFoldOnly: true },
+                                }) as ChatVaultToolResult | null;
                                 if (res?.structuredContent?.chats) {
                                   setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
                                   setPagination((res.structuredContent.pagination as Pagination) ?? null);
@@ -2575,11 +2458,11 @@ function App() {
                                   handleSearch(searchQuery, page);
                                 } else {
                                   setPaginationLoading(true);
-                                  (window.openai?.callTool("loadMyChats", {
-                                    page,
-                                    size: 10,
-                                  })).then((res: unknown) => {
-                                    const r = res as ChatVaultToolResult | undefined;
+                                  app.callServerTool({
+                                    name: "loadMyChats",
+                                    arguments: { page, size: 10, aboveTheFoldOnly: true },
+                                  }).then((res: unknown) => {
+                                    const r = res as ChatVaultToolResult | null;
                                     if (r?.structuredContent?.chats) {
                                       setChats(deduplicateChats(r.structuredContent.chats as Chat[]));
                                       setPagination((r.structuredContent.pagination as Pagination) ?? null);
@@ -2622,7 +2505,7 @@ function App() {
                               try {
                                 const res = await app.callServerTool({
                                   name: "loadMyChats",
-                                  arguments: { page, size: 10 },
+                                  arguments: { page, size: 10, aboveTheFoldOnly: true },
                                 }) as ChatVaultToolResult | null;
                                 if (res?.structuredContent?.chats) {
                                   setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
@@ -2661,7 +2544,7 @@ function App() {
                               try {
                                 const res = await app.callServerTool({
                                   name: "loadMyChats",
-                                  arguments: { page: targetPage, size: 10 },
+                                  arguments: { page: targetPage, size: 10, aboveTheFoldOnly: true },
                                 }) as ChatVaultToolResult | null;
                                 if (res?.structuredContent?.chats) {
                                   setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
@@ -2735,7 +2618,8 @@ function App() {
               )}
             </div>
           )}
-        </div>}
+        </div>
+}
 
         {/* Debug Panel - Toggle with Ctrl+Alt+D */}
         {showDebug && (
@@ -2985,7 +2869,7 @@ function App() {
               <div
                 className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
                   }`}
-                dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText) }}
+                dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText ?? "") }}
               />
             ) : !helpTextLoading ? (
               <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>

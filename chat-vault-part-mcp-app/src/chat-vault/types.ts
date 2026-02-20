@@ -2,9 +2,21 @@
 export interface ChatTurn {
   prompt: string;
   response: string;
+  /** True when server returned truncated content; use loadFullTurn to fetch full */
+  truncated?: boolean;
 }
 
-/** Chat item from loadMyChats/searchMyChats */
+/** Chat preview (above-the-fold only; no turns) */
+export interface ChatPreview {
+  id: string;
+  title: string;
+  timestamp?: string;
+  userId?: string;
+  turnsCount: number;
+  isNote: boolean;
+}
+
+/** Chat item from loadMyChats/searchMyChats - preview or full */
 export interface Chat {
   id: string;
   title: string;
@@ -13,6 +25,10 @@ export interface Chat {
   userId?: string;
   type?: "chat" | "note";
   content?: string;
+  /** Present when aboveTheFoldOnly - use instead of turns?.length */
+  turnsCount?: number;
+  /** Present when aboveTheFoldOnly - use instead of checking first turn */
+  isNote?: boolean;
 }
 
 /** User info from widget/user context */
