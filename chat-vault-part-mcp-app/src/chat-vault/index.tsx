@@ -1,7 +1,7 @@
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
+import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
 import { app } from "../app-instance.js";
 import type { Chat, UserInfo, Pagination, DeleteConfirmation, ContentMetadata, EditingTurn, ChatVaultToolResult } from "./types.js";
 
@@ -334,26 +334,6 @@ function App() {
       const errorMessage = error instanceof Error ? error.message : String(error);
       addLog("Fullscreen error", { error: errorMessage });
       setAlertMessage(`Failed to change display mode: ${errorMessage}`);
-      setAlertPortalLink(null);
-    }
-  };
-
-  // Reserved for PiP mode button in fullscreen toolbar
-  const handlePipMode = async () => {
-    try {
-      if (displayMode === "pip") {
-        const response = await app.requestDisplayMode({ mode: "inline" });
-        setDisplayMode(response.mode || "inline");
-        addLog("Exited PiP mode", response);
-      } else {
-        const response = await app.requestDisplayMode({ mode: "pip" });
-        setDisplayMode(response.mode || "pip");
-        addLog("Entered PiP mode", response);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      addLog("PiP mode error", { error: errorMessage });
-      setAlertMessage(`Failed to enter PiP mode: ${errorMessage}`);
       setAlertPortalLink(null);
     }
   };
@@ -1693,13 +1673,6 @@ function App() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={handlePipMode}
-              className={`p-2 rounded-lg transition-colors ${displayMode === "pip" ? (isDarkMode ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-500 text-white hover:bg-blue-600") : (isDarkMode ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-black hover:bg-gray-200")}`}
-              title={displayMode === "pip" ? "Exit picture-in-picture" : "Enter picture-in-picture"}
-            >
-              <MdPictureInPicture className="w-5 h-5" />
-            </button>
             <button
               onClick={() => {
                 // Check if limit reached for users on anonymous plan
