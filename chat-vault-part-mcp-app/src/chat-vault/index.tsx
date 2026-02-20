@@ -319,8 +319,7 @@ function App() {
     addLog("Refresh clicked");
     setLoading(true);
     setError(null);
-
-    const doRefresh = async () => {
+    try {
       addLog("Calling loadMyChats");
       addLog("loadMyChats parameters", {
         page: 0,
@@ -328,7 +327,7 @@ function App() {
         aboveTheFoldOnly: true,
         widgetVersion: WIDGET_VERSION,
       });
-      return (await app.callServerTool({
+      const result = (await app.callServerTool({
         name: "loadMyChats",
         arguments: {
           page: 0,
@@ -337,9 +336,6 @@ function App() {
           widgetVersion: WIDGET_VERSION,
         },
       })) as ChatVaultToolResult | null;
-    };
-
-    const applyResult = (result: ChatVaultToolResult | null) => {
       addLog("loadMyChats result", result);
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
@@ -350,31 +346,14 @@ function App() {
           setUserInfo(result.structuredContent.userInfo);
         }
       }
-    };
-
-    try {
-      const result = await doRefresh();
-      applyResult(result);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       addLog("Error refreshing chats", { error: errorMessage });
-
-      if (errorMessage.includes("Not connected")) {
-        try {
-          addLog("Attempting reconnect");
-          await app.connect();
-          addLog("Reconnected, retrying loadMyChats");
-          const result = await doRefresh();
-          applyResult(result);
-        } catch (reconnectErr) {
-          const reconnectMsg =
-            reconnectErr instanceof Error ? reconnectErr.message : String(reconnectErr);
-          addLog("Reconnect failed", { error: reconnectMsg });
-          setError("Connection lost. Reopen the chat to reconnect.");
-        }
-      } else {
-        setError(`Failed to refresh: ${errorMessage}`);
-      }
+      setError(
+        errorMessage.includes("Not connected")
+          ? "Connection lost. Reopen the chat to reconnect."
+          : `Failed to refresh: ${errorMessage}`
+      );
     } finally {
       setLoading(false);
     }
@@ -1400,11 +1379,12 @@ function App() {
 
     setIsSearching(true);
     setSearchLoading(true);
+    setError(null);
     setCurrentPage(page);
     addLog("Searching chats", { query, page });
 
     try {
-      const result = await app.callServerTool({
+      const result = (await app.callServerTool({
         name: "loadMyChats",
         arguments: {
           query: query.trim(),
@@ -1413,12 +1393,10 @@ function App() {
           aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
         },
-      }) as ChatVaultToolResult | null;
+      })) as ChatVaultToolResult | null;
 
       addLog("Search result", result);
-
       if (result?.structuredContent?.chats) {
-        // Always replace results when navigating pages
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
         setPagination((result.structuredContent.pagination as Pagination) ?? null);
         setCurrentPage(page);
@@ -1427,7 +1405,11 @@ function App() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       addLog("Search failed", { error: errorMessage });
-      setError(`Search failed: ${errorMessage}`);
+      setError(
+        errorMessage.includes("Not connected")
+          ? "Connection lost. Reopen the chat to reconnect."
+          : `Search failed: ${errorMessage}`
+      );
     } finally {
       setSearchLoading(false);
       // Keep isSearching true - it indicates search is active
