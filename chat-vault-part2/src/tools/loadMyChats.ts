@@ -4,7 +4,7 @@
 
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
@@ -38,6 +38,22 @@ function deduplicateChats<T extends { userId: string; title: string; turns: Arra
   return Array.from(seen.values());
 }
 
+const TURN_PREVIEW_LENGTH = 150;
+
+function truncateForPreview(text: string, max = TURN_PREVIEW_LENGTH): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max) + "...";
+}
+
+/** Full chat with turns (prompt/response may be truncated when aboveTheFoldOnly) */
+export interface FullChat {
+  id: string;
+  userId: string;
+  title: string;
+  timestamp: Date;
+  turns: Array<{ prompt: string; response: string; truncated?: boolean }>;
+}
+
 export interface LoadChatsParams {
   userId: string;
   page?: number; // 0-indexed, default 0
@@ -46,16 +62,11 @@ export interface LoadChatsParams {
   widgetVersion?: string; // Widget version (optional, for tracking which widget version is calling)
   userContext?: UserContext; // User context from Findexar headers
   headers?: Record<string, string | string[] | undefined>; // All request headers for logging
+  aboveTheFoldOnly?: boolean; // When true, return chats with truncated turns (first 150 chars). Use loadFullTurn when user expands.
 }
 
 export interface LoadChatsResult {
-  chats: Array<{
-    id: string;
-    userId: string;
-    title: string;
-    timestamp: Date;
-    turns: Array<{ prompt: string; response: string }>;
-  }>;
+  chats: FullChat[];
   pagination: {
     page: number;
     limit: number;
@@ -90,6 +101,22 @@ export interface LoadChatsResult {
   };
 }
 
+/** Format turns for response: truncate when aboveTheFoldOnly */
+function formatTurns(
+  chat: { turns: Array<{ prompt: string; response: string }> },
+  aboveTheFoldOnly: boolean
+): Array<{ prompt: string; response: string; truncated?: boolean }> {
+  const turns = chat.turns ?? [];
+  if (!aboveTheFoldOnly) {
+    return turns.map((t) => ({ ...t }));
+  }
+  return turns.map((t) => ({
+    prompt: truncateForPreview(t.prompt),
+    response: truncateForPreview(t.response),
+    truncated: true,
+  }));
+}
+
 /**
  * Filter out expired chats for anonymous users (older than ANON_CHAT_EXPIRY_DAYS)
  */
@@ -114,7 +141,7 @@ function filterExpiredChats<T extends { timestamp: Date }>(
  * Load paginated chats for a user
  */
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
-  let { userId, page = 0, size = 10, query, widgetVersion, userContext, headers } = params;
+  let { userId, page = 0, size = 10, query, widgetVersion, userContext, headers, aboveTheFoldOnly = false } = params;
   const isAnon = userContext?.isAnon ?? false;
   const isAnonymousPlan = userContext?.isAnonymousPlan;
   const portalLink = userContext?.portalLink ?? null;
@@ -203,9 +230,16 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
       console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
 
+      const chatsToReturn = paginatedFilteredChats.map((chat) => ({
+        id: chat.id,
+        userId: chat.userId,
+        title: chat.title,
+        timestamp: chat.timestamp,
+        turns: formatTurns(chat, aboveTheFoldOnly),
+      }));
 
       const result: LoadChatsResult = {
-        chats: paginatedFilteredChats,
+        chats: chatsToReturn,
         pagination: {
           page: searchResult.page,
           limit: searchResult.size,
@@ -269,7 +303,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       userId: chat.userId,
       title: chat.title,
       timestamp: chat.timestamp,
-      turns: chat.turns,
+      turns: formatTurns(chat, aboveTheFoldOnly),
     }));
 
     const result: LoadChatsResult = {

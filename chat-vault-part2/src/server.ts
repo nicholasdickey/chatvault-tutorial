@@ -23,6 +23,7 @@ import { saveChatTurn } from "./tools/saveChatTurn.js";
 import { saveChatTurnsFinalize } from "./tools/saveChatTurnsFinalize.js";
 import { widgetAdd } from "./tools/widgetAdd.js";
 import { loadMyChats } from "./tools/loadMyChats.js";
+import { loadFullTurn } from "./tools/loadFullTurn.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
@@ -287,6 +288,10 @@ const chatVaultTools: Tool[] = [
                     type: "string",
                     description: "Optional search query to filter chats by title or content",
                 },
+                aboveTheFoldOnly: {
+                    type: "boolean",
+                    description: "When true, return chats with truncated turns (first 150 chars). Use loadFullTurn when user expands a turn.",
+                },
                 widgetVersion: {
                     type: "string",
                     description: "Widget version (optional, for tracking which widget version is calling)",
@@ -295,6 +300,56 @@ const chatVaultTools: Tool[] = [
             required: ["userId"],
         },
 
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: true,
+            destructiveHint: false,
+        }
+    },
+    {
+        name: "loadFullChat",
+        description: "Load full chat with turns by chatId. Call when user expands/clicks a chat from the list (when using aboveTheFoldOnly).",
+        inputSchema: {
+            type: "object",
+            properties: {
+                chatId: {
+                    type: "string",
+                    description: "Chat ID (required)",
+                },
+                userId: {
+                    type: "string",
+                    description: "User ID (required)",
+                },
+            },
+            required: ["chatId", "userId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: true,
+            destructiveHint: false,
+        }
+    },
+    {
+        name: "loadFullTurn",
+        description: "Load full prompt and response for a single turn. Call when user expands a truncated turn.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                chatId: {
+                    type: "string",
+                    description: "Chat ID (required)",
+                },
+                userId: {
+                    type: "string",
+                    description: "User ID (required)",
+                },
+                turnIndex: {
+                    type: "number",
+                    description: "0-based turn index (required)",
+                },
+            },
+            required: ["chatId", "userId", "turnIndex"],
+        },
         annotations: {
             readOnlyHint: true,
             openWorldHint: true,
@@ -480,7 +535,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             };
             console.log("[MCP Handler] Final userContext (headers + args fallback):", finalUserContext);
             const result = await loadMyChats({
-                ...(args as { userId: string; page?: number; size?: number; query?: string }),
+                ...(args as { userId: string; page?: number; size?: number; query?: string; aboveTheFoldOnly?: boolean }),
                 userContext: finalUserContext,
                 headers: headers, // Pass all headers for logging
             });
@@ -491,6 +546,20 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                     {
                         type: "text",
                         text: `Loaded ${result.chats.length} chats`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "loadFullTurn") {
+            const result = await loadFullTurn(args as { chatId: string; userId: string; turnIndex: number });
+            if (!result) {
+                throw new Error("Turn not found or does not belong to user");
+            }
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Loaded turn`,
                     },
                 ],
                 structuredContent: result,
