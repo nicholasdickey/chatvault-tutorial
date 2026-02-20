@@ -7,7 +7,7 @@ import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { generateEmbedding, combineChatText } from "./embeddings.js";
+import { generateEmbedding, combineChatText, splitTurnsForEmbedding } from "./embeddings.js";
 
 export interface SaveChatCoreParams {
     userId: string;
@@ -18,6 +18,8 @@ export interface SaveChatCoreParams {
 export interface SaveChatCoreResult {
     chatId: string;
     saved: boolean;
+    /** When chat is split, all part IDs (first is primary) */
+    chatIds?: string[];
 }
 
 /**
@@ -76,48 +78,68 @@ export async function saveChatCore(params: SaveChatCoreParams): Promise<SaveChat
             throw new Error("turns must be a non-empty array");
         }
 
-        // Idempotency check: if same chat already exists, return existing ID
-        // This prevents duplicates from retries, double-clicks, etc.
-        console.log("[saveChatCore] Checking for existing chat (idempotency)...");
-        const existingId = await checkForExistingChat(userId, title, turns);
-        if (existingId) {
-            console.log("[saveChatCore] Existing chat found, returning existing chat ID:", existingId);
-            return {
-                chatId: existingId,
-                saved: false, // Not newly saved, but operation is idempotent
-            };
+        // Split into parts if combined text exceeds embedding model limit
+        const chunks = splitTurnsForEmbedding(turns);
+        const isSplit = chunks.length > 1;
+
+        // Idempotency: for single-part chat, check once before any embedding work
+        if (!isSplit) {
+            console.log("[saveChatCore] Checking for existing chat (idempotency)...");
+            const existingId = await checkForExistingChat(userId, title, turns);
+            if (existingId) {
+                console.log("[saveChatCore] Existing chat found, returning existing chat ID:", existingId);
+                return { chatId: existingId, saved: false };
+            }
         }
 
-        // Combine all prompts and responses into a single text
-        const chatText = combineChatText(turns);
-        console.log("[saveChatCore] Combined chat text length:", chatText.length, "chars");
-
-        // Generate embedding for the entire chat
-        console.log("[saveChatCore] Generating embedding...");
-        const embedding = await generateEmbedding(chatText);
-        console.log("[saveChatCore] Embedding generated, dimensions:", embedding.length);
-
-        // Save to database
-        console.log("[saveChatCore] Inserting chat into database...");
-        const [savedChat] = await db
-            .insert(chats)
-            .values({
-                userId,
-                title,
-                turns,
-                embedding,
-            })
-            .returning({ id: chats.id });
-
-        if (!savedChat) {
-            throw new Error("Failed to save chat - no ID returned");
+        if (isSplit) {
+            console.log("[saveChatCore] Splitting chat into", chunks.length, "parts (embedding limit)");
         }
 
-        console.log("[saveChatCore] Chat saved successfully - id:", savedChat.id);
+        const chatIds: string[] = [];
+        let anyNewlySaved = false;
+
+        for (let i = 0; i < chunks.length; i++) {
+            const partTurns = chunks[i] as Array<{ prompt: string; response: string }>;
+            const partTitle = isSplit ? `${title} Part ${i + 1}` : title;
+
+            // Idempotency per part (for retries of split saves)
+            if (isSplit) {
+                const existingId = await checkForExistingChat(userId, partTitle, partTurns);
+                if (existingId) {
+                    console.log("[saveChatCore] Part", i + 1, "already exists:", existingId);
+                    chatIds.push(existingId);
+                    continue;
+                }
+            }
+
+            const chatText = combineChatText(partTurns);
+            console.log("[saveChatCore] Part", i + 1, "text length:", chatText.length, "chars");
+
+            const embedding = await generateEmbedding(chatText);
+
+            const [savedChat] = await db
+                .insert(chats)
+                .values({
+                    userId,
+                    title: partTitle,
+                    turns: partTurns,
+                    embedding,
+                })
+                .returning({ id: chats.id });
+
+            if (!savedChat) {
+                throw new Error(`Failed to save chat part ${i + 1}`);
+            }
+            chatIds.push(savedChat.id);
+            anyNewlySaved = true;
+            console.log("[saveChatCore] Part", i + 1, "saved - id:", savedChat.id);
+        }
 
         return {
-            chatId: savedChat.id,
-            saved: true,
+            chatId: chatIds[0] as string,
+            saved: anyNewlySaved,
+            ...(chatIds.length > 1 && { chatIds }),
         };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

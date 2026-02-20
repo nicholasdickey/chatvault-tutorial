@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef } from "react";
+import type React from "react";
+import { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdPictureInPicture, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
 import { app } from "../app-instance.js";
-
-// Chat data structure (TSX; types can be added later)
+import type { Chat, UserInfo, Pagination, DeleteConfirmation, ContentMetadata, EditingTurn, ChatVaultToolResult } from "./types.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
 const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.1";
 
 // Debug logging
-const debugLogs = [];
-const addLog = (message, data = null) => {
+const debugLogs: Array<{ timestamp: string; message: string; data: string | null }> = [];
+const addLog = (message: string, data: unknown = null) => {
   const log = {
     timestamp: new Date().toISOString(),
     message,
@@ -25,56 +25,54 @@ const addLog = (message, data = null) => {
 };
 
 function App() {
-  const [chats, setChats] = useState([]);
+  const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedChat, setSelectedChat] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [pagination, setPagination] = useState(null);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
   const [pageInputValue, setPageInputValue] = useState("1");
   const [paginationLoading, setPaginationLoading] = useState(false);
-  const [expandedTurns, setExpandedTurns] = useState(new Set());
-  const [copiedItems, setCopiedItems] = useState({});
-  // Debug panel hidden by default, can be toggled with Ctrl+Shift+D
+  const [expandedTurns, setExpandedTurns] = useState<Set<string | number>>(new Set());
+  const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({});
+  // Debug panel hidden by default, can be toggled with Ctrl+Alt+D (avoids browser Ctrl+Shift+D = Bookmark all tabs)
   const [showDebug, setShowDebug] = useState(() => {
-    // Check localStorage for previously enabled debug panel
     return localStorage.getItem("chatvault-debug-enabled") === "true";
   });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showManualSaveModal, setShowManualSaveModal] = useState(false);
   const [manualSaveTitle, setManualSaveTitle] = useState("");
   const [manualSaveContent, setManualSaveContent] = useState("");
-  const [manualSaveHtml, setManualSaveHtml] = useState(""); // Store HTML from clipboard
-  const [manualSaveError, setManualSaveError] = useState(null);
+  const [manualSaveHtml, setManualSaveHtml] = useState("");
+  const [manualSaveError, setManualSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
-  const [contentMetadata, setContentMetadata] = useState(null);
-  const [alertMessage, setAlertMessage] = useState(null);
-  const [alertPortalLink, setAlertPortalLink] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [contentMetadata, setContentMetadata] = useState<ContentMetadata | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [alertPortalLink, setAlertPortalLink] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation | null>(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [helpText, setHelpText] = useState(null);
+  const [helpText, setHelpText] = useState<string | null>(null);
   const [helpTextLoading, setHelpTextLoading] = useState(false);
-  const [subTitle, setSubTitle] = useState(null);
   const [subTitleExpanded, setSubTitleExpanded] = useState(false);
-  const [displayMode, setDisplayMode] = useState("normal"); // "normal" | "fullscreen" | "pip"
+  const [displayMode, setDisplayMode] = useState<"inline" | "fullscreen" | "pip">("inline");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
-  const [editedTurns, setEditedTurns] = useState([]); // Local copy of turns being edited
-  const [editingTurn, setEditingTurn] = useState(null); // { turnIndex: number, field: 'prompt' | 'response' }
-  const [editingTurnValue, setEditingTurnValue] = useState(""); // Current value being edited
+  const [editedTurns, setEditedTurns] = useState<{ prompt: string; response: string }[]>([]);
+  const [editingTurn, setEditingTurn] = useState<EditingTurn | null>(null);
+  const [editingTurnValue, setEditingTurnValue] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingChat, setIsSavingChat] = useState(false);
 
-  // Keyboard shortcut to toggle debug panel (Ctrl+Shift+D)
+  // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Ctrl+Shift+D (or Cmd+Shift+D on Mac) - case-insensitive, capture phase
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d") {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Alt+D (or Cmd+Alt+D on Mac) - case-insensitive, capture phase
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d") {
         e.preventDefault();
         e.stopPropagation();
         const newState = !showDebug;
@@ -160,13 +158,13 @@ function App() {
         const dataScript = document.getElementById("chatvault-initial-data");
         if (dataScript) {
           try {
-            const initialChats = JSON.parse(dataScript.textContent || "[]");
+            const initialChats = JSON.parse(dataScript.textContent || "[]") as Chat[];
             addLog("Loaded chats from embedded data", { count: initialChats.length });
             setChats(deduplicateChats(initialChats));
             setLoading(false);
             return;
           } catch (e) {
-            addLog("Failed to parse embedded data", { error: e.message });
+            addLog("Failed to parse embedded data", { error: e instanceof Error ? e.message : String(e) });
           }
         }
 
@@ -175,12 +173,12 @@ function App() {
           const result = await app.callServerTool({
             name: "loadMyChats",
             arguments: { page: 0, size: 10, widgetVersion: WIDGET_VERSION },
-          });
+          }) as ChatVaultToolResult | null;
           addLog("loadMyChats result", result);
 
           if (result?.structuredContent?.chats) {
-            setChats(deduplicateChats(result.structuredContent.chats));
-            setPagination(result.structuredContent.pagination);
+            setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
+            setPagination((result.structuredContent.pagination as Pagination) ?? null);
             setCurrentPage(0);
             setPageInputValue("1");
             if (result.structuredContent.userInfo) {
@@ -188,10 +186,10 @@ function App() {
               addLog("User info extracted", result.structuredContent.userInfo);
             }
             if (result.structuredContent.content) {
-              setContentMetadata(result.structuredContent.content);
+              setContentMetadata(result.structuredContent.content as ContentMetadata);
               addLog("Content metadata extracted", result.structuredContent.content);
             }
-          } else if (result?.content?.[0]?.text) {
+          } else if (result?.content?.[0] && "text" in result.content[0]) {
             addLog("Unexpected result format", result);
           }
         } catch (err) {
@@ -238,7 +236,7 @@ function App() {
   useEffect(() => {
     if (!showHelp) return;
 
-    const handleEscKey = (e) => {
+    const handleEscKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setShowHelp(false);
       }
@@ -252,9 +250,9 @@ function App() {
 
   // Deduplicate chats based on title and content
   // Keeps the most recent chat (by timestamp) when duplicates are found
-  const deduplicateChats = (chatList) => {
-    const seen = new Map();
-    const deduplicated = [];
+  const deduplicateChats = (chatList: Chat[]) => {
+    const seen = new Map<string, Chat>();
+    const deduplicated: Chat[] = [];
 
     for (const chat of chatList) {
       // Create a signature based on title and content (different for notes vs chats)
@@ -274,15 +272,16 @@ function App() {
       } else {
         // If we've seen this before, keep the one with the latest timestamp
         const existing = seen.get(signature);
-        const existingTime = new Date(existing.timestamp).getTime();
-        const currentTime = new Date(chat.timestamp).getTime();
+        if (existing && chat.timestamp && existing.timestamp) {
+          const existingTime = new Date(existing.timestamp).getTime();
+          const currentTime = new Date(chat.timestamp).getTime();
 
-        if (currentTime > existingTime) {
-          // Replace the existing one with the newer one
-          const index = deduplicated.indexOf(existing);
-          if (index !== -1) {
-            deduplicated[index] = chat;
-            seen.set(signature, chat);
+          if (currentTime > existingTime) {
+            const index = deduplicated.indexOf(existing);
+            if (index !== -1) {
+              deduplicated[index] = chat;
+              seen.set(signature, chat);
+            }
           }
         }
       }
@@ -291,7 +290,7 @@ function App() {
     return deduplicated;
   };
 
-  const handleChatClick = (chat) => {
+  const handleChatClick = (chat: Chat) => {
     addLog("Chat clicked", { title: chat.title });
     // Create a fresh copy of the chat object to avoid reference issues
     setSelectedChat({ ...chat });
@@ -323,8 +322,8 @@ function App() {
   const handleFullscreen = async () => {
     try {
       if (displayMode === "fullscreen") {
-        const response = await app.requestDisplayMode({ mode: "normal" });
-        setDisplayMode(response.mode || "normal");
+        const response = await app.requestDisplayMode({ mode: "inline" });
+        setDisplayMode(response.mode || "inline");
         addLog("Exited fullscreen", response);
       } else {
         const response = await app.requestDisplayMode({ mode: "fullscreen" });
@@ -339,11 +338,12 @@ function App() {
     }
   };
 
+  // Reserved for PiP mode button in fullscreen toolbar
   const handlePipMode = async () => {
     try {
       if (displayMode === "pip") {
-        const response = await app.requestDisplayMode({ mode: "normal" });
-        setDisplayMode(response.mode || "normal");
+        const response = await app.requestDisplayMode({ mode: "inline" });
+        setDisplayMode(response.mode || "inline");
         addLog("Exited PiP mode", response);
       } else {
         const response = await app.requestDisplayMode({ mode: "pip" });
@@ -376,11 +376,11 @@ function App() {
           size: 10,
           widgetVersion: WIDGET_VERSION,
         },
-      });
+      }) as ChatVaultToolResult | null;
       addLog("loadMyChats result", result);
       if (result?.structuredContent?.chats) {
-        setChats(deduplicateChats(result.structuredContent.chats));
-        setPagination(result.structuredContent.pagination);
+        setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
+        setPagination((result.structuredContent.pagination as Pagination) ?? null);
         setCurrentPage(0);
         setPageInputValue("1");
         if (result.structuredContent.userInfo) {
@@ -446,7 +446,7 @@ function App() {
     }
   };
 
-  const handleDeleteChat = async (chat) => {
+  const handleDeleteChat = async (chat: Chat) => {
     addLog("Delete chat clicked", { chatId: chat.id, title: chat.title });
 
     // Show confirmation in alert area
@@ -479,7 +479,7 @@ function App() {
       const result = await app.callServerTool({
         name: "deleteChat",
         arguments: { chatId, userId },
-      });
+      }) as ChatVaultToolResult | null;
 
       addLog("Delete chat result", result);
 
@@ -490,13 +490,13 @@ function App() {
 
         // Update userInfo counts locally
         if (userInfo) {
-          setUserInfo((prev) => ({
+          setUserInfo((prev) => prev ? ({
             ...prev,
             totalChats: Math.max(0, (prev.totalChats || 0) - 1),
             remainingSlots: prev.remainingSlots !== undefined
               ? (prev.remainingSlots || 0) + 1
               : undefined,
-          }));
+          }) : null);
           addLog("UserInfo counts updated locally");
         }
 
@@ -561,7 +561,6 @@ function App() {
 
     // Capture chatId and current title before async operation to avoid closure issues
     const chatId = selectedChat.id;
-    const currentTitle = selectedChat.title;
 
     try {
       const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
@@ -579,12 +578,12 @@ function App() {
             title: trimmedTitle,
           },
         },
-      });
+      }) as ChatVaultToolResult | null;
 
       addLog("Update chat result", result);
 
       if (result?.structuredContent?.updated) {
-        const newTitle = result.structuredContent.title || trimmedTitle;
+        const newTitle = (typeof result.structuredContent.title === "string" ? result.structuredContent.title : trimmedTitle) as string;
 
         // Update selectedChat only if it's still the same chat
         setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, title: newTitle } : prev));
@@ -602,7 +601,7 @@ function App() {
         setIsEditingTitle(false);
         setEditedTitle("");
       } else {
-        throw new Error(result?.structuredContent?.message || "Update failed");
+        throw new Error(String(result?.structuredContent?.message || "Update failed"));
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -614,7 +613,7 @@ function App() {
     }
   };
 
-  const handleStartEditTurn = (turnIndex, field) => {
+  const handleStartEditTurn = (turnIndex: number, field: "prompt" | "response") => {
     if (!selectedChat || !editedTurns[turnIndex]) return;
     const turn = editedTurns[turnIndex];
     setEditingTurn({ turnIndex, field });
@@ -628,7 +627,7 @@ function App() {
     addLog("Cancelled editing turn");
   };
 
-  const handleSaveTurnEdit = (turnIndex, field) => {
+  const handleSaveTurnEdit = (turnIndex: number, field: "prompt" | "response") => {
     if (!selectedChat || !editedTurns[turnIndex]) return;
 
     const trimmedValue = editingTurnValue.trim();
@@ -647,7 +646,7 @@ function App() {
     addLog("Turn edited", { turnIndex, field });
   };
 
-  const handleDeleteTurn = (turnIndex) => {
+  const handleDeleteTurn = (turnIndex: number) => {
     if (!selectedChat || editedTurns.length <= 1) {
       setAlertMessage("Cannot delete the last turn. A chat must have at least one turn.");
       setAlertPortalLink(null);
@@ -709,12 +708,12 @@ function App() {
             turns: editedTurns,
           },
         },
-      });
+      }) as ChatVaultToolResult | null;
 
       addLog("Update chat result", result);
 
       if (result?.structuredContent?.updated) {
-        const updatedTurns = result.structuredContent.turns || editedTurns;
+        const updatedTurns = (result.structuredContent?.turns as { prompt: string; response: string }[] | undefined) || editedTurns;
 
         // Update selectedChat
         setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, turns: updatedTurns } : prev));
@@ -733,7 +732,7 @@ function App() {
         setEditingTurn(null);
         setEditingTurnValue("");
       } else {
-        throw new Error(result?.structuredContent?.message || "Update failed");
+        throw new Error(String(result?.structuredContent?.message || "Update failed"));
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -753,14 +752,14 @@ function App() {
   };
 
   // Convert markdown to HTML
-  const markdownToHtml = (markdown) => {
+  const markdownToHtml = (markdown: string): string => {
     if (!markdown) return "";
 
     let html = markdown;
-    const codeBlocks = [];
+    const codeBlocks: string[] = [];
 
     // Extract fenced code blocks (```tsx, ```json, etc.) first so paragraph split doesn't break them
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, content) => {
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_: string, lang: string, content: string) => {
       const escaped = content
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -793,18 +792,18 @@ function App() {
     html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
 
     // Parse a markdown table block into header row and body rows
-    const parseMarkdownTable = (block) => {
-      const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
-      if (lines.length === 0) return { header: [], body: [] };
-      const rowToCells = (line) => {
-        const cells = line.split('|').map((c) => c.trim());
+    const parseMarkdownTable = (block: string) => {
+      const lines = block.split(/\n/).map((l: string) => l.trim()).filter(Boolean);
+      if (lines.length === 0) return { header: [] as string[], body: [] as string[][] };
+      const rowToCells = (line: string) => {
+        const cells = line.split('|').map((c: string) => c.trim());
         while (cells.length && cells[0] === '') cells.shift();
         while (cells.length && cells[cells.length - 1] === '') cells.pop();
         return cells;
       };
       const rows = lines.map(rowToCells);
       const header = rows[0] || [];
-      const isSeparator = (cells) => cells.every((c) => /^[\s\-:]+$/.test(c));
+      const isSeparator = (cells: string[]) => cells.every((c: string) => /^[\s\-:]+$/.test(c));
       const body = rows.length > 1 && isSeparator(rows[1]) ? rows.slice(2) : rows.slice(1);
       return { header, body };
     };
@@ -814,12 +813,12 @@ function App() {
     const tableRowPattern = /^\|.+\|$/;
     const tableCellClasses = "px-2 py-1 border border-gray-300 dark:border-gray-600";
     const tableHeaderClasses = "px-2 py-1 border border-gray-300 dark:border-gray-600 font-semibold bg-gray-100 dark:bg-gray-700 text-left";
-    html = paragraphs.map(p => {
+    html = paragraphs.map((p: string) => {
       const trimmed = p.trim();
       if (!trimmed) return '';
       if (/^%%%CODEBLOCK\d+%%%$/.test(trimmed)) return trimmed;
-      const lines = trimmed.split(/\n/).map((l) => l.trim());
-      const looksLikeTable = lines.length >= 1 && lines.every((line) => tableRowPattern.test(line));
+      const lines = trimmed.split(/\n/).map((l: string) => l.trim());
+      const looksLikeTable = lines.length >= 1 && lines.every((line: string) => tableRowPattern.test(line));
       if (looksLikeTable) {
         const { header, body } = parseMarkdownTable(trimmed);
         const colCount = header.length;
@@ -827,26 +826,26 @@ function App() {
           ? `<thead><tr>${header.map((c) => `<th class="${tableHeaderClasses}">${c}</th>`).join('')}</tr></thead>`
           : '';
         const tbodyRows = body.map(
-          (row) => `<tr>${Array.from({ length: colCount }, (_, i) => `<td class="${tableCellClasses}">${row[i] ?? ''}</td>`).join('')}</tr>`
+          (row: string[]) => `<tr>${Array.from({ length: colCount }, (_: unknown, i: number) => `<td class="${tableCellClasses}">${row[i] ?? ''}</td>`).join('')}</tr>`
         );
         const tbody = tbodyRows.length ? `<tbody>${tbodyRows.join('')}</tbody>` : '';
         return `<table class="mb-3 table-auto border-collapse border border-gray-300 dark:border-gray-600 text-sm">${thead}${tbody}</table>`;
       }
       const ulPattern = /^\s*[-*+]\s+.+$/;
-      const looksLikeUl = lines.length >= 1 && lines.every((line) => ulPattern.test(line.trim()));
+      const looksLikeUl = lines.length >= 1 && lines.every((line: string) => ulPattern.test(line.trim()));
       if (looksLikeUl) {
-        const items = lines.map((line) => line.replace(/^\s*[-*+]\s+/, '').trim());
-        return `<ul class="mb-3 list-disc list-inside space-y-1">${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+        const items = lines.map((line: string) => line.replace(/^\s*[-*+]\s+/, '').trim());
+        return `<ul class="mb-3 list-disc list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join('')}</ul>`;
       }
       const olPattern = /^\d+\.\s+.+$/;
-      const looksLikeOl = lines.length >= 1 && lines.every((line) => olPattern.test(line.trim()));
+      const looksLikeOl = lines.length >= 1 && lines.every((line: string) => olPattern.test(line.trim()));
       if (looksLikeOl) {
-        const items = lines.map((line) => line.replace(/^\d+\.\s+/, '').trim());
-        return `<ol class="mb-3 list-decimal list-inside space-y-1">${items.map((item) => `<li>${item}</li>`).join('')}</ol>`;
+        const items = lines.map((line: string) => line.replace(/^\d+\.\s+/, '').trim());
+        return `<ol class="mb-3 list-decimal list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join('')}</ol>`;
       }
-      const looksLikeBlockquote = lines.length >= 1 && lines.every((line) => line.startsWith('> ') || line === '>');
+      const looksLikeBlockquote = lines.length >= 1 && lines.every((line: string) => line.startsWith('> ') || line === '>');
       if (looksLikeBlockquote) {
-        const content = lines.map((line) => (line.startsWith('> ') ? line.slice(2) : line === '>' ? '' : line)).join('<br />');
+        const content = lines.map((line: string) => (line.startsWith('> ') ? line.slice(2) : line === '>' ? '' : line)).join('<br />');
         return `<blockquote class="mb-3 border-l-4 border-gray-300 dark:border-gray-600 pl-4 text-gray-700 dark:text-gray-300">${content}</blockquote>`;
       }
       // Replace single newlines with <br> within paragraphs
@@ -854,7 +853,7 @@ function App() {
       return `<p class="mb-3">${withBreaks}</p>`;
     }).join('');
 
-    codeBlocks.forEach((block, i) => {
+    codeBlocks.forEach((block: string, i: number) => {
       html = html.replace(`%%%CODEBLOCK${i}%%%`, block);
     });
     return html;
@@ -887,12 +886,12 @@ function App() {
       const result = await app.callServerTool({
         name: "explainHowToUse",
         arguments: { userId },
-      });
+      }) as ChatVaultToolResult | null;
 
       addLog("explainHowToUse result", result);
 
       if (result?.structuredContent?.helpText) {
-        const rawHelpText = result.structuredContent.helpText;
+        const rawHelpText = String(result.structuredContent.helpText);
         // Replace placeholders in help text
         const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
         const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
@@ -911,7 +910,7 @@ function App() {
     }
   };
 
-  const toggleTurnExpansion = (index) => {
+  const toggleTurnExpansion = (index: number) => {
     addLog("Toggle turn expansion", { index });
     setExpandedTurns((prev) => {
       const next = new Set(prev);
@@ -924,7 +923,7 @@ function App() {
     });
   };
 
-  const copyToClipboard = async (text, id) => {
+  const copyToClipboard = async (text: string, id: string) => {
     console.log("[copyToClipboard] Called", { id, textLength: text?.length });
 
     const setCopiedState = () => {
@@ -981,9 +980,10 @@ function App() {
         throw new Error("execCommand('copy') returned false");
       }
     } catch (err) {
-      console.error("[copyToClipboard] Copy failed", { id, error: err.message, err });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[copyToClipboard] Copy failed", { id, error: errMsg, err });
       addLog("Failed to copy - clipboard access blocked. Please copy manually.", {
-        error: err.message,
+        error: errMsg,
         suggestion: "The clipboard API is blocked in this context. You may need to copy the text manually."
       });
 
@@ -993,7 +993,7 @@ function App() {
     }
   };
 
-  const formatChatForCopy = (chat) => {
+  const formatChatForCopy = (chat: Chat | null) => {
     if (!chat) {
       return "";
     }
@@ -1009,13 +1009,13 @@ function App() {
     }
 
     return chat.turns
-      .map((turn) => {
+      .map((turn: { prompt: string; response: string }) => {
         return `You said:\n${turn.prompt}\n\nAI said:\n${turn.response}`;
       })
       .join("\n\n");
   };
 
-  const copyEntireChat = async (chat) => {
+  const copyEntireChat = async (chat: Chat | null) => {
     console.log("[copyEntireChat] Called", { chat, timestamp: chat?.timestamp });
     try {
       if (!chat || !chat.timestamp) {
@@ -1028,17 +1028,19 @@ function App() {
       await copyToClipboard(formattedText, chatId);
       console.log("[copyEntireChat] Success", { chatId });
     } catch (err) {
-      console.error("[copyEntireChat] Error", { error: err.message, err, chat });
-      addLog("Failed to copy entire chat", { error: err.message });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[copyEntireChat] Error", { error: errMsg, err, chat });
+      addLog("Failed to copy entire chat", { error: errMsg });
     }
   };
 
-  const truncateText = (text, maxLength = 150) => {
+  const truncateText = (text: string, maxLength = 150) => {
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength) + "...";
   };
 
-  const formatDate = (timestamp) => {
+  const formatDate = (timestamp: string | number | Date | undefined) => {
+    if (timestamp == null) return "";
     const date = new Date(timestamp);
     return date.toLocaleDateString("en-US", {
       month: "short",
@@ -1095,7 +1097,7 @@ function App() {
       const callToolPromise = app.callServerTool({ name: "widgetAdd", arguments: toolArgs });
 
       addLog("⏳ [WIDGET] Waiting for response...");
-      const result = await Promise.race([callToolPromise, timeoutPromise]);
+      const result = await Promise.race([callToolPromise, timeoutPromise]) as ChatVaultToolResult;
       addLog("✅ [WIDGET] Response received");
 
       addLog("📥 [WIDGET] Manual save result received", {
@@ -1129,23 +1131,25 @@ function App() {
           error: result.error,
           errorMessage,
         });
-        throw new Error(errorMessage);
+        throw new Error(String(errorMessage));
       }
 
       // Check for JSON-RPC error format
       if (result?.jsonrpc === "2.0" && result?.error) {
-        const errorMessage = result.error.message || result.error.data || "Unknown error occurred";
+        const errorMessage = (typeof result.error === "object" && result.error && "message" in result.error
+          ? (result.error as { message?: string }).message
+          : result.error) || result.error?.data || "Unknown error occurred";
         addLog("❌ [WIDGET] JSON-RPC error found", {
           error: result.error,
           errorMessage,
         });
-        throw new Error(errorMessage);
+        throw new Error(String(errorMessage));
       }
 
       // Check if content indicates an error
       if (result?.content && Array.isArray(result.content) && result.content.length > 0) {
-        const firstContent = result.content[0];
-        if (firstContent?.text) {
+        const firstContent = result.content[0] as { type?: string; text?: string } | undefined;
+        if (firstContent && "text" in firstContent && firstContent.text) {
           const text = firstContent.text;
           addLog("📄 [WIDGET] Content text found", { text: text.substring(0, 200) });
           if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed") || text.toLowerCase().includes("could not parse")) {
@@ -1175,7 +1179,7 @@ function App() {
           setShowManualSaveModal(false);
           setManualSaveError(null);
           setAlertMessage(message);
-          setAlertPortalLink(portalLink || null);
+          setAlertPortalLink(typeof portalLink === "string" ? portalLink : null);
           return; // Don't throw, just show error in alert
         }
 
@@ -1184,7 +1188,7 @@ function App() {
 
         // Check for server_error
         if (result.structuredContent.error === "server_error") {
-          const message = result.structuredContent.message || "An error occurred while saving the chat";
+          const message = (typeof result.structuredContent.message === "string" ? result.structuredContent.message : "An error occurred while saving the chat") as string;
           addLog("❌ [WIDGET] Server error in structuredContent", {
             message,
             error: result.structuredContent.error,
@@ -1201,13 +1205,14 @@ function App() {
         }
 
         if (result.structuredContent.error) {
-          const errorMessage = result.structuredContent.error.message || result.structuredContent.error || "Unknown error occurred";
+          const errObj = result.structuredContent.error;
+          const errorMessage = (typeof errObj === "object" && errObj && "message" in errObj ? (errObj as { message?: string }).message : String(errObj)) || "Unknown error occurred";
           addLog("❌ [WIDGET] Error found in structuredContent.error", {
             error: result.structuredContent.error,
             errorMessage,
             fullStructuredContent: result.structuredContent,
           });
-          throw new Error(errorMessage);
+          throw new Error(String(errorMessage));
         }
         // Also check if structuredContent has an error-like structure
         if (result.structuredContent.saved === false || result.structuredContent.success === false) {
@@ -1218,7 +1223,7 @@ function App() {
             errorMessage,
             fullStructuredContent: result.structuredContent,
           });
-          throw new Error(errorMessage);
+          throw new Error(String(errorMessage));
         }
       }
 
@@ -1248,23 +1253,23 @@ function App() {
         const loadResult = await app.callServerTool({
           name: "loadMyChats",
           arguments: { page: 0, size: 10 },
-        });
+        }) as ChatVaultToolResult | null;
         if (loadResult?.structuredContent?.chats) {
-          setChats(deduplicateChats(loadResult.structuredContent.chats));
-          setPagination(loadResult.structuredContent.pagination);
+          setChats(deduplicateChats(loadResult.structuredContent.chats as Chat[]));
+          setPagination((loadResult.structuredContent.pagination as Pagination) ?? null);
           setCurrentPage(0);
           setPageInputValue("1");
           if (loadResult.structuredContent.userInfo) {
-            setUserInfo(loadResult.structuredContent.userInfo);
+            setUserInfo(loadResult.structuredContent.userInfo as UserInfo);
             addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
           }
           if (loadResult.structuredContent.content) {
-            setContentMetadata(loadResult.structuredContent.content);
+            setContentMetadata(loadResult.structuredContent.content as ContentMetadata);
           }
         }
       } catch (err) {
-        addLog("Error reloading chats after manual save", { error: err.message });
-        setError(`Failed to reload chats: ${err.message}`);
+        addLog("Error reloading chats after manual save", { error: err instanceof Error ? err.message : String(err) });
+        setError(`Failed to reload chats: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setPaginationLoading(false);
       }
@@ -1275,18 +1280,18 @@ function App() {
         errorMessage = err.message;
       } else if (typeof err === "string") {
         errorMessage = err;
-      } else if (err && typeof err === "object") {
-        // Try to extract error message from various possible structures
-        errorMessage = err.message || err.error?.message || err.error || JSON.stringify(err);
+      } else if (err && typeof err === "object" && err !== null) {
+        const o = err as { message?: string; name?: string; stack?: string; error?: { message?: string } | string };
+        errorMessage = o.message || (typeof o.error === "object" && o.error?.message) || (typeof o.error === "string" ? o.error : "") || JSON.stringify(err);
       }
 
       addLog("❌ [WIDGET] Manual save failed", {
         error: errorMessage,
         errorType: typeof err,
         errorString: String(err),
-        errorName: err?.name || "(none)",
-        errorStack: err?.stack || "(none)",
-        errorMessage: err?.message || "(none)",
+        errorName: (err && typeof err === "object" && "name" in err ? (err as { name?: string }).name : undefined) || "(none)",
+        errorStack: (err && typeof err === "object" && "stack" in err ? (err as { stack?: string }).stack : undefined) || "(none)",
+        errorMessage: (err && typeof err === "object" && "message" in err ? (err as { message?: string }).message : undefined) || "(none)",
         fullError: err,
       });
       setManualSaveError(errorMessage || "Failed to save chat. Please check the debug panel for details.");
@@ -1304,7 +1309,7 @@ function App() {
     setManualSaveError(null);
   };
 
-  const handleSearch = async (query, page = 0) => {
+  const handleSearch = async (query: string, page = 0) => {
     if (!query.trim()) {
       // Clear search - reload regular chats
       handleClearSearch();
@@ -1325,14 +1330,14 @@ function App() {
           size: 10,
           widgetVersion: WIDGET_VERSION,
         },
-      });
+      }) as ChatVaultToolResult | null;
 
       addLog("Search result", result);
 
       if (result?.structuredContent?.chats) {
         // Always replace results when navigating pages
-        setChats(deduplicateChats(result.structuredContent.chats));
-        setPagination(result.structuredContent.pagination);
+        setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
+        setPagination((result.structuredContent.pagination as Pagination) ?? null);
         setCurrentPage(page);
         setPageInputValue(String(page + 1));
       }
@@ -1357,15 +1362,15 @@ function App() {
       const result = await app.callServerTool({
         name: "loadMyChats",
         arguments: { page: 0, size: 10 },
-      });
+      }) as ChatVaultToolResult | null;
       if (result?.structuredContent?.chats) {
-        setChats(deduplicateChats(result.structuredContent.chats));
-        setPagination(result.structuredContent.pagination);
+        setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
+        setPagination((result.structuredContent.pagination as Pagination) ?? null);
         setCurrentPage(0);
         setPageInputValue("1");
       }
-    } catch (err) {
-      addLog("Error reloading chats", { error: err.message });
+      } catch (err) {
+        addLog("Error reloading chats", { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setPaginationLoading(false);
     }
@@ -1388,10 +1393,11 @@ function App() {
             size: 10,
             widgetVersion: WIDGET_VERSION,
           },
-        });
+        }) as ChatVaultToolResult | null;
         if (result?.structuredContent?.chats) {
-          setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
-          setPagination(result.structuredContent.pagination);
+          const newChats = result.structuredContent.chats as Chat[];
+          setChats((prev) => deduplicateChats([...prev, ...newChats]));
+          setPagination((result.structuredContent.pagination as Pagination) ?? null);
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
@@ -1403,16 +1409,17 @@ function App() {
             size: 10,
             widgetVersion: WIDGET_VERSION,
           },
-        });
+        }) as ChatVaultToolResult | null;
         if (result?.structuredContent?.chats) {
-          setChats((prev) => deduplicateChats([...prev, ...result.structuredContent.chats]));
-          setPagination(result.structuredContent.pagination);
+          const newChats = result.structuredContent.chats as Chat[];
+          setChats((prev) => deduplicateChats([...prev, ...newChats]));
+          setPagination((result.structuredContent.pagination as Pagination) ?? null);
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
       }
     } catch (err) {
-      addLog("Error loading more chats", { error: err.message });
+      addLog("Error loading more chats", { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -1420,7 +1427,7 @@ function App() {
 
   // Handle Esc key to clear search
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && searchQuery && !selectedChat) {
         e.preventDefault();
         handleClearSearch();
@@ -1686,23 +1693,13 @@ function App() {
             </div>
           </div>
           <div className="flex gap-2">
-            {/* PiP button - commented out until PiP mode is working */}
-            {/* <button
+            <button
               onClick={handlePipMode}
-              className={`p-2 rounded-lg transition-colors ${
-                displayMode === "pip"
-                  ? isDarkMode
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-blue-500 text-white hover:bg-blue-600"
-                  : isDarkMode
-                  ? "bg-gray-800 text-white hover:bg-gray-700"
-                  : "bg-gray-100 text-black hover:bg-gray-200"
-              }`}
+              className={`p-2 rounded-lg transition-colors ${displayMode === "pip" ? (isDarkMode ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-500 text-white hover:bg-blue-600") : (isDarkMode ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-black hover:bg-gray-200")}`}
               title={displayMode === "pip" ? "Exit picture-in-picture" : "Enter picture-in-picture"}
             >
               <MdPictureInPicture className="w-5 h-5" />
-            </button> */}
-
+            </button>
             <button
               onClick={() => {
                 // Check if limit reached for users on anonymous plan
@@ -1923,8 +1920,8 @@ function App() {
 
                       <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
                         {(() => {
-                          const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                          return currentTurns.length === 1 && !currentTurns[0].response;
+                          const currentTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
+                          return currentTurns.length === 1 && !currentTurns[0]?.response;
                         })() ? (
                           <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
                         ) : (
@@ -1932,17 +1929,17 @@ function App() {
                         )}
                         {formatDate(selectedChat.timestamp)}
                         {(() => {
-                          const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                          return currentTurns.length === 1 && !currentTurns[0].response;
+                          const currentTurns: { prompt: string; response: string }[] = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
+                          return currentTurns.length === 1 && !currentTurns[0]?.response;
                         })() ? (
                           " • Note"
                         ) : (
                           ` • ${(() => {
-                            const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                            return currentTurns?.length || 0;
+                            const currentTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
+                            return currentTurns.length;
                           })()} turn${(() => {
-                            const currentTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
-                            return (currentTurns?.length || 0) !== 1 ? "s" : "";
+                            const currentTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
+                            return currentTurns.length !== 1 ? "s" : "";
                           })()}`
                         )}
                       </div>
@@ -1989,10 +1986,10 @@ function App() {
                 </div>
               </div>
 
-              {selectedChat.turns.length === 1 && !selectedChat.turns[0].response ? (
+              {(selectedChat.turns?.length ?? 0) === 1 && !selectedChat.turns?.[0]?.response ? (
                 // Note rendering - single card with prompt (same style as turn prompt)
                 (() => {
-                  const noteTurns = editedTurns.length > 0 ? editedTurns : selectedChat.turns;
+                  const noteTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
                   const noteTurn = noteTurns[0];
                   const noteIndex = 0;
                   const isExpanded = expandedTurns.has(noteIndex);
@@ -2467,7 +2464,7 @@ function App() {
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
                   {isSearching ? (
                     `No chats found matching "${searchQuery}"`
-                  ) : window.openai?.callTool ? (
+                  ) : (typeof window !== "undefined" && window.openai && "callTool" in window.openai) ? (
                     "No chats found. Start a conversation to save it here."
                   ) : (
                     <div>
@@ -2498,13 +2495,13 @@ function App() {
                             {chat.title}
                           </div>
                           <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {chat.turns.length === 1 && !chat.turns[0].response ? (
+                            {(chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response ? (
                               <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
                             ) : (
                               <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
                             )}
-                            {formatDate(chat.timestamp)}
-                            {chat.turns.length === 1 && !chat.turns[0].response ? (
+                            {formatDate(chat.timestamp ?? "")}
+                            {(chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response ? (
                               " • Note"
                             ) : (
                               ` • ${chat.turns?.length || 0} turn${(chat.turns?.length || 0) !== 1 ? "s" : ""}`
@@ -2553,15 +2550,15 @@ function App() {
                                 const res = await window.openai?.callTool("loadMyChats", {
                                   page: targetPage,
                                   size: 10,
-                                });
+                                }) as ChatVaultToolResult | undefined;
                                 if (res?.structuredContent?.chats) {
-                                  setChats(deduplicateChats(res.structuredContent.chats));
-                                  setPagination(res.structuredContent.pagination);
+                                  setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
+                                  setPagination((res.structuredContent.pagination as Pagination) ?? null);
                                   setCurrentPage(targetPage);
                                   setPageInputValue(String(targetPage + 1));
                                 }
                               } catch (err) {
-                                addLog("Error loading previous page", { error: err.message });
+                                addLog("Error loading previous page", { error: err instanceof Error ? err.message : String(err) });
                               } finally {
                                 setPaginationLoading(false);
                               }
@@ -2605,18 +2602,19 @@ function App() {
                                   handleSearch(searchQuery, page);
                                 } else {
                                   setPaginationLoading(true);
-                                  window.openai?.callTool("loadMyChats", {
+                                  (window.openai?.callTool("loadMyChats", {
                                     page,
                                     size: 10,
-                                  }).then((res) => {
-                                    if (res?.structuredContent?.chats) {
-                                      setChats(deduplicateChats(res.structuredContent.chats));
-                                      setPagination(res.structuredContent.pagination);
+                                  })).then((res: unknown) => {
+                                    const r = res as ChatVaultToolResult | undefined;
+                                    if (r?.structuredContent?.chats) {
+                                      setChats(deduplicateChats(r.structuredContent.chats as Chat[]));
+                                      setPagination((r.structuredContent.pagination as Pagination) ?? null);
                                       setCurrentPage(page);
                                       setPageInputValue(String(page + 1));
                                     }
-                                  }).catch((err) => {
-                                    addLog("Error loading page", { error: err.message });
+                                  }).catch((err: unknown) => {
+                                    addLog("Error loading page", { error: err instanceof Error ? err.message : String(err) });
                                   }).finally(() => {
                                     setPaginationLoading(false);
                                   });
@@ -2647,20 +2645,20 @@ function App() {
                                 if (isSearching && searchQuery) {
                                   await handleSearch(searchQuery, page);
                                 } else {
-                                  setPaginationLoading(true);
-                                  try {
-                                    const res = await app.callServerTool({
-                                      name: "loadMyChats",
-                                      arguments: { page, size: 10 },
-                                    });
-                                    if (res?.structuredContent?.chats) {
-                                      setChats(deduplicateChats(res.structuredContent.chats));
-                                      setPagination(res.structuredContent.pagination);
+                              setPaginationLoading(true);
+                              try {
+                                const res = await app.callServerTool({
+                                  name: "loadMyChats",
+                                  arguments: { page, size: 10 },
+                                }) as ChatVaultToolResult | null;
+                                if (res?.structuredContent?.chats) {
+                                  setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
+                                  setPagination((res.structuredContent.pagination as Pagination) ?? null);
                                       setCurrentPage(page);
                                       setPageInputValue(String(page + 1));
                                     }
                                   } catch (err) {
-                                    addLog("Error loading page", { error: err.message });
+                                    addLog("Error loading page", { error: err instanceof Error ? err.message : String(err) });
                                   } finally {
                                     setPaginationLoading(false);
                                   }
@@ -2691,15 +2689,15 @@ function App() {
                                 const res = await app.callServerTool({
                                   name: "loadMyChats",
                                   arguments: { page: targetPage, size: 10 },
-                                });
+                                }) as ChatVaultToolResult | null;
                                 if (res?.structuredContent?.chats) {
-                                  setChats(deduplicateChats(res.structuredContent.chats));
-                                  setPagination(res.structuredContent.pagination);
+                                  setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
+                                  setPagination((res.structuredContent.pagination as Pagination) ?? null);
                                   setCurrentPage(targetPage);
                                   setPageInputValue(String(targetPage + 1));
                                 }
                               } catch (err) {
-                                addLog("Error loading next page", { error: err.message });
+                                addLog("Error loading next page", { error: err instanceof Error ? err.message : String(err) });
                               } finally {
                                 setPaginationLoading(false);
                               }
@@ -2718,12 +2716,23 @@ function App() {
                       </button>
                     </div>
                   )}
-                  {pagination && pagination.totalPages <= 1 && chats.length > 0 && (
+                  {pagination && pagination.totalPages <= 1 && chats.length > 0 && !pagination.hasMore && (
                     <div className={`pt-2 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
                       {isSearching
                         ? `Showing all ${chats.length} result${chats.length !== 1 ? "s" : ""}`
                         : `Showing all ${pagination.total} chat${pagination.total !== 1 ? "s" : ""}`
                       }
+                    </div>
+                  )}
+                  {pagination?.hasMore && chats.length > 0 && pagination.totalPages <= 1 && (
+                    <div className="pt-2 text-center">
+                      <button
+                        onClick={loadMoreChats}
+                        disabled={loading || paginationLoading || searchLoading}
+                        className={`px-3 py-1.5 rounded text-sm font-medium ${loading || paginationLoading || searchLoading ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-black hover:bg-gray-200"}`}
+                      >
+                        Load more
+                      </button>
                     </div>
                   )}
                   {userInfo?.message && (
@@ -2755,7 +2764,7 @@ function App() {
           )}
         </div>}
 
-        {/* Debug Panel - Toggle with Ctrl+Shift+D */}
+        {/* Debug Panel - Toggle with Ctrl+Alt+D */}
         {showDebug && (
           <div className={`mt-4 pt-4 border-t ${isDarkMode ? "border-gray-700" : "border-black/5"
             }`}>
@@ -2776,7 +2785,7 @@ function App() {
                 }`}
             >
               {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-              <span className="ml-2 text-xs opacity-60">(Ctrl+Shift+D to toggle)</span>
+              <span className="ml-2 text-xs opacity-60">(Ctrl+Alt+D to toggle)</span>
             </button>
             {showDebug && (
               <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
@@ -2860,9 +2869,10 @@ function App() {
                           setManualSaveHtml("");
                         }
                       }}
-                      onPaste={(e) => {
+                      onPaste={(e: React.ClipboardEvent<HTMLTextAreaElement>) => {
                         e.preventDefault();
-                        const clipboardData = e.clipboardData || window.clipboardData;
+                        const clipboardData = e.clipboardData;
+                        if (!clipboardData) return;
 
                         // Try to get HTML content first
                         const html = clipboardData.getData("text/html");
@@ -3016,4 +3026,7 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("chat-vault-root")).render(<App />);
+const rootEl = document.getElementById("chat-vault-root");
+if (rootEl) {
+  createRoot(rootEl).render(<App />);
+}
