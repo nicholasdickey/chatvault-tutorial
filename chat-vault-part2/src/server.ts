@@ -307,29 +307,6 @@ const chatVaultTools: Tool[] = [
         }
     },
     {
-        name: "loadFullChat",
-        description: "Load full chat with turns by chatId. Call when user expands/clicks a chat from the list (when using aboveTheFoldOnly).",
-        inputSchema: {
-            type: "object",
-            properties: {
-                chatId: {
-                    type: "string",
-                    description: "Chat ID (required)",
-                },
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-            },
-            required: ["chatId", "userId"],
-        },
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
         name: "loadFullTurn",
         description: "Load full prompt and response for a single turn. Call when user expands a truncated turn.",
         inputSchema: {
