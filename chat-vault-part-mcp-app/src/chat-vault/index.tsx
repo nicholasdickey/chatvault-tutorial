@@ -177,18 +177,21 @@ function App() {
           }) as ChatVaultToolResult | null;
           addLog("loadMyChats result", result);
 
-          if (result?.structuredContent?.chats) {
-            setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-            setPagination((result.structuredContent.pagination as Pagination) ?? null);
+          const rawChats = result?.structuredContent?.chats;
+          const chatList = Array.isArray(rawChats) ? rawChats : [];
+          const sc = result?.structuredContent;
+          if (chatList.length > 0 || sc) {
+            setChats(deduplicateChats(chatList as Chat[]));
+            setPagination((sc?.pagination as Pagination) ?? null);
             setCurrentPage(0);
             setPageInputValue("1");
-            if (result.structuredContent.userInfo) {
-              setUserInfo(result.structuredContent.userInfo);
-              addLog("User info extracted", result.structuredContent.userInfo);
+            if (sc?.userInfo) {
+              setUserInfo(sc.userInfo);
+              addLog("User info extracted", sc.userInfo);
             }
-            if (result.structuredContent.content) {
-              setContentMetadata(result.structuredContent.content as ContentMetadata);
-              addLog("Content metadata extracted", result.structuredContent.content);
+            if (sc?.content) {
+              setContentMetadata(sc.content as ContentMetadata);
+              addLog("Content metadata extracted", sc.content);
             }
           } else if (result?.content?.[0] && "text" in result.content[0]) {
             addLog("Unexpected result format", result);
@@ -1296,7 +1299,8 @@ function App() {
           arguments: { jobId },
         }) as ChatVaultToolResult | null;
         const sc = statusResult?.structuredContent as { status?: string; chatId?: string; error?: string } | undefined;
-        return sc ?? null;
+        if (!sc || typeof sc.status !== "string") return null;
+        return { status: sc.status, chatId: sc.chatId, error: sc.error };
       };
 
       let statusResult: { status: string; chatId?: string; error?: string } | null = null;
