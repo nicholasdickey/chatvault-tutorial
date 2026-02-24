@@ -28,6 +28,7 @@ import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
 import { updateChat } from "./tools/updateChat.js";
+import { getJobStatus } from "./utils/redis.js";
 
 dotenv.config();
 
@@ -151,7 +152,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChat",
-        description: "Save a short chat with up to 3 short turns. To be used by LLM to save chats turn-by-turn and verbatim into the vault. Not a summary but the original chat. For longer chats, use saveChatTurnsBegin, saveChatTurn, and saveChatTurnsFinalize instead.",
+        description: "Save a short chat with up to 3 short turns. Queues for async processing; returns jobId. Poll getChatSaveJobStatus for completion. For longer chats, use saveChatTurnsBegin, saveChatTurn, and saveChatTurnsFinalize instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -245,7 +246,7 @@ const chatVaultTools: Tool[] = [
     },
     {
         name: "saveChatTurnsFinalize",
-        description: "Finalize a chat save session. Call AFTER all turns have been added via saveChatTurn. Generates embeddings and persists the chat to the vault. Removes temporary data. The chat will appear in loadMyChats and searchMyChats.",
+        description: "Finalize a chat save session. Call AFTER all turns have been added via saveChatTurn. Queues for async embeddings; returns jobId. Poll getChatSaveJobStatus for completion. Removes temporary data.",
         inputSchema: {
             type: "object",
             properties: {
@@ -365,8 +366,27 @@ const chatVaultTools: Tool[] = [
         }
     },
     {
+        name: "getChatSaveJobStatus",
+        description: "USED INSIDE THE WIDGET. Poll status of an async chat save job. Call after saveChat, saveChatTurnsFinalize, or widgetAdd returns jobId. Returns status: pending, completed, or failed.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                jobId: {
+                    type: "string",
+                    description: "Job ID from saveChat, saveChatTurnsFinalize, or widgetAdd (required)",
+                },
+            },
+            required: ["jobId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: true,
+            destructiveHint: false,
+        },
+    },
+    {
         name: "widgetAdd",
-        description: "INTERNAL USE ONLY: This tool is strictly for in-widget operations.",
+        description: "INTERNAL USE ONLY: This tool is strictly for in-widget operations. Queues pasted chat for async save; returns jobId. Poll getChatSaveJobStatus for completion.",
         inputSchema: {
             type: "object",
             properties: {
@@ -456,13 +476,11 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
         if (toolName === "saveChat") {
             const result = await saveChat(args as { userId: string; title: string; turns: Array<{ prompt: string; response: string }> });
             console.log("[MCP Handler] handleCallTool - saveChat result:", JSON.stringify(result));
+            const text = "jobId" in result
+                ? `Chat save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getChatSaveJobStatus for completion.`
+                : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
             return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Chat saved successfully with ID: ${result.chatId}`,
-                    },
-                ],
+                content: [{ type: "text", text }],
                 structuredContent: result,
             };
         } else if (toolName === "saveChatTurnsBegin") {
@@ -491,14 +509,12 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             };
         } else if (toolName === "saveChatTurnsFinalize") {
             const result = await saveChatTurnsFinalize(args as { userId: string; jobId: string });
-            console.log("[MCP Handler] handleCallTool - saveChatTurnsFinalize result:", result.chatId);
+            console.log("[MCP Handler] handleCallTool - saveChatTurnsFinalize result:", JSON.stringify(result));
+            const text = "jobId" in result
+                ? `Chat save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getChatSaveJobStatus for completion.`
+                : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
             return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Chat saved successfully with ID: ${result.chatId}`,
-                    },
-                ],
+                content: [{ type: "text", text }],
                 structuredContent: result,
             };
         } else if (toolName === "loadMyChats") {
@@ -582,22 +598,33 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 userContext,
             });
             console.log("[MCP Handler] 📤 widgetAdd result:", {
-                chatId: result.chatId || "(empty)",
-                saved: result.saved,
+                jobId: result.jobId || "(empty)",
                 turnsCount: result.turnsCount,
                 error: result.error || "(none)",
                 message: result.message || "(none)",
             });
+            const text = result.error
+                ? `Error: ${result.message}`
+                : result.jobId
+                    ? `Chat save queued. Job ID: ${result.jobId} (${result.turnsCount} turns). Poll getChatSaveJobStatus for completion.`
+                    : `Chat saved. ID: ${result.chatId} (${result.turnsCount} turns).`;
+            return {
+                content: [{ type: "text", text }],
+                structuredContent: result,
+            };
+        } else if (toolName === "getChatSaveJobStatus") {
+            const result = await getJobStatus((args as { jobId: string }).jobId);
+            console.log("[MCP Handler] handleCallTool - getChatSaveJobStatus result:", result?.status ?? "null");
             return {
                 content: [
                     {
                         type: "text",
-                        text: result.error
-                            ? `Error: ${result.message}`
-                            : `Chat saved successfully with ID: ${result.chatId} (${result.turnsCount} turns)`,
+                        text: result
+                            ? `Status: ${result.status}${result.chatId ? `, chatId: ${result.chatId}` : ""}${result.error ? `, error: ${result.error}` : ""}`
+                            : "Job not found or expired",
                     },
                 ],
-                structuredContent: result,
+                structuredContent: result ?? { status: "expired" as const },
             };
         } else if (toolName === "explainHowToUse") {
             const result = explainHowToUse(args as { userId: string });

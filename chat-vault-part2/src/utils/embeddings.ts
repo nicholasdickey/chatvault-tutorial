@@ -73,9 +73,7 @@ export function splitTurnsForEmbedding(
 
     const chunks: Array<Array<{ prompt: string; response: string }>> = [];
     let currentChunk: Array<{ prompt: string; response: string }> = [];
-    let currentLen = 0;
-
-    for (const turn of turns) {
+    let currentLen = 0;    for (const turn of turns) {
         const turnText = `${turn.prompt}\n${turn.response}`;
         const turnLen = turnText.length + (currentChunk.length > 0 ? 2 : 0); // +2 for "\n\n"
 

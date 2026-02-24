@@ -116,6 +116,9 @@ export async function startMcpServer(port: number = 8000): Promise<void> {
                 DATABASE_URL: process.env.TEST_DATABASE_URL || "postgresql://testuser:testpass@localhost:5433/testdb",
                 // OpenAI API key is needed for embeddings
                 OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
+                // Unset Redis so server uses sync fallback (no worker in test env)
+                UPSTASH_REDIS_REST_URL: "",
+                UPSTASH_REDIS_REST_TOKEN: "",
             },
             stdio: "pipe",
             shell: true,

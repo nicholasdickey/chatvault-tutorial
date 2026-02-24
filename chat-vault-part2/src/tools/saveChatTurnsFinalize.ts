@@ -1,11 +1,13 @@
 /**
  * saveChatTurnsFinalize - Finalize a chat save session
- * Runs embeddings, saves to chats, removes temporary data
+ * Queues job for async embeddings; worker processes and saves to chats.
+ * Removes temporary data before returning.
  */
 
 import { db } from "../db/index.js";
 import { chatSaveJobs, chatSaveJobTurns } from "../db/schema.js";
 import { eq, and, asc } from "drizzle-orm";
+import { pushChatSaveJob, isRedisConfigured } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
 
 export interface SaveChatTurnsFinalizeParams {
@@ -13,9 +15,7 @@ export interface SaveChatTurnsFinalizeParams {
     jobId: string;
 }
 
-export interface SaveChatTurnsFinalizeResult {
-    chatId: string;
-}
+export type SaveChatTurnsFinalizeResult = { jobId: string } | { chatId: string };
 
 export async function saveChatTurnsFinalize(
     params: SaveChatTurnsFinalizeParams
@@ -56,16 +56,24 @@ export async function saveChatTurnsFinalize(
 
     const turns = turnsRows.map((r) => ({ prompt: r.prompt, response: r.response }));
 
-    // Save via core (embeddings + insert into chats)
-    const result = await saveChatCore({
-        userId,
-        title: job.title,
-        turns,
-    });
+    if (isRedisConfigured()) {
+        // Queue job for async processing (embeddings + insert into chats)
+        await pushChatSaveJob({
+            jobId,
+            userId,
+            title: job.title,
+            turns,
+            source: "saveChatTurnsFinalize",
+        });
+        // Clean up temp data
+        await db.delete(chatSaveJobTurns).where(eq(chatSaveJobTurns.jobId, jobId));
+        await db.delete(chatSaveJobs).where(eq(chatSaveJobs.id, jobId));
+        return { jobId };
+    }
 
-    // Clean up: delete turns first (CASCADE would handle, but explicit is fine), then job
+    // Sync fallback when Redis not configured (e.g. test env)
+    const result = await saveChatCore({ userId, title: job.title, turns });
     await db.delete(chatSaveJobTurns).where(eq(chatSaveJobTurns.jobId, jobId));
     await db.delete(chatSaveJobs).where(eq(chatSaveJobs.id, jobId));
-
     return { chatId: result.chatId };
 }

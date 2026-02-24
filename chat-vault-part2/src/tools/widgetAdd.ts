@@ -4,10 +4,12 @@
  * WIDGET-ONLY: This tool is only for use within the widget UI, not for LLM calls
  */
 
+import { randomUUID } from "node:crypto";
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { saveChatCore, checkForExistingChat } from "../utils/saveChatCore.js";
+import { pushChatSaveJob, isRedisConfigured } from "../utils/redis.js";
+import { saveChatCore } from "../utils/saveChatCore.js";
 import { parsePastedChatWithLLM } from "../utils/parsePastedChatWithLLM.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
@@ -21,8 +23,8 @@ export interface WidgetAddParams {
 }
 
 export interface WidgetAddResult {
-    chatId: string;
-    saved: boolean;
+    jobId?: string;
+    chatId?: string;
     turnsCount: number;
     error?: "limit_reached" | "parse_error" | "server_error";
     message?: string;
@@ -436,8 +438,6 @@ export async function widgetAdd(
                     limit: ANON_MAX_CHATS,
                 });
                 const errorResult = {
-                    chatId: "",
-                    saved: false,
                     turnsCount: 0,
                     error: "limit_reached" as const,
                     message,
@@ -472,8 +472,6 @@ export async function widgetAdd(
             // This should not happen with the new logic, but handle it as a safety check
             console.warn("[widgetAdd] ❌ Unexpected: no turns after parsing, content may be empty");
             const errorResult = {
-                chatId: "",
-                saved: false,
                 turnsCount: 0,
                 error: "parse_error" as const,
                 message: "Content is empty or could not be processed",
@@ -495,19 +493,9 @@ export async function widgetAdd(
         const finalTitle = title?.trim() || generateDefaultTitle();
         console.log("[widgetAdd] Using title:", finalTitle);
 
-        // Use shared core logic to save the chat
-        console.log("[widgetAdd] Calling saveChatCore...");
-        const coreResult = await saveChatCore({
-            userId,
-            title: finalTitle,
-            turns,
-        });
-        console.log("[widgetAdd] ✅ saveChatCore result:", {
-            chatId: coreResult.chatId,
-            saved: coreResult.saved,
-        });
+        // Content size check for single-turn (note or single AI response)
         if (turns.length === 1) {
-            const contentLength = turns[0].response.length;
+            const contentLength = Math.max(turns[0].prompt.length, turns[0].response.length);
             if (contentLength > maxLength) {
                 const limitType = isAnonymousPlan !== undefined ? "20,000 characters" : "1,000,000 characters";
                 const message = isAnonymousPlan !== undefined
@@ -520,8 +508,6 @@ export async function widgetAdd(
                     limitType,
                 });
                 const errorResult = {
-                    chatId: "",
-                    saved: false,
                     turnsCount: 0,
                     error: "limit_reached" as const,
                     message,
@@ -530,14 +516,26 @@ export async function widgetAdd(
                 console.log("[widgetAdd] ===== EXIT (size limit) =====", errorResult);
                 return errorResult;
             }
-
         }
 
-        const successResult = {
-            chatId: coreResult.chatId,
-            saved: coreResult.saved,
-            turnsCount: turns.length,
-        };
+        if (isRedisConfigured()) {
+            // Queue job for async processing (embeddings + insert into chats)
+            const jobId = randomUUID();
+            await pushChatSaveJob({
+                jobId,
+                userId,
+                title: finalTitle,
+                turns,
+                source: "widgetAdd",
+            });
+            console.log("[widgetAdd] ✅ Job queued:", jobId);
+            return { jobId, turnsCount: turns.length };
+        }
+
+        // Sync fallback when Redis not configured (e.g. test env)
+        const result = await saveChatCore({ userId, title: finalTitle, turns });
+        console.log("[widgetAdd] ✅ Saved synchronously:", result.chatId);
+        return { chatId: result.chatId, turnsCount: turns.length };
         console.log("[widgetAdd] ===== EXIT (success) =====", successResult);
         return successResult;
     } catch (error) {
@@ -549,8 +547,6 @@ export async function widgetAdd(
         });
         // Return structured error instead of throwing
         const errorResult = {
-            chatId: "",
-            saved: false,
             turnsCount: 0,
             error: "server_error" as const,
             message: "An error occurred while saving the chat. Please try again.",
