@@ -1275,25 +1275,54 @@ function App() {
           });
           throw new Error(String(errorMessage));
         }
-        // Also check if structuredContent has an error-like structure
-        if (result.structuredContent.saved === false || result.structuredContent.success === false) {
-          const errorMessage = result.structuredContent.message || result.structuredContent.error || "Save operation failed";
-          addLog("❌ [WIDGET] Save failed indicated in structuredContent", {
-            saved: result.structuredContent.saved,
-            success: result.structuredContent.success,
-            errorMessage,
-            fullStructuredContent: result.structuredContent,
-          });
-          throw new Error(String(errorMessage));
-        }
       }
 
-      addLog("✅ [WIDGET] Manual save successful", {
-        chatId: result?.structuredContent?.chatId || "(none)",
-        saved: result?.structuredContent?.saved,
-        turnsCount: result?.structuredContent?.turnsCount,
-        fullResult: result,
-      });
+      // Success: we have jobId, poll for completion
+      const jobId = result?.structuredContent?.jobId;
+      if (!jobId) {
+        addLog("❌ [WIDGET] No jobId in successful response");
+        throw new Error("Save queued but no job ID received");
+      }
+
+      addLog("✅ [WIDGET] Job queued, polling for completion", { jobId });
+
+      const POLL_INTERVAL_MS = 1500;
+      const POLL_TIMEOUT_MS = 180_000; // 3 min
+      const startTime = Date.now();
+
+      const pollStatus = async (): Promise<{ status: string; chatId?: string; error?: string } | null> => {
+        const statusResult = await app.callServerTool({
+          name: "getChatSaveJobStatus",
+          arguments: { jobId },
+        }) as ChatVaultToolResult | null;
+        const sc = statusResult?.structuredContent as { status?: string; chatId?: string; error?: string } | undefined;
+        return sc ?? null;
+      };
+
+      let statusResult: { status: string; chatId?: string; error?: string } | null = null;
+      while (Date.now() - startTime < POLL_TIMEOUT_MS) {
+        statusResult = await pollStatus();
+        if (statusResult?.status === "completed") {
+          addLog("✅ [WIDGET] Job completed", { chatId: statusResult.chatId });
+          break;
+        }
+        if (statusResult?.status === "failed") {
+          addLog("❌ [WIDGET] Job failed", { error: statusResult.error });
+          setManualSaveError(statusResult.error || "Save failed");
+          return;
+        }
+        if (statusResult?.status === "expired") {
+          addLog("⚠️ [WIDGET] Job status expired (key TTL)");
+          setManualSaveError("Save is still processing. Please refresh in a moment to see your chat.");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      }
+
+      if (statusResult?.status !== "completed") {
+        setManualSaveError("Save is taking longer than expected. Please refresh in a moment to check.");
+        return;
+      }
 
       // Close modal and reset form on success
       setShowManualSaveModal(false);
@@ -1306,10 +1335,8 @@ function App() {
       setSearchQuery("");
       setIsSearching(false);
 
-      // Show loading indicator immediately after modal closes (same as pagination)
+      // Reload chats and update userInfo
       setPaginationLoading(true);
-
-      // Reload chats and update userInfo with loading indicator
       try {
         const loadResult = await app.callServerTool({
           name: "loadMyChats",

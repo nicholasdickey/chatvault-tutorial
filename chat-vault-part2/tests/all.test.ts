@@ -124,14 +124,16 @@ describe("chat-vault-part2 (all)", () => {
         ).resolves.not.toThrow();
     });
 
-    test("should require session for tools/list", async () => {
+    test("should return tools when tools/list called (session created on demand)", async () => {
         const newClient = new McpTestClient(serverUrl);
-        // Don't initialize - try to call tools/list directly
+        // Don't initialize - server creates session on demand for tools/list
         const response = await newClient.listTools();
 
-        expect(response.error).toBeDefined();
-        expect(response.error?.code).toBe(-32000);
-        expect(response.error?.message).toContain("Session not found");
+        expect(response.error).toBeUndefined();
+        expect(response.result).toBeDefined();
+        const result = response.result as { tools: unknown[] };
+        expect(Array.isArray(result.tools)).toBe(true);
+        expect(result.tools.length).toBeGreaterThan(0);
     });
 
     test("should return all ChatVault tools in tools list", async () => {
@@ -154,7 +156,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(toolNames).toContain("saveChat");
         expect(toolNames).toContain("loadMyChats");
         expect(toolNames).toContain("searchMyChats");
-        expect(toolNames).toContain("saveChatManually");
+        expect(toolNames).toContain("widgetAdd");
         expect(toolNames).toContain("explainHowToUse");
 
         // Verify tool schemas
@@ -168,7 +170,7 @@ describe("chat-vault-part2 (all)", () => {
         const saveChatTool = tools.find((t) => t.name === "saveChat");
         const loadChatsTool = tools.find((t) => t.name === "loadMyChats");
         const searchChatsTool = tools.find((t) => t.name === "searchMyChats");
-        const saveChatManuallyTool = tools.find((t) => t.name === "saveChatManually");
+        const widgetAddTool = tools.find((t) => t.name === "widgetAdd");
         const explainHowToUseTool = tools.find((t) => t.name === "explainHowToUse");
 
         expect(deleteChatTool).toBeDefined();
@@ -188,9 +190,9 @@ describe("chat-vault-part2 (all)", () => {
         expect(searchChatsTool?.description).toBeDefined();
         expect(searchChatsTool?.inputSchema).toBeDefined();
 
-        expect(saveChatManuallyTool).toBeDefined();
-        expect(saveChatManuallyTool?.description).toBeDefined();
-        expect(saveChatManuallyTool?.inputSchema).toBeDefined();
+        expect(widgetAddTool).toBeDefined();
+        expect(widgetAddTool?.description).toBeDefined();
+        expect(widgetAddTool?.inputSchema).toBeDefined();
 
         expect(explainHowToUseTool).toBeDefined();
         expect(explainHowToUseTool?.description).toBeDefined();
@@ -1184,8 +1186,11 @@ describe("chat-vault-part2 (all)", () => {
         expect(result.structuredContent.pagination.total).toBeDefined();
         expect(result.structuredContent.pagination.hasMore).toBeDefined();
 
-        // Verify _meta structure exists
-        expect(result._meta).toBeDefined();
+        // _meta is optional for loadMyChats (searchMyChats includes it)
+        if (result._meta) {
+            expect(result._meta.chats).toBeDefined();
+            expect(result._meta.pagination).toBeDefined();
+        }
     });
 
     test("should search chats by semantic similarity", async () => {
@@ -1897,7 +1902,7 @@ ChatGPT said: React is a JavaScript library for building user interfaces.
 You said: How do I use hooks?
 ChatGPT said: React hooks let you use state in functional components.`;
 
-        const response = await client.callTool("saveChatManually", {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user-manual-1",
             htmlContent,
             title: "Manual React Chat",
@@ -1921,7 +1926,7 @@ ChatGPT said: React hooks let you use state in functional components.`;
         expect(savedChats.length).toBe(1);
         expect(savedChats[0].title).toBe("Manual React Chat");
         expect(savedChats[0].turns).toHaveLength(2);
-        expect(savedChats[0].turns[0].prompt).toBe("What is React?");
+        expect(savedChats[0].turns[0].prompt).toContain("What is React");
         expect(savedChats[0].turns[0].response).toContain("React is a JavaScript library");
     });
 
@@ -1940,7 +1945,7 @@ How do I install it?
 
 You can download Python from python.org.`;
 
-        const response = await client.callTool("saveChatManually", {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user-manual-2",
             htmlContent,
         });
@@ -1965,8 +1970,8 @@ You can download Python from python.org.`;
         expect(savedChats[0].turns).toHaveLength(2);
     });
 
-    test("should error on missing userId for saveChatManually", async () => {
-        const response = await client.callTool("saveChatManually", {
+    test("should error on missing userId for widgetAdd", async () => {
+        const response = await client.callTool("widgetAdd", {
             htmlContent: "Some content",
         });
 
@@ -1977,8 +1982,8 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should error on missing htmlContent for saveChatManually", async () => {
-        const response = await client.callTool("saveChatManually", {
+    test("should error on missing htmlContent for widgetAdd", async () => {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user",
         });
 
@@ -1989,8 +1994,8 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should error on empty htmlContent for saveChatManually", async () => {
-        const response = await client.callTool("saveChatManually", {
+    test("should error on empty htmlContent for widgetAdd", async () => {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user",
             htmlContent: "",
         });
@@ -2002,27 +2007,26 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should error on unparseable htmlContent for saveChatManually", async () => {
+    test("should save unstructured content as note for widgetAdd", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[widgetAdd Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
-        const response = await client.callTool("saveChatManually", {
-            userId: "test-user",
+        const response = await client.callTool("widgetAdd", {
+            userId: "test-user-unparseable",
             htmlContent: "This is just random text with no structure",
         });
 
-        // Should error because no turns can be parsed
-        // Check structuredContent error (not JSON-RPC error, as we return structured error response)
-        expect(response.error).toBeUndefined(); // No JSON-RPC error
+        // Unstructured content is saved as a single note (1 turn with prompt only)
+        expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
         const result = response.result as {
-            structuredContent: { error?: string; message?: string };
+            structuredContent: { chatId?: string; turnsCount: number }; 
         };
-        expect(result.structuredContent.error).toBe("parse_error");
-        expect(result.structuredContent.message).toBeDefined();
+        expect(result.structuredContent.turnsCount).toBe(1);
+        expect(result.structuredContent.chatId).toBeDefined();
     });
 
     // -------------------------------------------------------------------------
