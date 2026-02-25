@@ -1719,7 +1719,7 @@ function App() {
           >
             <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0 ${isDarkMode ? "border-gray-300" : "border-gray-600"}`} />
             <div className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-              Saving...
+              Processing...
             </div>
           </div>
         )}
@@ -2842,7 +2842,7 @@ function App() {
                       : "bg-blue-600 text-white hover:bg-blue-700"
                     }`}
                 >
-                  {isSaving ? "Saving..." : "Save"}
+                  {isSaving ? "Processing..." : "Save"}
                 </button>
               </div>
             </div>
