@@ -2374,15 +2374,8 @@ function App() {
                 <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
                   {isSearching ? (
                     `No chats found matching "${searchQuery}"`
-                  ) : (typeof window !== "undefined" && (window as any).openai && "callTool" in (window as any).openai) ? (
-                    "No chats found. Start a conversation to save it here."
                   ) : (
-                    <div>
-                      <div className="mb-2">Widget running in isolation mode</div>
-                      <div className="text-xs opacity-75">
-                        window.openai.callTool not available. Check debug panel for details.
-                      </div>
-                    </div>
+                    "No chats yet. Use the + button to save a chat manually or instruct your AI host or agent connected to the app to save the chat or a fragment"
                   )}
                 </div>
               ) : (
