@@ -1311,8 +1311,13 @@ function App() {
       const POLL_INTERVAL_MS = 1500;
       const POLL_TIMEOUT_MS = 180_000; // 3 min
       const startTime = Date.now();
+      let pollCount = 0;
 
       const pollStatus = async (): Promise<{ status: string; chatId?: string; error?: string } | null> => {
+        if (pollCount === 0) {
+          addLog("First poll: calling getChatSaveJobStatus with jobId", { jobId, jobIdLength: typeof jobId === "string" ? jobId.length : undefined });
+        }
+        pollCount += 1;
         const statusResult = await app.callServerTool({
           name: "getChatSaveJobStatus",
           arguments: { jobId },

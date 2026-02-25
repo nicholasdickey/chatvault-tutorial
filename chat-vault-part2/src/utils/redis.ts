@@ -107,11 +107,32 @@ export async function pushChatSaveJob(payload: ChatSaveJobPayload): Promise<stri
  * Returns null if Redis not configured, key expired, or not found.
  */
 export async function getJobStatus(jobId: string): Promise<JobStatus | null> {
-    if (!isRedisConfigured()) return null;
+    const config = getRedisConfigStatus();
+    console.log("[redis] getJobStatus ENTRY:", {
+        jobId: jobId || "(empty)",
+        jobIdLength: jobId?.length ?? 0,
+        statusKey: jobId ? `${STATUS_KEY_PREFIX}${jobId}` : "(none)",
+        redisConfigured: config.configured,
+    });
+    if (!isRedisConfigured()) {
+        console.log("[redis] getJobStatus EXIT: Redis not configured");
+        return null;
+    }
     const redis = getRedis();
     const statusKey = `${STATUS_KEY_PREFIX}${jobId}`;
     const raw = await redis.get(statusKey);
-    if (raw == null) return null;
+    const found = raw != null;
+    console.log("[redis] getJobStatus LOOKUP:", {
+        statusKey,
+        found,
+        rawPreview: raw != null ? (typeof raw === "string" ? (raw.length > 100 ? raw.substring(0, 100) + "..." : raw) : "(object)") : "(null)",
+    });
+    if (raw == null) {
+        console.log("[redis] getJobStatus EXIT: key not found or expired");
+        return null;
+    }
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return parsed as JobStatus;
+    const result = parsed as JobStatus;
+    console.log("[redis] getJobStatus EXIT: success", { status: result.status, chatId: result.chatId });
+    return result;
 }
