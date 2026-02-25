@@ -58,7 +58,8 @@ export interface ChatSaveJobPayload {
     jobId: string;
     userId: string;
     title: string;
-    turns: Array<{ prompt: string; response: string }>;
+    turns?: Array<{ prompt: string; response: string }>;
+    htmlContent?: string;
     source: "saveChat" | "saveChatTurnsFinalize" | "widgetAdd";
 }
 
@@ -72,6 +73,7 @@ export interface JobStatus {
 /**
  * Push a chat save job to the queue and set status to pending.
  * Returns the jobId.
+ * Payload must have either turns (saveChat, saveChatTurnsFinalize) or htmlContent (widgetAdd).
  */
 export async function pushChatSaveJob(payload: ChatSaveJobPayload): Promise<string> {
     const redis = getRedis();
@@ -86,7 +88,8 @@ export async function pushChatSaveJob(payload: ChatSaveJobPayload): Promise<stri
         source: payload.source,
         userId: payload.userId,
         title: payload.title,
-        turnsCount: payload.turns.length,
+        turnsCount: payload.turns?.length ?? "(htmlContent)",
+        htmlContentLength: payload.htmlContent?.length,
         payloadSizeBytes: payloadSize,
     });
     await redis.lpush(CHAT_SAVE_QUEUE, payloadJson);
