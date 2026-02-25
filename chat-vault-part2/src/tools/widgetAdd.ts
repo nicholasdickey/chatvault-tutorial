@@ -536,8 +536,6 @@ export async function widgetAdd(
         const result = await saveChatCore({ userId, title: finalTitle, turns });
         console.log("[widgetAdd] ✅ Saved synchronously:", result.chatId);
         return { chatId: result.chatId, turnsCount: turns.length };
-        console.log("[widgetAdd] ===== EXIT (success) =====", successResult);
-        return successResult;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("[widgetAdd] ❌ EXCEPTION:", {
