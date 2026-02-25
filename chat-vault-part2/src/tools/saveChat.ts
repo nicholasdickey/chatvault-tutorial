@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { pushChatSaveJob, isRedisConfigured } from "../utils/redis.js";
+import { pushChatSaveJob, isRedisConfigured, getRedisConfigStatus } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
 
 export interface SaveChatParams {
@@ -45,8 +45,18 @@ export async function saveChat(params: SaveChatParams): Promise<SaveChatResult> 
         }
     }
 
+    const redisStatus = getRedisConfigStatus();
+    console.log("[saveChat] Redis config check:", redisStatus);
+
     if (isRedisConfigured()) {
         const jobId = randomUUID();
+        console.log("[saveChat] Taking ASYNC path - pushing to queue", {
+            jobId,
+            queue: redisStatus.queueName,
+            userId: params.userId,
+            title: params.title,
+            turnsCount: params.turns.length,
+        });
         await pushChatSaveJob({
             jobId,
             userId: params.userId,
@@ -54,9 +64,22 @@ export async function saveChat(params: SaveChatParams): Promise<SaveChatResult> 
             turns: params.turns,
             source: "saveChat",
         });
-        return { jobId };
+        const asyncResult = { jobId };
+        console.log("[saveChat] ===== EXIT (async, queued) =====", asyncResult);
+        return asyncResult;
     }
 
-    // Sync fallback when Redis not configured (e.g. test env)
-    return saveChatCore(params);
+    console.log("[saveChat] Taking SYNC path - running saveChatCore in-process", {
+        userId: params.userId,
+        title: params.title,
+        turnsCount: params.turns.length,
+        reason: !redisStatus.hasUrl
+            ? "UPSTASH_REDIS_REST_URL missing"
+            : !redisStatus.hasToken
+              ? "UPSTASH_REDIS_REST_TOKEN missing"
+              : "Redis env vars not set",
+    });
+    const syncResult = await saveChatCore(params);
+    console.log("[saveChat] ===== EXIT (sync, saved) =====", syncResult);
+    return syncResult;
 }

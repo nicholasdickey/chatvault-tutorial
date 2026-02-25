@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { pushChatSaveJob, isRedisConfigured } from "../utils/redis.js";
+import { pushChatSaveJob, isRedisConfigured, getRedisConfigStatus } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
 import { parsePastedChatWithLLM } from "../utils/parsePastedChatWithLLM.js";
 import type { UserContext } from "../server.js";
@@ -518,9 +518,20 @@ export async function widgetAdd(
             }
         }
 
+        // Redis config check - determines async (queue) vs sync (in-process embeddings) path
+        const redisStatus = getRedisConfigStatus();
+        console.log("[widgetAdd] Redis config check:", redisStatus);
+
         if (isRedisConfigured()) {
-            // Queue job for async processing (embeddings + insert into chats)
+            // ASYNC PATH: Queue job for mcp-worker (embeddings + insert into chats)
             const jobId = randomUUID();
+            console.log("[widgetAdd] Taking ASYNC path - pushing to queue", {
+                jobId,
+                queue: redisStatus.queueName,
+                userId,
+                title: finalTitle,
+                turnsCount: turns.length,
+            });
             await pushChatSaveJob({
                 jobId,
                 userId,
@@ -528,14 +539,26 @@ export async function widgetAdd(
                 turns,
                 source: "widgetAdd",
             });
-            console.log("[widgetAdd] ✅ Job queued:", jobId);
-            return { jobId, turnsCount: turns.length };
+            const asyncResult = { jobId, turnsCount: turns.length };
+            console.log("[widgetAdd] ===== EXIT (async, queued) =====", asyncResult);
+            return asyncResult;
         }
 
-        // Sync fallback when Redis not configured (e.g. test env)
+        // SYNC PATH: Redis not configured - run embeddings + DB insert in-process
+        console.log("[widgetAdd] Taking SYNC path - running saveChatCore in-process (embeddings + DB)", {
+            userId,
+            title: finalTitle,
+            turnsCount: turns.length,
+            reason: !redisStatus.hasUrl
+                ? "UPSTASH_REDIS_REST_URL missing"
+                : !redisStatus.hasToken
+                  ? "UPSTASH_REDIS_REST_TOKEN missing"
+                  : "Redis env vars not set",
+        });
         const result = await saveChatCore({ userId, title: finalTitle, turns });
-        console.log("[widgetAdd] ✅ Saved synchronously:", result.chatId);
-        return { chatId: result.chatId, turnsCount: turns.length };
+        const syncResult = { chatId: result.chatId, turnsCount: turns.length };
+        console.log("[widgetAdd] ===== EXIT (sync, saved) =====", syncResult);
+        return syncResult;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("[widgetAdd] ❌ EXCEPTION:", {
