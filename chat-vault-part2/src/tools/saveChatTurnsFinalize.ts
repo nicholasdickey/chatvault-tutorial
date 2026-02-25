@@ -7,7 +7,7 @@
 import { db } from "../db/index.js";
 import { chatSaveJobs, chatSaveJobTurns } from "../db/schema.js";
 import { eq, and, asc } from "drizzle-orm";
-import { pushChatSaveJob, isRedisConfigured } from "../utils/redis.js";
+import { pushChatSaveJob, isRedisConfigured, getRedisConfigStatus } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
 
 export interface SaveChatTurnsFinalizeParams {
@@ -56,8 +56,17 @@ export async function saveChatTurnsFinalize(
 
     const turns = turnsRows.map((r) => ({ prompt: r.prompt, response: r.response }));
 
+    const redisStatus = getRedisConfigStatus();
+    console.log("[saveChatTurnsFinalize] Redis config check:", redisStatus);
+
     if (isRedisConfigured()) {
-        // Queue job for async processing (embeddings + insert into chats)
+        console.log("[saveChatTurnsFinalize] Taking ASYNC path - pushing to queue", {
+            jobId,
+            queue: redisStatus.queueName,
+            userId,
+            title: job.title,
+            turnsCount: turns.length,
+        });
         await pushChatSaveJob({
             jobId,
             userId,
@@ -65,15 +74,28 @@ export async function saveChatTurnsFinalize(
             turns,
             source: "saveChatTurnsFinalize",
         });
-        // Clean up temp data
         await db.delete(chatSaveJobTurns).where(eq(chatSaveJobTurns.jobId, jobId));
         await db.delete(chatSaveJobs).where(eq(chatSaveJobs.id, jobId));
-        return { jobId };
+        const asyncResult = { jobId };
+        console.log("[saveChatTurnsFinalize] ===== EXIT (async, queued) =====", asyncResult);
+        return asyncResult;
     }
 
-    // Sync fallback when Redis not configured (e.g. test env)
+    console.log("[saveChatTurnsFinalize] Taking SYNC path - running saveChatCore in-process", {
+        jobId,
+        userId,
+        title: job.title,
+        turnsCount: turns.length,
+        reason: !redisStatus.hasUrl
+            ? "UPSTASH_REDIS_REST_URL missing"
+            : !redisStatus.hasToken
+              ? "UPSTASH_REDIS_REST_TOKEN missing"
+              : "Redis env vars not set",
+    });
     const result = await saveChatCore({ userId, title: job.title, turns });
     await db.delete(chatSaveJobTurns).where(eq(chatSaveJobTurns.jobId, jobId));
     await db.delete(chatSaveJobs).where(eq(chatSaveJobs.id, jobId));
-    return { chatId: result.chatId };
+    const syncResult = { chatId: result.chatId };
+    console.log("[saveChatTurnsFinalize] ===== EXIT (sync, saved) =====", syncResult);
+    return syncResult;
 }

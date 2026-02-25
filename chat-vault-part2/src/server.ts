@@ -953,6 +953,11 @@ export async function handleMcpRequest(
                 console.log("[MCP] resources/list - id:", id);
                 result = { resources: [] };
                 console.log("[MCP] resources/list response: empty list");
+            } else if (method === "prompts/list") {
+                // MCP protocol: prompts/list - return empty list since we don't provide prompts
+                console.log("[MCP] prompts/list - id:", id);
+                result = { prompts: [] };
+                console.log("[MCP] prompts/list response: empty list");
             } else {
                 console.error("[MCP] Method not found:", method);
                 writeJsonRpcResponse(res, id, undefined, {

@@ -7,13 +7,42 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const CHAT_SAVE_QUEUE = process.env.CHATVAULT_CHAT_SAVE_QUEUE ?? "queue:mcp:chat-save";
+export const CHAT_SAVE_QUEUE = process.env.CHATVAULT_CHAT_SAVE_QUEUE ?? "queue:mcp:chat-save";
 const STATUS_KEY_PREFIX = "chatvault:job:";
 const STATUS_TTL_SECONDS = 180;
+
+function maskUrl(url: string | undefined): string {
+    if (!url) return "(missing)";
+    try {
+        const u = new URL(url);
+        return `${u.protocol}//${u.hostname}${u.pathname ? "..." : ""}`;
+    } catch {
+        return "(invalid)";
+    }
+}
 
 /** True when Redis env vars are set (async mode). When false, tools fall back to sync saveChatCore. */
 export function isRedisConfigured(): boolean {
     return !!(process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
+}
+
+/** Returns Redis config status for logging (no secrets). */
+export function getRedisConfigStatus(): {
+    configured: boolean;
+    hasUrl: boolean;
+    hasToken: boolean;
+    queueName: string;
+    urlMasked: string;
+} {
+    const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+    return {
+        configured: !!(url && token),
+        hasUrl: !!url,
+        hasToken: !!token,
+        queueName: CHAT_SAVE_QUEUE,
+        urlMasked: maskUrl(url || undefined),
+    };
 }
 
 function getRedis(): Redis {
@@ -47,11 +76,26 @@ export interface JobStatus {
 export async function pushChatSaveJob(payload: ChatSaveJobPayload): Promise<string> {
     const redis = getRedis();
     const statusKey = `${STATUS_KEY_PREFIX}${payload.jobId}`;
+    const payloadJson = JSON.stringify(payload);
+    const payloadSize = payloadJson.length;
 
-    await redis.lpush(CHAT_SAVE_QUEUE, JSON.stringify(payload));
+    console.log("[redis] pushChatSaveJob ENTRY", {
+        jobId: payload.jobId,
+        queue: CHAT_SAVE_QUEUE,
+        statusKey,
+        source: payload.source,
+        userId: payload.userId,
+        title: payload.title,
+        turnsCount: payload.turns.length,
+        payloadSizeBytes: payloadSize,
+    });
+    await redis.lpush(CHAT_SAVE_QUEUE, payloadJson);
     await redis.set(statusKey, JSON.stringify({ status: "pending" as const }), { ex: STATUS_TTL_SECONDS });
-
-    console.log("[redis] Pushed chat save job:", payload.jobId, "status key:", statusKey);
+    console.log("[redis] pushChatSaveJob SUCCESS", {
+        jobId: payload.jobId,
+        queue: CHAT_SAVE_QUEUE,
+        statusKey,
+    });
     return payload.jobId;
 }
 
