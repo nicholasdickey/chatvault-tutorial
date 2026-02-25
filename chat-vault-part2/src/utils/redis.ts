@@ -91,6 +91,9 @@ export async function pushChatSaveJob(payload: ChatSaveJobPayload): Promise<stri
         turnsCount: payload.turns?.length ?? "(htmlContent)",
         htmlContentLength: payload.htmlContent?.length,
         payloadSizeBytes: payloadSize,
+        payloadKeys: Object.keys(payload),
+        hasHtmlContent: "htmlContent" in payload,
+        hasTurns: "turns" in payload,
     });
     await redis.lpush(CHAT_SAVE_QUEUE, payloadJson);
     await redis.set(statusKey, JSON.stringify({ status: "pending" as const }), { ex: STATUS_TTL_SECONDS });

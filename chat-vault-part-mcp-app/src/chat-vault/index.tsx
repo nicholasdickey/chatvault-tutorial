@@ -47,7 +47,6 @@ function App() {
   const [manualSaveContent, setManualSaveContent] = useState("");
   const [manualSaveHtml, setManualSaveHtml] = useState("");
   const [manualSaveError, setManualSaveError] = useState<string | null>(null);
-  const [manualSaveStatusLog, setManualSaveStatusLog] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [contentMetadata, setContentMetadata] = useState<ContentMetadata | null>(null);
@@ -69,6 +68,8 @@ function App() {
   const [isSavingChat, setIsSavingChat] = useState(false);
   const [fullTurnContent, setFullTurnContent] = useState<Record<string, { prompt: string; response: string }>>({});
   const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
+  const [pendingAddJobId, setPendingAddJobId] = useState<string | null>(null);
+  const [addSuccessAlert, setAddSuccessAlert] = useState<string | null>(null);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
@@ -1116,10 +1117,43 @@ function App() {
     });
   };
 
-  const addManualSaveStatus = (message: string, result?: string) => {
-    const ts = new Date().toISOString();
-    const line = result ? `[${ts}] ${message}: ${result}` : `[${ts}] ${message}`;
-    setManualSaveStatusLog((prev) => [...prev, line]);
+  const closeModalAndResetForm = () => {
+    setShowManualSaveModal(false);
+    setManualSaveTitle("");
+    setManualSaveContent("");
+    setManualSaveHtml("");
+    setManualSaveError(null);
+    setIsSaving(false);
+  };
+
+  const reloadChatsAfterSave = async () => {
+    setSearchQuery("");
+    setIsSearching(false);
+    setPaginationLoading(true);
+    try {
+      const loadResult = await app.callServerTool({
+        name: "loadMyChats",
+        arguments: { page: 0, size: 10, aboveTheFoldOnly: true, widgetVersion: WIDGET_VERSION },
+      }) as ChatVaultToolResult | null;
+      if (loadResult?.structuredContent?.chats) {
+        setChats(deduplicateChats(loadResult.structuredContent.chats as Chat[]));
+        setPagination((loadResult.structuredContent.pagination as Pagination) ?? null);
+        setCurrentPage(0);
+        setPageInputValue("1");
+        if (loadResult.structuredContent.userInfo) {
+          setUserInfo(loadResult.structuredContent.userInfo as UserInfo);
+          addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
+        }
+        if (loadResult.structuredContent.content) {
+          setContentMetadata(loadResult.structuredContent.content as ContentMetadata);
+        }
+      }
+    } catch (err) {
+      addLog("Error reloading chats after manual save", { error: err instanceof Error ? err.message : String(err) });
+      setError(`Failed to reload chats: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPaginationLoading(false);
+    }
   };
 
   const handleManualSave = async () => {
@@ -1130,8 +1164,6 @@ function App() {
 
     setIsSaving(true);
     setManualSaveError(null);
-    setManualSaveStatusLog([]);
-    addManualSaveStatus("Starting save...");
 
     const contentToSend = manualSaveHtml || manualSaveContent;
     const titleToSend = manualSaveTitle.trim() || undefined;
@@ -1162,7 +1194,6 @@ function App() {
         },
       });
 
-      // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
       });
@@ -1173,68 +1204,39 @@ function App() {
       const result = await Promise.race([callToolPromise, timeoutPromise]) as ChatVaultToolResult;
       addLog("✅ [WIDGET] Response received");
 
-      const sc = result?.structuredContent;
-      const widgetAddSummary = sc?.jobId
-        ? `jobId=${sc.jobId}, turnsCount=${sc.turnsCount ?? "?"}`
-        : sc?.chatId
-          ? `chatId=${sc.chatId} (sync)`
-          : result?.error
-            ? `error=${String(result.error)}`
-            : JSON.stringify(sc ?? result).substring(0, 100);
-      addManualSaveStatus("widgetAdd returned", widgetAddSummary);
-
       addLog("📥 [WIDGET] Manual save result received", {
         resultType: typeof result,
         isNull: result === null,
-        isUndefined: result === undefined,
         hasError: !!result?.error,
         hasStructuredContent: !!result?.structuredContent,
-        hasContent: !!result?.content,
-        keys: result ? Object.keys(result) : [],
-        structuredContentKeys: result?.structuredContent ? Object.keys(result.structuredContent) : [],
         structuredContentError: result?.structuredContent?.error || "(none)",
-        structuredContentMessage: result?.structuredContent?.message || "(none)",
         structuredContentChatId: result?.structuredContent?.chatId || "(none)",
-        structuredContentSaved: result?.structuredContent?.saved,
-        structuredContentTurnsCount: result?.structuredContent?.turnsCount,
-        contentText: result?.content?.[0]?.text?.substring(0, 200) || "(none)",
-        fullResultPreview: JSON.stringify(result).substring(0, 1000),
+        structuredContentJobId: result?.structuredContent?.jobId || "(none)",
       });
 
-      // If result is null/undefined, that's an error
       if (result == null) {
         addLog("❌ [WIDGET] No response received from server");
         throw new Error("No response received from server");
       }
 
-      // Check for errors in the response (multiple possible formats)
       if (result?.error) {
         const errorMessage = result.error.message || result.error?.data || result.error || "Unknown error occurred";
-        addLog("❌ [WIDGET] Error found in result.error", {
-          error: result.error,
-          errorMessage,
-        });
+        addLog("❌ [WIDGET] Error found in result.error", { error: result.error, errorMessage });
         throw new Error(String(errorMessage));
       }
 
-      // Check for JSON-RPC error format
       if (result?.jsonrpc === "2.0" && result?.error) {
         const errorMessage = (typeof result.error === "object" && result.error && "message" in result.error
           ? (result.error as { message?: string }).message
           : result.error) || result.error?.data || "Unknown error occurred";
-        addLog("❌ [WIDGET] JSON-RPC error found", {
-          error: result.error,
-          errorMessage,
-        });
+        addLog("❌ [WIDGET] JSON-RPC error found", { error: result.error, errorMessage });
         throw new Error(String(errorMessage));
       }
 
-      // Check if content indicates an error
       if (result?.content && Array.isArray(result.content) && result.content.length > 0) {
         const firstContent = result.content[0] as { type?: string; text?: string } | undefined;
         if (firstContent && "text" in firstContent && firstContent.text) {
           const text = firstContent.text;
-          addLog("📄 [WIDGET] Content text found", { text: text.substring(0, 200) });
           if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed") || text.toLowerCase().includes("could not parse")) {
             addLog("❌ [WIDGET] Error text found in content", { text });
             throw new Error(text);
@@ -1242,71 +1244,56 @@ function App() {
         }
       }
 
-      // Check structuredContent for error indicators
       if (result?.structuredContent) {
-        addLog("📋 [WIDGET] Checking structuredContent", {
-          error: result.structuredContent.error || "(none)",
-          saved: result.structuredContent.saved,
-          chatId: result.structuredContent.chatId || "(none)",
-          turnsCount: result.structuredContent.turnsCount,
-          message: result.structuredContent.message || "(none)",
-        });
-
-        // Check for limit_reached error specifically
         if (result.structuredContent.error === "limit_reached") {
           const message = result.structuredContent.message || "Chat limit reached";
           const portalLink = result.structuredContent.portalLink;
           addLog("❌ [WIDGET] Limit reached error", { message, portalLink });
-
-          // Show error in alert area (close modal first)
-          setShowManualSaveModal(false);
-          setManualSaveError(null);
+          closeModalAndResetForm();
           setAlertMessage(message);
           setAlertPortalLink(typeof portalLink === "string" ? portalLink : null);
-          return; // Don't throw, just show error in alert
+          return;
         }
 
-        // Parse errors are now handled by backend - content is saved as note instead of erroring
-        // No need to handle parse_error here anymore
-
-        // Check for server_error
         if (result.structuredContent.error === "server_error") {
           const message = (typeof result.structuredContent.message === "string" ? result.structuredContent.message : "An error occurred while saving the chat") as string;
-          addLog("❌ [WIDGET] Server error in structuredContent", {
-            message,
-            error: result.structuredContent.error,
-            fullResult: result,
-          });
-
-          // Show error in alert area (close modal first)
-          setShowManualSaveModal(false);
-          setManualSaveError(null);
+          addLog("❌ [WIDGET] Server error in structuredContent", { message });
+          closeModalAndResetForm();
           setAlertMessage(message);
           setAlertPortalLink(null);
-          setIsSaving(false);
-          return; // Don't throw, just show error in alert
+          return;
         }
 
         if (result.structuredContent.error) {
           const errObj = result.structuredContent.error;
           const errorMessage = (typeof errObj === "object" && errObj && "message" in errObj ? (errObj as { message?: string }).message : String(errObj)) || "Unknown error occurred";
-          addLog("❌ [WIDGET] Error found in structuredContent.error", {
-            error: result.structuredContent.error,
-            errorMessage,
-            fullStructuredContent: result.structuredContent,
-          });
+          addLog("❌ [WIDGET] Error found in structuredContent.error", { error: result.structuredContent.error, errorMessage });
           throw new Error(String(errorMessage));
         }
       }
 
-      // Success: we have jobId, poll for completion
-      const jobId = result?.structuredContent?.jobId;
+      // Sync path: chatId returned directly
+      const chatId = result?.structuredContent?.chatId;
+      if (chatId) {
+        addLog("✅ [WIDGET] Sync save completed", { chatId });
+        closeModalAndResetForm();
+        await reloadChatsAfterSave();
+        return;
+      }
+
+      // Async path: jobId returned, poll for completion
+      const jobId = typeof result?.structuredContent?.jobId === "string" ? result.structuredContent.jobId : undefined;
       if (!jobId) {
-        addLog("❌ [WIDGET] No jobId in successful response");
+        addLog("❌ [WIDGET] No jobId or chatId in successful response");
         throw new Error("Save queued but no job ID received");
       }
 
-      addLog("✅ [WIDGET] Job queued, polling for completion", { jobId });
+      addLog("✅ [WIDGET] Job queued, closing modal and polling for completion", { jobId });
+
+      // Close modal immediately, show success alert, start polling
+      closeModalAndResetForm();
+      setAddSuccessAlert("Chat save started successfully.");
+      setPendingAddJobId(jobId);
 
       const POLL_INTERVAL_MS = 1500;
       const POLL_TIMEOUT_MS = 180_000; // 3 min
@@ -1315,84 +1302,56 @@ function App() {
 
       const pollStatus = async (): Promise<{ status: string; chatId?: string; error?: string } | null> => {
         if (pollCount === 0) {
-          addLog("First poll: calling getChatSaveJobStatus with jobId", { jobId, jobIdLength: typeof jobId === "string" ? jobId.length : undefined });
+          addLog("First poll: calling getChatSaveJobStatus with jobId", { jobId, jobIdLength: jobId.length });
         }
         pollCount += 1;
         const statusResult = await app.callServerTool({
           name: "getChatSaveJobStatus",
           arguments: { jobId },
         }) as ChatVaultToolResult | null;
-        const sc = statusResult?.structuredContent as { status?: string; chatId?: string; error?: string } | undefined;
-        if (!sc || typeof sc.status !== "string") return null;
-        return { status: sc.status, chatId: sc.chatId, error: sc.error };
+        const statusSc = statusResult?.structuredContent as { status?: string; chatId?: string; error?: string } | undefined;
+        if (!statusSc || typeof statusSc.status !== "string") return null;
+        return { status: statusSc.status, chatId: statusSc.chatId, error: statusSc.error };
       };
 
       let statusResult: { status: string; chatId?: string; error?: string } | null = null;
       while (Date.now() - startTime < POLL_TIMEOUT_MS) {
         statusResult = await pollStatus();
-        const statusSummary = statusResult
-          ? `status=${statusResult.status}${statusResult.chatId ? `, chatId=${statusResult.chatId}` : ""}${statusResult.error ? `, error=${statusResult.error}` : ""}`
-          : "null";
-        addManualSaveStatus("Status check result", statusSummary);
         if (statusResult?.status === "completed") {
           addLog("✅ [WIDGET] Job completed", { chatId: statusResult.chatId });
           break;
         }
         if (statusResult?.status === "failed") {
           addLog("❌ [WIDGET] Job failed", { error: statusResult.error });
-          setManualSaveError(statusResult.error || "Save failed");
+          setPendingAddJobId(null);
+          setAddSuccessAlert(null);
+          setAlertMessage(statusResult.error || "Save failed");
+          setAlertPortalLink(null);
           return;
         }
         if (statusResult?.status === "expired") {
           addLog("⚠️ [WIDGET] Job status expired (key TTL)");
-          setManualSaveError("Save is still processing. Please refresh in a moment to see your chat.");
+          setPendingAddJobId(null);
+          setAddSuccessAlert(null);
+          setAlertMessage("Save is still processing. Please refresh in a moment to see your chat.");
+          setAlertPortalLink(null);
           return;
         }
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
       }
 
       if (statusResult?.status !== "completed") {
-        setManualSaveError("Save is taking longer than expected. Please refresh in a moment to check.");
+        setPendingAddJobId(null);
+        setAddSuccessAlert(null);
+        setAlertMessage("Save is taking longer than expected. Please refresh in a moment to check.");
+        setAlertPortalLink(null);
         return;
       }
 
-      // Close modal and reset form on success
-      setShowManualSaveModal(false);
-      setManualSaveTitle("");
-      setManualSaveContent("");
-      setManualSaveHtml("");
-      setManualSaveError(null);
-
-      // Clear search filter when adding a new chat/note
-      setSearchQuery("");
-      setIsSearching(false);
-
-      // Reload chats and update userInfo
-      setPaginationLoading(true);
-      try {
-        const loadResult = await app.callServerTool({
-          name: "loadMyChats",
-          arguments: { page: 0, size: 10, aboveTheFoldOnly: true },
-        }) as ChatVaultToolResult | null;
-        if (loadResult?.structuredContent?.chats) {
-          setChats(deduplicateChats(loadResult.structuredContent.chats as Chat[]));
-          setPagination((loadResult.structuredContent.pagination as Pagination) ?? null);
-          setCurrentPage(0);
-          setPageInputValue("1");
-          if (loadResult.structuredContent.userInfo) {
-            setUserInfo(loadResult.structuredContent.userInfo as UserInfo);
-            addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
-          }
-          if (loadResult.structuredContent.content) {
-            setContentMetadata(loadResult.structuredContent.content as ContentMetadata);
-          }
-        }
-      } catch (err) {
-        addLog("Error reloading chats after manual save", { error: err instanceof Error ? err.message : String(err) });
-        setError(`Failed to reload chats: ${err instanceof Error ? err.message : String(err)}`);
-      } finally {
-        setPaginationLoading(false);
-      }
+      // Poll completed successfully
+      setPendingAddJobId(null);
+      setAddSuccessAlert(null);
+      await reloadChatsAfterSave();
     } catch (err) {
       let errorMessage = "Unknown error occurred";
 
@@ -1409,15 +1368,10 @@ function App() {
         error: errorMessage,
         errorType: typeof err,
         errorString: String(err),
-        errorName: (err && typeof err === "object" && "name" in err ? (err as { name?: string }).name : undefined) || "(none)",
-        errorStack: (err && typeof err === "object" && "stack" in err ? (err as { stack?: string }).stack : undefined) || "(none)",
-        errorMessage: (err && typeof err === "object" && "message" in err ? (err as { message?: string }).message : undefined) || "(none)",
-        fullError: err,
       });
-      setManualSaveError(errorMessage || "Failed to save chat. Please check the debug panel for details.");
-    } finally {
-      setIsSaving(false);
-      addLog("Manual save handler finished", { isSaving: false });
+      closeModalAndResetForm();
+      setAlertMessage(errorMessage || "Failed to save chat. Please check the debug panel for details.");
+      setAlertPortalLink(null);
     }
   };
 
@@ -1427,7 +1381,6 @@ function App() {
     setManualSaveContent("");
     setManualSaveHtml("");
     setManualSaveError(null);
-    setManualSaveStatusLog([]);
   };
 
   const handleSearch = async (query: string, page = 0) => {
@@ -1737,6 +1690,40 @@ function App() {
           </div>
         )}
 
+        {/* Success Alert - Dismissible OK after widgetAdd started */}
+        {addSuccessAlert && (
+          <div
+            className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${isDarkMode ? "bg-gray-800 border-blue-600" : "bg-blue-50 border-blue-200"
+              }`}
+          >
+            <div className={`flex-1 text-sm ${isDarkMode ? "text-gray-200" : "text-blue-900"}`}>
+              {addSuccessAlert}
+            </div>
+            <button
+              onClick={() => setAddSuccessAlert(null)}
+              className={`px-3 py-1.5 rounded text-sm font-medium ${isDarkMode
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {/* Work-in-Progress Indicator - Non-dismissible while polling */}
+        {pendingAddJobId && (
+          <div
+            className={`flex items-center gap-3 p-3 rounded-lg border mb-2 ${isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
+              }`}
+          >
+            <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0 ${isDarkMode ? "border-gray-300" : "border-gray-600"}`} />
+            <div className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+              Saving...
+            </div>
+          </div>
+        )}
+
         {/* Alert Area - Regular alerts (not delete confirmation) */}
         {alertMessage && !deleteConfirmation && (() => {
           console.log("[ChatVault] Rendering alert", { alertMessage, alertPortalLink });
@@ -1840,8 +1827,8 @@ function App() {
                 setAlertPortalLink(null);
                 setShowManualSaveModal(true);
               }}
-              disabled={paginationLoading || searchLoading}
-              className={`p-2 rounded-lg transition-colors ${paginationLoading || searchLoading
+              disabled={paginationLoading || searchLoading || !!pendingAddJobId}
+              className={`p-2 rounded-lg transition-colors ${paginationLoading || searchLoading || pendingAddJobId
                 ? "opacity-50 cursor-not-allowed"
                 : ""
                 } ${userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
@@ -2829,19 +2816,6 @@ function App() {
                         }`}>
                         {manualSaveError}
                       </p>
-                    </div>
-                  )}
-
-                  {manualSaveStatusLog.length > 0 && (
-                    <div
-                      className={`mt-4 p-3 rounded-lg font-mono text-xs overflow-y-auto max-h-32 ${isDarkMode ? "bg-gray-900/50 text-gray-300" : "bg-gray-100 text-gray-800"}`}
-                    >
-                      <div className="font-medium mb-2">Status</div>
-                      {manualSaveStatusLog.map((line, i) => (
-                        <div key={i} className="whitespace-pre-wrap break-words">
-                          {line}
-                        </div>
-                      ))}
                     </div>
                   )}
                 </div>
