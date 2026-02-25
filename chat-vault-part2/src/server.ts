@@ -613,8 +613,24 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 structuredContent: result,
             };
         } else if (toolName === "getChatSaveJobStatus") {
-            const result = await getJobStatus((args as { jobId: string }).jobId);
-            console.log("[MCP Handler] handleCallTool - getChatSaveJobStatus result:", result?.status ?? "null");
+            const receivedJobId = (args as { jobId?: string }).jobId;
+            const statusKey = receivedJobId ? `chatvault:job:${receivedJobId}` : "(no jobId)";
+            console.log("[MCP Handler] getChatSaveJobStatus ENTRY:", {
+                requestId,
+                receivedJobId: receivedJobId ?? "(missing)",
+                receivedJobIdLength: receivedJobId?.length ?? 0,
+                statusKeyToLookup: statusKey,
+                allArgKeys: Object.keys(args),
+            });
+            if (!receivedJobId || typeof receivedJobId !== "string") {
+                console.log("[MCP Handler] getChatSaveJobStatus ERROR: jobId missing or invalid");
+            }
+            const result = await getJobStatus(receivedJobId ?? "");
+            console.log("[MCP Handler] getChatSaveJobStatus EXIT:", {
+                requestId,
+                receivedJobId: receivedJobId ?? "(missing)",
+                lookupResult: result ? { status: result.status, chatId: result.chatId } : "null (not found or expired)",
+            });
             return {
                 content: [
                     {
