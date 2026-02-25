@@ -47,6 +47,7 @@ function App() {
   const [manualSaveContent, setManualSaveContent] = useState("");
   const [manualSaveHtml, setManualSaveHtml] = useState("");
   const [manualSaveError, setManualSaveError] = useState<string | null>(null);
+  const [manualSaveStatusLog, setManualSaveStatusLog] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [contentMetadata, setContentMetadata] = useState<ContentMetadata | null>(null);
@@ -1115,6 +1116,12 @@ function App() {
     });
   };
 
+  const addManualSaveStatus = (message: string, result?: string) => {
+    const ts = new Date().toISOString();
+    const line = result ? `[${ts}] ${message}: ${result}` : `[${ts}] ${message}`;
+    setManualSaveStatusLog((prev) => [...prev, line]);
+  };
+
   const handleManualSave = async () => {
     if (!manualSaveContent.trim()) {
       setManualSaveError("Please paste the chat conversation");
@@ -1123,6 +1130,8 @@ function App() {
 
     setIsSaving(true);
     setManualSaveError(null);
+    setManualSaveStatusLog([]);
+    addManualSaveStatus("Starting save...");
 
     const contentToSend = manualSaveHtml || manualSaveContent;
     const titleToSend = manualSaveTitle.trim() || undefined;
@@ -1163,6 +1172,16 @@ function App() {
       addLog("⏳ [WIDGET] Waiting for response...");
       const result = await Promise.race([callToolPromise, timeoutPromise]) as ChatVaultToolResult;
       addLog("✅ [WIDGET] Response received");
+
+      const sc = result?.structuredContent;
+      const widgetAddSummary = sc?.jobId
+        ? `jobId=${sc.jobId}, turnsCount=${sc.turnsCount ?? "?"}`
+        : sc?.chatId
+          ? `chatId=${sc.chatId} (sync)`
+          : result?.error
+            ? `error=${String(result.error)}`
+            : JSON.stringify(sc ?? result).substring(0, 100);
+      addManualSaveStatus("widgetAdd returned", widgetAddSummary);
 
       addLog("📥 [WIDGET] Manual save result received", {
         resultType: typeof result,
@@ -1306,6 +1325,10 @@ function App() {
       let statusResult: { status: string; chatId?: string; error?: string } | null = null;
       while (Date.now() - startTime < POLL_TIMEOUT_MS) {
         statusResult = await pollStatus();
+        const statusSummary = statusResult
+          ? `status=${statusResult.status}${statusResult.chatId ? `, chatId=${statusResult.chatId}` : ""}${statusResult.error ? `, error=${statusResult.error}` : ""}`
+          : "null";
+        addManualSaveStatus("Status check result", statusSummary);
         if (statusResult?.status === "completed") {
           addLog("✅ [WIDGET] Job completed", { chatId: statusResult.chatId });
           break;
@@ -1399,6 +1422,7 @@ function App() {
     setManualSaveContent("");
     setManualSaveHtml("");
     setManualSaveError(null);
+    setManualSaveStatusLog([]);
   };
 
   const handleSearch = async (query: string, page = 0) => {
@@ -2800,6 +2824,19 @@ function App() {
                         }`}>
                         {manualSaveError}
                       </p>
+                    </div>
+                  )}
+
+                  {manualSaveStatusLog.length > 0 && (
+                    <div
+                      className={`mt-4 p-3 rounded-lg font-mono text-xs overflow-y-auto max-h-32 ${isDarkMode ? "bg-gray-900/50 text-gray-300" : "bg-gray-100 text-gray-800"}`}
+                    >
+                      <div className="font-medium mb-2">Status</div>
+                      {manualSaveStatusLog.map((line, i) => (
+                        <div key={i} className="whitespace-pre-wrap break-words">
+                          {line}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
