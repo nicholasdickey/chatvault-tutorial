@@ -1,14 +1,45 @@
 import { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { MdArrowBack, MdExpandMore, MdExpandLess, MdContentCopy, MdAdd, MdClose, MdCheck, MdSearch, MdRefresh, MdOpenInNew, MdDelete, MdHelp, MdFullscreen, MdFullscreenExit, MdNote, MdLogin, MdMessage, MdEdit } from "react-icons/md";
+import {
+  MdArrowBack,
+  MdExpandMore,
+  MdExpandLess,
+  MdContentCopy,
+  MdAdd,
+  MdClose,
+  MdCheck,
+  MdSearch,
+  MdRefresh,
+  MdOpenInNew,
+  MdDelete,
+  MdHelp,
+  MdFullscreen,
+  MdFullscreenExit,
+  MdNote,
+  MdLogin,
+  MdMessage,
+  MdEdit,
+} from "react-icons/md";
 import { app } from "../app-instance.js";
-import type { Chat, UserInfo, Pagination, DeleteConfirmation, ContentMetadata, EditingTurn, ChatVaultToolResult } from "./types.js";
+import type {
+  Chat,
+  UserInfo,
+  Pagination,
+  DeleteConfirmation,
+  ContentMetadata,
+  EditingTurn,
+  ChatVaultToolResult,
+} from "./types.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
 const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.1";
 
 // Debug logging
-const debugLogs: Array<{ timestamp: string; message: string; data: string | null }> = [];
+const debugLogs: Array<{
+  timestamp: string;
+  message: string;
+  data: string | null;
+}> = [];
 const addLog = (message: string, data: unknown = null) => {
   const log = {
     timestamp: new Date().toISOString(),
@@ -35,7 +66,9 @@ function App() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [pageInputValue, setPageInputValue] = useState("1");
   const [paginationLoading, setPaginationLoading] = useState(false);
-  const [expandedTurns, setExpandedTurns] = useState<Set<string | number>>(new Set());
+  const [expandedTurns, setExpandedTurns] = useState<Set<string | number>>(
+    new Set(),
+  );
   const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({});
   // Debug panel hidden by default, can be toggled with Ctrl+Alt+D (avoids browser Ctrl+Shift+D = Bookmark all tabs)
   const [showDebug, setShowDebug] = useState(() => {
@@ -49,24 +82,32 @@ function App() {
   const [manualSaveError, setManualSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [contentMetadata, setContentMetadata] = useState<ContentMetadata | null>(null);
+  const [contentMetadata, setContentMetadata] =
+    useState<ContentMetadata | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [alertPortalLink, setAlertPortalLink] = useState<string | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState<DeleteConfirmation | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpText, setHelpText] = useState<string | null>(null);
   const [helpTextLoading, setHelpTextLoading] = useState(false);
   const [subTitleExpanded, setSubTitleExpanded] = useState(false);
-  const [displayMode, setDisplayMode] = useState<"inline" | "fullscreen" | "pip">("inline");
+  const [displayMode, setDisplayMode] = useState<
+    "inline" | "fullscreen" | "pip"
+  >("inline");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
-  const [editedTurns, setEditedTurns] = useState<Array<{ prompt: string; response: string; truncated?: boolean }>>([]);
+  const [editedTurns, setEditedTurns] = useState<
+    Array<{ prompt: string; response: string; truncated?: boolean }>
+  >([]);
   const [editingTurn, setEditingTurn] = useState<EditingTurn | null>(null);
   const [editingTurnValue, setEditingTurnValue] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingChat, setIsSavingChat] = useState(false);
-  const [fullTurnContent, setFullTurnContent] = useState<Record<string, { prompt: string; response: string }>>({});
+  const [fullTurnContent, setFullTurnContent] = useState<
+    Record<string, { prompt: string; response: string }>
+  >({});
   const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
   const [pendingAddJobId, setPendingAddJobId] = useState<string | null>(null);
   const [addSuccessAlert, setAddSuccessAlert] = useState<string | null>(null);
@@ -104,7 +145,9 @@ function App() {
       const root = document.documentElement;
       const theme = root.getAttribute("data-theme");
       const hasDarkClass = root.classList.contains("dark");
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
 
       // Only use dark mode if explicitly set via data-theme or class
       // Don't use system preference by default (widget should default to light)
@@ -116,7 +159,7 @@ function App() {
         theme,
         hasDarkClass,
         prefersDark,
-        note: "Only using explicit theme/class, not system preference"
+        note: "Only using explicit theme/class, not system preference",
       });
     };
 
@@ -161,22 +204,33 @@ function App() {
         const dataScript = document.getElementById("chatvault-initial-data");
         if (dataScript) {
           try {
-            const initialChats = JSON.parse(dataScript.textContent || "[]") as Chat[];
-            addLog("Loaded chats from embedded data", { count: initialChats.length });
+            const initialChats = JSON.parse(
+              dataScript.textContent || "[]",
+            ) as Chat[];
+            addLog("Loaded chats from embedded data", {
+              count: initialChats.length,
+            });
             setChats(deduplicateChats(initialChats));
             setLoading(false);
             return;
           } catch (e) {
-            addLog("Failed to parse embedded data", { error: e instanceof Error ? e.message : String(e) });
+            addLog("Failed to parse embedded data", {
+              error: e instanceof Error ? e.message : String(e),
+            });
           }
         }
 
         // Fallback: call loadMyChats
         try {
-          const result = await app.callServerTool({
+          const result = (await app.callServerTool({
             name: "loadMyChats",
-            arguments: { page: 0, size: 10, aboveTheFoldOnly: true, widgetVersion: WIDGET_VERSION },
-          }) as ChatVaultToolResult | null;
+            arguments: {
+              page: 0,
+              size: 10,
+              aboveTheFoldOnly: true,
+              widgetVersion: WIDGET_VERSION,
+            },
+          })) as ChatVaultToolResult | null;
           addLog("loadMyChats result", result);
 
           const rawChats = result?.structuredContent?.chats;
@@ -219,24 +273,41 @@ function App() {
   // Debug alert state changes
   useEffect(() => {
     if (alertMessage) {
-      addLog("Alert message state changed", { alertMessage, alertPortalLink, deleteConfirmation });
+      addLog("Alert message state changed", {
+        alertMessage,
+        alertPortalLink,
+        deleteConfirmation,
+      });
     }
   }, [alertMessage, alertPortalLink, deleteConfirmation]);
 
   // Update alert message dynamically when userInfo changes (if counter alert is showing)
   useEffect(() => {
-    if (alertMessage && !deleteConfirmation && userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined) {
+    if (
+      alertMessage &&
+      !deleteConfirmation &&
+      userInfo?.isAnonymousPlan &&
+      userInfo.remainingSlots !== undefined
+    ) {
       // Check if this is a counter alert (starts with "You have X chat")
-      if (alertMessage.includes("You have") && alertMessage.includes("to save remaining")) {
-        const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
-        const message = userInfo.remainingSlots <= 1
-          ? `${baseMessage} Delete chats or`
-          : baseMessage;
+      if (
+        alertMessage.includes("You have") &&
+        alertMessage.includes("to save remaining")
+      ) {
+        const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? "s" : ""} to save remaining.`;
+        const message =
+          userInfo.remainingSlots <= 1
+            ? `${baseMessage} Delete chats or`
+            : baseMessage;
         setAlertMessage(message);
         setAlertPortalLink(userInfo.portalLink || null);
       }
     }
-  }, [userInfo?.remainingSlots, userInfo?.portalLink, userInfo?.isAnonymousPlan]);
+  }, [
+    userInfo?.remainingSlots,
+    userInfo?.portalLink,
+    userInfo?.isAnonymousPlan,
+  ]);
 
   // Handle ESC key to close help
   useEffect(() => {
@@ -285,7 +356,7 @@ function App() {
 
     // Chats always come from loadMyChats (with truncated or full turns)
     setSelectedChat({ ...chat });
-    setEditedTurns((chat.turns ?? []).map(turn => ({ ...turn })));
+    setEditedTurns((chat.turns ?? []).map((turn) => ({ ...turn })));
   };
 
   const handleBackClick = () => {
@@ -313,7 +384,8 @@ function App() {
         addLog("Entered fullscreen", response);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       addLog("Fullscreen error", { error: errorMessage });
       setAlertMessage(`Failed to change display mode: ${errorMessage}`);
       setAlertPortalLink(null);
@@ -344,7 +416,9 @@ function App() {
       addLog("loadMyChats result", result);
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-        setPagination((result.structuredContent.pagination as Pagination) ?? null);
+        setPagination(
+          (result.structuredContent.pagination as Pagination) ?? null,
+        );
         setCurrentPage(0);
         setPageInputValue("1");
         if (result.structuredContent.userInfo) {
@@ -357,7 +431,7 @@ function App() {
       setError(
         errorMessage.includes("Not connected")
           ? "Connection lost. Reopen the chat to reconnect."
-          : `Failed to refresh: ${errorMessage}`
+          : `Failed to refresh: ${errorMessage}`,
       );
     } finally {
       setLoading(false);
@@ -384,17 +458,23 @@ function App() {
 
   const handleCounterClick = () => {
     if (userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined) {
-      const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? 's' : ''} to save remaining.`;
-      const message = userInfo.remainingSlots <= 1
-        ? `${baseMessage} Delete chats or`
-        : baseMessage;
+      const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? "s" : ""} to save remaining.`;
+      const message =
+        userInfo.remainingSlots <= 1
+          ? `${baseMessage} Delete chats or`
+          : baseMessage;
 
-      addLog("Counter clicked - setting alert", { message, portalLink: userInfo.portalLink });
+      addLog("Counter clicked - setting alert", {
+        message,
+        portalLink: userInfo.portalLink,
+      });
       setAlertMessage(message);
       setAlertPortalLink(userInfo.portalLink || null);
       addLog("Counter clicked - alert state set", { message });
     } else {
-      addLog("Counter clicked but user is not on anonymous plan", { isAnonymousPlan: userInfo?.isAnonymousPlan });
+      addLog("Counter clicked but user is not on anonymous plan", {
+        isAnonymousPlan: userInfo?.isAnonymousPlan,
+      });
     }
   };
 
@@ -444,10 +524,10 @@ function App() {
       }
 
       addLog("Calling deleteChat tool", { chatId, userId });
-      const result = await app.callServerTool({
+      const result = (await app.callServerTool({
         name: "deleteChat",
         arguments: { chatId, userId },
-      }) as ChatVaultToolResult | null;
+      })) as ChatVaultToolResult | null;
 
       addLog("Delete chat result", result);
 
@@ -458,13 +538,18 @@ function App() {
 
         // Update userInfo counts locally
         if (userInfo) {
-          setUserInfo((prev) => prev ? ({
-            ...prev,
-            totalChats: Math.max(0, (prev.totalChats || 0) - 1),
-            remainingSlots: prev.remainingSlots !== undefined
-              ? (prev.remainingSlots || 0) + 1
-              : undefined,
-          }) : null);
+          setUserInfo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  totalChats: Math.max(0, (prev.totalChats || 0) - 1),
+                  remainingSlots:
+                    prev.remainingSlots !== undefined
+                      ? (prev.remainingSlots || 0) + 1
+                      : undefined,
+                }
+              : null,
+          );
           addLog("UserInfo counts updated locally");
         }
 
@@ -531,13 +616,18 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+      const userId =
+        selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
-      addLog("Calling updateChat tool", { chatId, userId, title: trimmedTitle });
-      const result = await app.callServerTool({
+      addLog("Calling updateChat tool", {
+        chatId,
+        userId,
+        title: trimmedTitle,
+      });
+      const result = (await app.callServerTool({
         name: "updateChat",
         arguments: {
           chatId,
@@ -546,21 +636,27 @@ function App() {
             title: trimmedTitle,
           },
         },
-      }) as ChatVaultToolResult | null;
+      })) as ChatVaultToolResult | null;
 
       addLog("Update chat result", result);
 
       if (result?.structuredContent?.updated) {
-        const newTitle = (typeof result.structuredContent.title === "string" ? result.structuredContent.title : trimmedTitle) as string;
+        const newTitle = (
+          typeof result.structuredContent.title === "string"
+            ? result.structuredContent.title
+            : trimmedTitle
+        ) as string;
 
         // Update selectedChat only if it's still the same chat
-        setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, title: newTitle } : prev));
+        setSelectedChat((prev) =>
+          prev && prev.id === chatId ? { ...prev, title: newTitle } : prev,
+        );
 
         // Update chats list
         setChats((prev) =>
           prev.map((chat) =>
-            chat.id === chatId ? { ...chat, title: newTitle } : chat
-          )
+            chat.id === chatId ? { ...chat, title: newTitle } : chat,
+          ),
         );
 
         addLog("Title updated in local state", { chatId, newTitle });
@@ -569,7 +665,9 @@ function App() {
         setIsEditingTitle(false);
         setEditedTitle("");
       } else {
-        throw new Error(String(result?.structuredContent?.message || "Update failed"));
+        throw new Error(
+          String(result?.structuredContent?.message || "Update failed"),
+        );
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -581,32 +679,45 @@ function App() {
     }
   };
 
-  const handleStartEditTurn = async (turnIndex: number, field: "prompt" | "response") => {
+  const handleStartEditTurn = async (
+    turnIndex: number,
+    field: "prompt" | "response",
+  ) => {
     if (!selectedChat || !editedTurns[turnIndex]) return;
     const turn = editedTurns[turnIndex];
     const turnId = `${selectedChat.id}-${turnIndex}`;
-    let value = field === 'prompt' ? turn.prompt : turn.response;
+    let value = field === "prompt" ? turn.prompt : turn.response;
 
     if (turn.truncated && !fullTurnContent[turnId]) {
       try {
-        const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+        const userId =
+          selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
         if (!userId) throw new Error("User ID not available");
-        const result = await app.callServerTool({
+        const result = (await app.callServerTool({
           name: "loadFullTurn",
           arguments: { chatId: selectedChat.id, userId, turnIndex },
-        }) as ChatVaultToolResult | null;
-        const turnData = result?.structuredContent?.turn as { prompt: string; response: string } | undefined;
+        })) as ChatVaultToolResult | null;
+        const turnData = result?.structuredContent?.turn as
+          | { prompt: string; response: string }
+          | undefined;
         if (turnData) {
           setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
-          value = field === 'prompt' ? turnData.prompt : turnData.response;
+          value = field === "prompt" ? turnData.prompt : turnData.response;
         }
       } catch (err) {
-        addLog("Error loading full turn for edit", { error: err instanceof Error ? err.message : String(err) });
-        setAlertMessage(`Failed to load turn: ${err instanceof Error ? err.message : String(err)}`);
+        addLog("Error loading full turn for edit", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setAlertMessage(
+          `Failed to load turn: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return;
       }
     } else if (fullTurnContent[turnId]) {
-      value = field === 'prompt' ? fullTurnContent[turnId].prompt : fullTurnContent[turnId].response;
+      value =
+        field === "prompt"
+          ? fullTurnContent[turnId].prompt
+          : fullTurnContent[turnId].response;
     }
 
     setEditingTurn({ turnIndex, field });
@@ -620,7 +731,10 @@ function App() {
     addLog("Cancelled editing turn");
   };
 
-  const handleSaveTurnEdit = (turnIndex: number, field: "prompt" | "response") => {
+  const handleSaveTurnEdit = (
+    turnIndex: number,
+    field: "prompt" | "response",
+  ) => {
     if (!selectedChat || !editedTurns[turnIndex]) return;
 
     const trimmedValue = editingTurnValue.trim();
@@ -641,7 +755,9 @@ function App() {
 
   const handleDeleteTurn = (turnIndex: number) => {
     if (!selectedChat || editedTurns.length <= 1) {
-      setAlertMessage("Cannot delete the last turn. A chat must have at least one turn.");
+      setAlertMessage(
+        "Cannot delete the last turn. A chat must have at least one turn.",
+      );
       setAlertPortalLink(null);
       return;
     }
@@ -686,13 +802,18 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+      const userId =
+        selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
-      addLog("Calling updateChat tool with turns", { chatId, userId, turnsCount: editedTurns.length });
-      const result = await app.callServerTool({
+      addLog("Calling updateChat tool with turns", {
+        chatId,
+        userId,
+        turnsCount: editedTurns.length,
+      });
+      const result = (await app.callServerTool({
         name: "updateChat",
         arguments: {
           chatId,
@@ -701,31 +822,41 @@ function App() {
             turns: editedTurns,
           },
         },
-      }) as ChatVaultToolResult | null;
+      })) as ChatVaultToolResult | null;
 
       addLog("Update chat result", result);
 
       if (result?.structuredContent?.updated) {
-        const updatedTurns = (result.structuredContent?.turns as { prompt: string; response: string }[] | undefined) || editedTurns;
+        const updatedTurns =
+          (result.structuredContent?.turns as
+            | { prompt: string; response: string }[]
+            | undefined) || editedTurns;
 
         // Update selectedChat
-        setSelectedChat((prev) => (prev && prev.id === chatId ? { ...prev, turns: updatedTurns } : prev));
+        setSelectedChat((prev) =>
+          prev && prev.id === chatId ? { ...prev, turns: updatedTurns } : prev,
+        );
 
         // Update chats list
         setChats((prev) =>
           prev.map((chat) =>
-            chat.id === chatId ? { ...chat, turns: updatedTurns } : chat
-          )
+            chat.id === chatId ? { ...chat, turns: updatedTurns } : chat,
+          ),
         );
 
-        addLog("Chat turns updated in local state", { chatId, turnsCount: updatedTurns.length });
+        addLog("Chat turns updated in local state", {
+          chatId,
+          turnsCount: updatedTurns.length,
+        });
 
         // Clear editing state
         setHasUnsavedChanges(false);
         setEditingTurn(null);
         setEditingTurnValue("");
       } else {
-        throw new Error(String(result?.structuredContent?.message || "Update failed"));
+        throw new Error(
+          String(result?.structuredContent?.message || "Update failed"),
+        );
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -752,99 +883,146 @@ function App() {
     const codeBlocks: string[] = [];
 
     // Extract fenced code blocks (```tsx, ```json, etc.) first so paragraph split doesn't break them
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_: string, lang: string, content: string) => {
-      const escaped = content
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-      const langClass = lang ? ` language-${lang}` : "";
-      const index = codeBlocks.length;
-      codeBlocks.push(
-        `<pre class="mb-3 overflow-x-auto rounded bg-gray-100 dark:bg-gray-800 p-3 text-sm"><code class="${langClass}">${escaped}</code></pre>`
-      );
-      return `\n\n%%%CODEBLOCK${index}%%%\n\n`;
-    });
+    html = html.replace(
+      /```(\w*)\n([\s\S]*?)```/g,
+      (_: string, lang: string, content: string) => {
+        const escaped = content
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+        const langClass = lang ? ` language-${lang}` : "";
+        const index = codeBlocks.length;
+        codeBlocks.push(
+          `<pre class="mb-3 overflow-x-auto rounded bg-gray-100 dark:bg-gray-800 p-3 text-sm"><code class="${langClass}">${escaped}</code></pre>`,
+        );
+        return `\n\n%%%CODEBLOCK${index}%%%\n\n`;
+      },
+    );
 
     // Convert headers (do this first before paragraph processing)
-    html = html.replace(/^### (.*$)/gim, '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>');
-    html = html.replace(/^## (.*$)/gim, '<h4 class="text-lg font-semibold mt-6 mb-3">$1</h4>');
-    html = html.replace(/^# (.*$)/gim, '<h3 class="text-xl font-semibold mt-6 mb-4">$1</h3>');
+    html = html.replace(
+      /^### (.*$)/gim,
+      '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>',
+    );
+    html = html.replace(
+      /^## (.*$)/gim,
+      '<h4 class="text-lg font-semibold mt-6 mb-3">$1</h4>',
+    );
+    html = html.replace(
+      /^# (.*$)/gim,
+      '<h3 class="text-xl font-semibold mt-6 mb-4">$1</h3>',
+    );
 
     // Convert links [text](url) - do this before bold to avoid conflicts
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">$1</a>');
+    html = html.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">$1</a>',
+    );
 
     // Convert bold
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
     // Italic (after bold so ** is already consumed)
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    html = html.replace(/_([^_]+)_/g, "<em>$1</em>");
     // Inline code (after fenced blocks so ``` is gone; no newlines in inline code)
-    html = html.replace(/`([^`\n]+)`/g, '<code class="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-1 rounded">$1</code>');
+    html = html.replace(
+      /`([^`\n]+)`/g,
+      '<code class="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-1 rounded">$1</code>',
+    );
     // Strikethrough
-    html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+    html = html.replace(/~~(.*?)~~/g, "<del>$1</del>");
 
     // Parse a markdown table block into header row and body rows
     const parseMarkdownTable = (block: string) => {
-      const lines = block.split(/\n/).map((l: string) => l.trim()).filter(Boolean);
-      if (lines.length === 0) return { header: [] as string[], body: [] as string[][] };
+      const lines = block
+        .split(/\n/)
+        .map((l: string) => l.trim())
+        .filter(Boolean);
+      if (lines.length === 0)
+        return { header: [] as string[], body: [] as string[][] };
       const rowToCells = (line: string) => {
-        const cells = line.split('|').map((c: string) => c.trim());
-        while (cells.length && cells[0] === '') cells.shift();
-        while (cells.length && cells[cells.length - 1] === '') cells.pop();
+        const cells = line.split("|").map((c: string) => c.trim());
+        while (cells.length && cells[0] === "") cells.shift();
+        while (cells.length && cells[cells.length - 1] === "") cells.pop();
         return cells;
       };
       const rows = lines.map(rowToCells);
       const header = rows[0] || [];
-      const isSeparator = (cells: string[]) => cells.every((c: string) => /^[\s\-:]+$/.test(c));
-      const body = rows.length > 1 && isSeparator(rows[1]) ? rows.slice(2) : rows.slice(1);
+      const isSeparator = (cells: string[]) =>
+        cells.every((c: string) => /^[\s\-:]+$/.test(c));
+      const body =
+        rows.length > 1 && isSeparator(rows[1]) ? rows.slice(2) : rows.slice(1);
       return { header, body };
     };
 
     // Convert line breaks to paragraphs (double newline = paragraph, single = br)
     const paragraphs = html.split(/\n\s*\n/);
     const tableRowPattern = /^\|.+\|$/;
-    const tableCellClasses = "px-2 py-1 border border-gray-300 dark:border-gray-600";
-    const tableHeaderClasses = "px-2 py-1 border border-gray-300 dark:border-gray-600 font-semibold bg-gray-100 dark:bg-gray-700 text-left";
-    html = paragraphs.map((p: string) => {
-      const trimmed = p.trim();
-      if (!trimmed) return '';
-      if (/^%%%CODEBLOCK\d+%%%$/.test(trimmed)) return trimmed;
-      const lines = trimmed.split(/\n/).map((l: string) => l.trim());
-      const looksLikeTable = lines.length >= 1 && lines.every((line: string) => tableRowPattern.test(line));
-      if (looksLikeTable) {
-        const { header, body } = parseMarkdownTable(trimmed);
-        const colCount = header.length;
-        const thead = header.length
-          ? `<thead><tr>${header.map((c) => `<th class="${tableHeaderClasses}">${c}</th>`).join('')}</tr></thead>`
-          : '';
-        const tbodyRows = body.map(
-          (row: string[]) => `<tr>${Array.from({ length: colCount }, (_: unknown, i: number) => `<td class="${tableCellClasses}">${row[i] ?? ''}</td>`).join('')}</tr>`
-        );
-        const tbody = tbodyRows.length ? `<tbody>${tbodyRows.join('')}</tbody>` : '';
-        return `<table class="mb-3 table-auto border-collapse border border-gray-300 dark:border-gray-600 text-sm">${thead}${tbody}</table>`;
-      }
-      const ulPattern = /^\s*[-*+]\s+.+$/;
-      const looksLikeUl = lines.length >= 1 && lines.every((line: string) => ulPattern.test(line.trim()));
-      if (looksLikeUl) {
-        const items = lines.map((line: string) => line.replace(/^\s*[-*+]\s+/, '').trim());
-        return `<ul class="mb-3 list-disc list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join('')}</ul>`;
-      }
-      const olPattern = /^\d+\.\s+.+$/;
-      const looksLikeOl = lines.length >= 1 && lines.every((line: string) => olPattern.test(line.trim()));
-      if (looksLikeOl) {
-        const items = lines.map((line: string) => line.replace(/^\d+\.\s+/, '').trim());
-        return `<ol class="mb-3 list-decimal list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join('')}</ol>`;
-      }
-      const looksLikeBlockquote = lines.length >= 1 && lines.every((line: string) => line.startsWith('> ') || line === '>');
-      if (looksLikeBlockquote) {
-        const content = lines.map((line: string) => (line.startsWith('> ') ? line.slice(2) : line === '>' ? '' : line)).join('<br />');
-        return `<blockquote class="mb-3 border-l-4 border-gray-300 dark:border-gray-600 pl-4 text-gray-700 dark:text-gray-300">${content}</blockquote>`;
-      }
-      // Replace single newlines with <br> within paragraphs
-      const withBreaks = trimmed.replace(/\n/g, '<br />');
-      return `<p class="mb-3">${withBreaks}</p>`;
-    }).join('');
+    const tableCellClasses =
+      "px-2 py-1 border border-gray-300 dark:border-gray-600";
+    const tableHeaderClasses =
+      "px-2 py-1 border border-gray-300 dark:border-gray-600 font-semibold bg-gray-100 dark:bg-gray-700 text-left";
+    html = paragraphs
+      .map((p: string) => {
+        const trimmed = p.trim();
+        if (!trimmed) return "";
+        if (/^%%%CODEBLOCK\d+%%%$/.test(trimmed)) return trimmed;
+        const lines = trimmed.split(/\n/).map((l: string) => l.trim());
+        const looksLikeTable =
+          lines.length >= 1 &&
+          lines.every((line: string) => tableRowPattern.test(line));
+        if (looksLikeTable) {
+          const { header, body } = parseMarkdownTable(trimmed);
+          const colCount = header.length;
+          const thead = header.length
+            ? `<thead><tr>${header.map((c) => `<th class="${tableHeaderClasses}">${c}</th>`).join("")}</tr></thead>`
+            : "";
+          const tbodyRows = body.map(
+            (row: string[]) =>
+              `<tr>${Array.from({ length: colCount }, (_: unknown, i: number) => `<td class="${tableCellClasses}">${row[i] ?? ""}</td>`).join("")}</tr>`,
+          );
+          const tbody = tbodyRows.length
+            ? `<tbody>${tbodyRows.join("")}</tbody>`
+            : "";
+          return `<table class="mb-3 table-auto border-collapse border border-gray-300 dark:border-gray-600 text-sm">${thead}${tbody}</table>`;
+        }
+        const ulPattern = /^\s*[-*+]\s+.+$/;
+        const looksLikeUl =
+          lines.length >= 1 &&
+          lines.every((line: string) => ulPattern.test(line.trim()));
+        if (looksLikeUl) {
+          const items = lines.map((line: string) =>
+            line.replace(/^\s*[-*+]\s+/, "").trim(),
+          );
+          return `<ul class="mb-3 list-disc list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join("")}</ul>`;
+        }
+        const olPattern = /^\d+\.\s+.+$/;
+        const looksLikeOl =
+          lines.length >= 1 &&
+          lines.every((line: string) => olPattern.test(line.trim()));
+        if (looksLikeOl) {
+          const items = lines.map((line: string) =>
+            line.replace(/^\d+\.\s+/, "").trim(),
+          );
+          return `<ol class="mb-3 list-decimal list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join("")}</ol>`;
+        }
+        const looksLikeBlockquote =
+          lines.length >= 1 &&
+          lines.every((line: string) => line.startsWith("> ") || line === ">");
+        if (looksLikeBlockquote) {
+          const content = lines
+            .map((line: string) =>
+              line.startsWith("> ") ? line.slice(2) : line === ">" ? "" : line,
+            )
+            .join("<br />");
+          return `<blockquote class="mb-3 border-l-4 border-gray-300 dark:border-gray-600 pl-4 text-gray-700 dark:text-gray-300">${content}</blockquote>`;
+        }
+        // Replace single newlines with <br> within paragraphs
+        const withBreaks = trimmed.replace(/\n/g, "<br />");
+        return `<p class="mb-3">${withBreaks}</p>`;
+      })
+      .join("");
 
     codeBlocks.forEach((block: string, i: number) => {
       html = html.replace(`%%%CODEBLOCK${i}%%%`, block);
@@ -869,17 +1047,18 @@ function App() {
     setHelpTextLoading(true);
 
     try {
-      const userId = selectedChat?.userId || (chats.length > 0 && chats[0].userId) || "";
+      const userId =
+        selectedChat?.userId || (chats.length > 0 && chats[0].userId) || "";
 
       if (!userId) {
         throw new Error("User ID not available. Please refresh and try again.");
       }
 
       addLog("Calling explainHowToUse tool", { userId });
-      const result = await app.callServerTool({
+      const result = (await app.callServerTool({
         name: "explainHowToUse",
         arguments: { userId },
-      }) as ChatVaultToolResult | null;
+      })) as ChatVaultToolResult | null;
 
       addLog("explainHowToUse result", result);
 
@@ -887,7 +1066,10 @@ function App() {
         const rawHelpText = String(result.structuredContent.helpText);
         // Replace placeholders in help text
         const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
-        const processedHelpText = rawHelpText.replace(/{expirationDays}/g, String(expirationDays));
+        const processedHelpText = rawHelpText.replace(
+          /{expirationDays}/g,
+          String(expirationDays),
+        );
         setHelpText(processedHelpText);
       } else {
         throw new Error("No help text received from server");
@@ -925,21 +1107,28 @@ function App() {
     if (needsFetch) {
       setLoadingTurnIds((prev) => new Set(prev).add(turnId));
       try {
-        const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+        const userId =
+          selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
         if (!userId) {
           throw new Error("User ID not available");
         }
-        const result = await app.callServerTool({
+        const result = (await app.callServerTool({
           name: "loadFullTurn",
           arguments: { chatId: selectedChat.id, userId, turnIndex: index },
-        }) as ChatVaultToolResult | null;
-        const turnData = result?.structuredContent?.turn as { prompt: string; response: string } | undefined;
+        })) as ChatVaultToolResult | null;
+        const turnData = result?.structuredContent?.turn as
+          | { prompt: string; response: string }
+          | undefined;
         if (turnData) {
           setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
         }
       } catch (err) {
-        addLog("Error loading full turn", { error: err instanceof Error ? err.message : String(err) });
-        setAlertMessage(`Failed to load turn: ${err instanceof Error ? err.message : String(err)}`);
+        addLog("Error loading full turn", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setAlertMessage(
+          `Failed to load turn: ${err instanceof Error ? err.message : String(err)}`,
+        );
       } finally {
         setLoadingTurnIds((prev) => {
           const next = new Set(prev);
@@ -956,36 +1145,52 @@ function App() {
     });
   };
 
-  const ensureFullTurnContent = async (turnIndex: number): Promise<{ prompt: string; response: string } | null> => {
+  const ensureFullTurnContent = async (
+    turnIndex: number,
+  ): Promise<{ prompt: string; response: string } | null> => {
     if (!selectedChat) return null;
     const turn = editedTurns[turnIndex];
     const turnId = `${selectedChat.id}-${turnIndex}`;
-    if (!turn?.truncated) return { prompt: turn.prompt, response: turn.response };
+    if (!turn?.truncated)
+      return { prompt: turn.prompt, response: turn.response };
     if (fullTurnContent[turnId]) return fullTurnContent[turnId];
     try {
-      const userId = selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
+      const userId =
+        selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
       if (!userId) return null;
-      const result = await app.callServerTool({
+      const result = (await app.callServerTool({
         name: "loadFullTurn",
         arguments: { chatId: selectedChat.id, userId, turnIndex },
-      }) as ChatVaultToolResult | null;
-      const turnData = result?.structuredContent?.turn as { prompt: string; response: string } | undefined;
+      })) as ChatVaultToolResult | null;
+      const turnData = result?.structuredContent?.turn as
+        | { prompt: string; response: string }
+        | undefined;
       if (turnData) {
         setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
         return turnData;
       }
     } catch (err) {
-      addLog("Error loading full turn for copy", { error: err instanceof Error ? err.message : String(err) });
+      addLog("Error loading full turn for copy", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     return null;
   };
 
-  const handleCopyTurnField = async (turnIndex: number, field: "prompt" | "response", id: string) => {
+  const handleCopyTurnField = async (
+    turnIndex: number,
+    field: "prompt" | "response",
+    id: string,
+  ) => {
     const full = await ensureFullTurnContent(turnIndex);
     const turn = editedTurns[turnIndex];
     const text = full
-      ? (field === "prompt" ? full.prompt : full.response)
-      : (field === "prompt" ? turn?.prompt ?? "" : turn?.response ?? "");
+      ? field === "prompt"
+        ? full.prompt
+        : full.response
+      : field === "prompt"
+        ? (turn?.prompt ?? "")
+        : (turn?.response ?? "");
     await copyToClipboard(text, id);
   };
 
@@ -998,15 +1203,24 @@ function App() {
           ...prev,
           [id]: true,
         };
-        console.log("[copyToClipboard] Setting copiedItems", { id, prev, next });
+        console.log("[copyToClipboard] Setting copiedItems", {
+          id,
+          prev,
+          next,
+        });
         return next;
       });
       setTimeout(() => {
-        console.log("[copyToClipboard] Removing copied state after timeout", { id });
+        console.log("[copyToClipboard] Removing copied state after timeout", {
+          id,
+        });
         setCopiedItems((prev) => {
           const next = { ...prev };
           delete next[id];
-          console.log("[copyToClipboard] Removed from copiedItems", { id, next });
+          console.log("[copyToClipboard] Removed from copiedItems", {
+            id,
+            next,
+          });
           return next;
         });
       }, 3000);
@@ -1047,14 +1261,24 @@ function App() {
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error("[copyToClipboard] Copy failed", { id, error: errMsg, err });
-      addLog("Failed to copy - clipboard access blocked. Please copy manually.", {
+      console.error("[copyToClipboard] Copy failed", {
+        id,
         error: errMsg,
-        suggestion: "The clipboard API is blocked in this context. You may need to copy the text manually."
+        err,
       });
+      addLog(
+        "Failed to copy - clipboard access blocked. Please copy manually.",
+        {
+          error: errMsg,
+          suggestion:
+            "The clipboard API is blocked in this context. You may need to copy the text manually.",
+        },
+      );
 
       // Show a user-friendly message
-      setAlertMessage("Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.");
+      setAlertMessage(
+        "Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.",
+      );
       setAlertPortalLink(null);
     }
   };
@@ -1082,15 +1306,24 @@ function App() {
   };
 
   const copyEntireChat = async (chat: Chat | null) => {
-    console.log("[copyEntireChat] Called", { chat, timestamp: chat?.timestamp });
+    console.log("[copyEntireChat] Called", {
+      chat,
+      timestamp: chat?.timestamp,
+    });
     try {
       if (!chat || !chat.timestamp) {
         throw new Error("Invalid chat object");
       }
       const chatId = `chat-${chat.timestamp}`;
-      console.log("[copyEntireChat] Formatting chat", { chatId, turnsCount: chat.turns?.length });
+      console.log("[copyEntireChat] Formatting chat", {
+        chatId,
+        turnsCount: chat.turns?.length,
+      });
       const formattedText = formatChatForCopy(chat);
-      console.log("[copyEntireChat] Formatted text length", { chatId, textLength: formattedText.length });
+      console.log("[copyEntireChat] Formatted text length", {
+        chatId,
+        textLength: formattedText.length,
+      });
       await copyToClipboard(formattedText, chatId);
       console.log("[copyEntireChat] Success", { chatId });
     } catch (err) {
@@ -1131,26 +1364,44 @@ function App() {
     setIsSearching(false);
     setPaginationLoading(true);
     try {
-      const loadResult = await app.callServerTool({
+      const loadResult = (await app.callServerTool({
         name: "loadMyChats",
-        arguments: { page: 0, size: 10, aboveTheFoldOnly: true, widgetVersion: WIDGET_VERSION },
-      }) as ChatVaultToolResult | null;
+        arguments: {
+          page: 0,
+          size: 10,
+          aboveTheFoldOnly: true,
+          widgetVersion: WIDGET_VERSION,
+        },
+      })) as ChatVaultToolResult | null;
       if (loadResult?.structuredContent?.chats) {
-        setChats(deduplicateChats(loadResult.structuredContent.chats as Chat[]));
-        setPagination((loadResult.structuredContent.pagination as Pagination) ?? null);
+        setChats(
+          deduplicateChats(loadResult.structuredContent.chats as Chat[]),
+        );
+        setPagination(
+          (loadResult.structuredContent.pagination as Pagination) ?? null,
+        );
         setCurrentPage(0);
         setPageInputValue("1");
         if (loadResult.structuredContent.userInfo) {
           setUserInfo(loadResult.structuredContent.userInfo as UserInfo);
-          addLog("UserInfo updated after save", loadResult.structuredContent.userInfo);
+          addLog(
+            "UserInfo updated after save",
+            loadResult.structuredContent.userInfo,
+          );
         }
         if (loadResult.structuredContent.content) {
-          setContentMetadata(loadResult.structuredContent.content as ContentMetadata);
+          setContentMetadata(
+            loadResult.structuredContent.content as ContentMetadata,
+          );
         }
       }
     } catch (err) {
-      addLog("Error reloading chats after manual save", { error: err instanceof Error ? err.message : String(err) });
-      setError(`Failed to reload chats: ${err instanceof Error ? err.message : String(err)}`);
+      addLog("Error reloading chats after manual save", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      setError(
+        `Failed to reload chats: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setPaginationLoading(false);
     }
@@ -1195,13 +1446,22 @@ function App() {
       });
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000);
+        setTimeout(
+          () => reject(new Error("Request timed out after 30 seconds")),
+          30000,
+        );
       });
 
-      const callToolPromise = app.callServerTool({ name: "widgetAdd", arguments: toolArgs });
+      const callToolPromise = app.callServerTool({
+        name: "widgetAdd",
+        arguments: toolArgs,
+      });
 
       addLog("⏳ [WIDGET] Waiting for response...");
-      const result = await Promise.race([callToolPromise, timeoutPromise]) as ChatVaultToolResult;
+      const result = (await Promise.race([
+        callToolPromise,
+        timeoutPromise,
+      ])) as ChatVaultToolResult;
       addLog("✅ [WIDGET] Response received");
 
       addLog("📥 [WIDGET] Manual save result received", {
@@ -1220,24 +1480,49 @@ function App() {
       }
 
       if (result?.error) {
-        const errorMessage = result.error.message || result.error?.data || result.error || "Unknown error occurred";
-        addLog("❌ [WIDGET] Error found in result.error", { error: result.error, errorMessage });
+        const errorMessage =
+          result.error.message ||
+          result.error?.data ||
+          result.error ||
+          "Unknown error occurred";
+        addLog("❌ [WIDGET] Error found in result.error", {
+          error: result.error,
+          errorMessage,
+        });
         throw new Error(String(errorMessage));
       }
 
       if (result?.jsonrpc === "2.0" && result?.error) {
-        const errorMessage = (typeof result.error === "object" && result.error && "message" in result.error
-          ? (result.error as { message?: string }).message
-          : result.error) || result.error?.data || "Unknown error occurred";
-        addLog("❌ [WIDGET] JSON-RPC error found", { error: result.error, errorMessage });
+        const errorMessage =
+          (typeof result.error === "object" &&
+          result.error &&
+          "message" in result.error
+            ? (result.error as { message?: string }).message
+            : result.error) ||
+          result.error?.data ||
+          "Unknown error occurred";
+        addLog("❌ [WIDGET] JSON-RPC error found", {
+          error: result.error,
+          errorMessage,
+        });
         throw new Error(String(errorMessage));
       }
 
-      if (result?.content && Array.isArray(result.content) && result.content.length > 0) {
-        const firstContent = result.content[0] as { type?: string; text?: string } | undefined;
+      if (
+        result?.content &&
+        Array.isArray(result.content) &&
+        result.content.length > 0
+      ) {
+        const firstContent = result.content[0] as
+          | { type?: string; text?: string }
+          | undefined;
         if (firstContent && "text" in firstContent && firstContent.text) {
           const text = firstContent.text;
-          if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed") || text.toLowerCase().includes("could not parse")) {
+          if (
+            text.toLowerCase().includes("error") ||
+            text.toLowerCase().includes("failed") ||
+            text.toLowerCase().includes("could not parse")
+          ) {
             addLog("❌ [WIDGET] Error text found in content", { text });
             throw new Error(text);
           }
@@ -1246,17 +1531,24 @@ function App() {
 
       if (result?.structuredContent) {
         if (result.structuredContent.error === "limit_reached") {
-          const message = result.structuredContent.message || "Chat limit reached";
+          const message =
+            result.structuredContent.message || "Chat limit reached";
           const portalLink = result.structuredContent.portalLink;
           addLog("❌ [WIDGET] Limit reached error", { message, portalLink });
           closeModalAndResetForm();
           setAlertMessage(message);
-          setAlertPortalLink(typeof portalLink === "string" ? portalLink : null);
+          setAlertPortalLink(
+            typeof portalLink === "string" ? portalLink : null,
+          );
           return;
         }
 
         if (result.structuredContent.error === "server_error") {
-          const message = (typeof result.structuredContent.message === "string" ? result.structuredContent.message : "An error occurred while saving the chat") as string;
+          const message = (
+            typeof result.structuredContent.message === "string"
+              ? result.structuredContent.message
+              : "An error occurred while saving the chat"
+          ) as string;
           addLog("❌ [WIDGET] Server error in structuredContent", { message });
           closeModalAndResetForm();
           setAlertMessage(message);
@@ -1266,8 +1558,14 @@ function App() {
 
         if (result.structuredContent.error) {
           const errObj = result.structuredContent.error;
-          const errorMessage = (typeof errObj === "object" && errObj && "message" in errObj ? (errObj as { message?: string }).message : String(errObj)) || "Unknown error occurred";
-          addLog("❌ [WIDGET] Error found in structuredContent.error", { error: result.structuredContent.error, errorMessage });
+          const errorMessage =
+            (typeof errObj === "object" && errObj && "message" in errObj
+              ? (errObj as { message?: string }).message
+              : String(errObj)) || "Unknown error occurred";
+          addLog("❌ [WIDGET] Error found in structuredContent.error", {
+            error: result.structuredContent.error,
+            errorMessage,
+          });
           throw new Error(String(errorMessage));
         }
       }
@@ -1282,13 +1580,19 @@ function App() {
       }
 
       // Async path: jobId returned, poll for completion
-      const jobId = typeof result?.structuredContent?.jobId === "string" ? result.structuredContent.jobId : undefined;
+      const jobId =
+        typeof result?.structuredContent?.jobId === "string"
+          ? result.structuredContent.jobId
+          : undefined;
       if (!jobId) {
         addLog("❌ [WIDGET] No jobId or chatId in successful response");
         throw new Error("Save queued but no job ID received");
       }
 
-      addLog("✅ [WIDGET] Job queued, closing modal and polling for completion", { jobId });
+      addLog(
+        "✅ [WIDGET] Job queued, closing modal and polling for completion",
+        { jobId },
+      );
 
       // Close modal immediately, show success alert, start polling
       closeModalAndResetForm();
@@ -1300,21 +1604,38 @@ function App() {
       const startTime = Date.now();
       let pollCount = 0;
 
-      const pollStatus = async (): Promise<{ status: string; chatId?: string; error?: string } | null> => {
+      const pollStatus = async (): Promise<{
+        status: string;
+        chatId?: string;
+        error?: string;
+      } | null> => {
         if (pollCount === 0) {
-          addLog("First poll: calling getChatSaveJobStatus with jobId", { jobId, jobIdLength: jobId.length });
+          addLog("First poll: calling getChatSaveJobStatus with jobId", {
+            jobId,
+            jobIdLength: jobId.length,
+          });
         }
         pollCount += 1;
-        const statusResult = await app.callServerTool({
+        const statusResult = (await app.callServerTool({
           name: "getChatSaveJobStatus",
           arguments: { jobId },
-        }) as ChatVaultToolResult | null;
-        const statusSc = statusResult?.structuredContent as { status?: string; chatId?: string; error?: string } | undefined;
+        })) as ChatVaultToolResult | null;
+        const statusSc = statusResult?.structuredContent as
+          | { status?: string; chatId?: string; error?: string }
+          | undefined;
         if (!statusSc || typeof statusSc.status !== "string") return null;
-        return { status: statusSc.status, chatId: statusSc.chatId, error: statusSc.error };
+        return {
+          status: statusSc.status,
+          chatId: statusSc.chatId,
+          error: statusSc.error,
+        };
       };
 
-      let statusResult: { status: string; chatId?: string; error?: string } | null = null;
+      let statusResult: {
+        status: string;
+        chatId?: string;
+        error?: string;
+      } | null = null;
       while (Date.now() - startTime < POLL_TIMEOUT_MS) {
         statusResult = await pollStatus();
         if (statusResult?.status === "completed") {
@@ -1333,7 +1654,9 @@ function App() {
           addLog("⚠️ [WIDGET] Job status expired (key TTL)");
           setPendingAddJobId(null);
           setAddSuccessAlert(null);
-          setAlertMessage("Save is still processing. Please refresh in a moment to see your chat.");
+          setAlertMessage(
+            "Save is still processing. Please refresh in a moment to see your chat.",
+          );
           setAlertPortalLink(null);
           return;
         }
@@ -1343,7 +1666,9 @@ function App() {
       if (statusResult?.status !== "completed") {
         setPendingAddJobId(null);
         setAddSuccessAlert(null);
-        setAlertMessage("Save is taking longer than expected. Please refresh in a moment to check.");
+        setAlertMessage(
+          "Save is taking longer than expected. Please refresh in a moment to check.",
+        );
         setAlertPortalLink(null);
         return;
       }
@@ -1360,8 +1685,17 @@ function App() {
       } else if (typeof err === "string") {
         errorMessage = err;
       } else if (err && typeof err === "object" && err !== null) {
-        const o = err as { message?: string; name?: string; stack?: string; error?: { message?: string } | string };
-        errorMessage = o.message || (typeof o.error === "object" && o.error?.message) || (typeof o.error === "string" ? o.error : "") || JSON.stringify(err);
+        const o = err as {
+          message?: string;
+          name?: string;
+          stack?: string;
+          error?: { message?: string } | string;
+        };
+        errorMessage =
+          o.message ||
+          (typeof o.error === "object" && o.error?.message) ||
+          (typeof o.error === "string" ? o.error : "") ||
+          JSON.stringify(err);
       }
 
       addLog("❌ [WIDGET] Manual save failed", {
@@ -1370,7 +1704,10 @@ function App() {
         errorString: String(err),
       });
       closeModalAndResetForm();
-      setAlertMessage(errorMessage || "Failed to save chat. Please check the debug panel for details.");
+      setAlertMessage(
+        errorMessage ||
+          "Failed to save chat. Please check the debug panel for details.",
+      );
       setAlertPortalLink(null);
     }
   };
@@ -1411,7 +1748,9 @@ function App() {
       addLog("Search result", result);
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-        setPagination((result.structuredContent.pagination as Pagination) ?? null);
+        setPagination(
+          (result.structuredContent.pagination as Pagination) ?? null,
+        );
         setCurrentPage(page);
         setPageInputValue(String(page + 1));
       }
@@ -1421,7 +1760,7 @@ function App() {
       setError(
         errorMessage.includes("Not connected")
           ? "Connection lost. Reopen the chat to reconnect."
-          : `Search failed: ${errorMessage}`
+          : `Search failed: ${errorMessage}`,
       );
     } finally {
       setSearchLoading(false);
@@ -1437,18 +1776,27 @@ function App() {
     addLog("Clearing search, reloading chats");
 
     try {
-      const result = await app.callServerTool({
+      const result = (await app.callServerTool({
         name: "loadMyChats",
-        arguments: { page: 0, size: 10, aboveTheFoldOnly: true, widgetVersion: WIDGET_VERSION },
-      }) as ChatVaultToolResult | null;
+        arguments: {
+          page: 0,
+          size: 10,
+          aboveTheFoldOnly: true,
+          widgetVersion: WIDGET_VERSION,
+        },
+      })) as ChatVaultToolResult | null;
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-        setPagination((result.structuredContent.pagination as Pagination) ?? null);
+        setPagination(
+          (result.structuredContent.pagination as Pagination) ?? null,
+        );
         setCurrentPage(0);
         setPageInputValue("1");
       }
     } catch (err) {
-        addLog("Error reloading chats", { error: err instanceof Error ? err.message : String(err) });
+      addLog("Error reloading chats", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setPaginationLoading(false);
     }
@@ -1463,7 +1811,7 @@ function App() {
 
     try {
       if (isSearching && searchQuery) {
-        const result = await app.callServerTool({
+        const result = (await app.callServerTool({
           name: "loadMyChats",
           arguments: {
             query: searchQuery.trim(),
@@ -1472,16 +1820,18 @@ function App() {
             aboveTheFoldOnly: true,
             widgetVersion: WIDGET_VERSION,
           },
-        }) as ChatVaultToolResult | null;
+        })) as ChatVaultToolResult | null;
         if (result?.structuredContent?.chats) {
           const newChats = result.structuredContent.chats as Chat[];
           setChats((prev) => deduplicateChats([...prev, ...newChats]));
-          setPagination((result.structuredContent.pagination as Pagination) ?? null);
+          setPagination(
+            (result.structuredContent.pagination as Pagination) ?? null,
+          );
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
       } else {
-        const result = await app.callServerTool({
+        const result = (await app.callServerTool({
           name: "loadMyChats",
           arguments: {
             page: nextPage,
@@ -1489,17 +1839,21 @@ function App() {
             aboveTheFoldOnly: true,
             widgetVersion: WIDGET_VERSION,
           },
-        }) as ChatVaultToolResult | null;
+        })) as ChatVaultToolResult | null;
         if (result?.structuredContent?.chats) {
           const newChats = result.structuredContent.chats as Chat[];
           setChats((prev) => deduplicateChats([...prev, ...newChats]));
-          setPagination((result.structuredContent.pagination as Pagination) ?? null);
+          setPagination(
+            (result.structuredContent.pagination as Pagination) ?? null,
+          );
           setCurrentPage(nextPage);
           setPageInputValue(String(nextPage + 1));
         }
       }
     } catch (err) {
-      addLog("Error loading more chats", { error: err instanceof Error ? err.message : String(err) });
+      addLog("Error loading more chats", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setLoading(false);
     }
@@ -1522,9 +1876,21 @@ function App() {
 
   // SVG logo component
   const ChatVaultLogo = () => (
-    <svg width="64" height="64" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width="64"
+      height="64"
+      viewBox="0 0 1024 1024"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A" />
-      <circle cx="512" cy="512" r="300" fill="none" stroke="#E5E7EB" strokeWidth="80" />
+      <circle
+        cx="512"
+        cy="512"
+        r="300"
+        fill="none"
+        stroke="#E5E7EB"
+        strokeWidth="80"
+      />
       <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB" />
       <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB" />
       <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB" />
@@ -1539,64 +1905,78 @@ function App() {
 
   if (loading && chats.length === 0) {
     return (
-      <div className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${isDarkMode
-        ? "bg-gray-900 border-gray-700 text-white"
-        : "bg-white border-black/10 text-black"
-        }`}>
+      <div
+        className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${
+          isDarkMode
+            ? "bg-gray-900 border-gray-700 text-white"
+            : "bg-white border-black/10 text-black"
+        }`}
+      >
         <div className="text-center text-sm opacity-60">Loading chats...</div>
       </div>
     );
   }
 
   return (
-    <div className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-hidden ${isDarkMode
-      ? "bg-gray-900 border-gray-700 text-white"
-      : "bg-white border-black/10 text-black"
-      }`}>
+    <div
+      className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-hidden ${
+        isDarkMode
+          ? "bg-gray-900 border-gray-700 text-white"
+          : "bg-white border-black/10 text-black"
+      }`}
+    >
       <div className="max-w-full relative">
         {/* Toolbar */}
-        <div className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${isDarkMode ? "border-gray-700" : "border-black/5"
-          }`}>
+        <div
+          className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${
+            isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}
+        >
           <div className="flex items-center gap-2">
-
             {selectedChat ? (
               <button
                 onClick={handleBackClick}
-                className={`p-2 rounded-lg ${isDarkMode
-                  ? "bg-gray-800 text-white hover:bg-gray-700"
-                  : "bg-gray-100 text-black hover:bg-gray-200"
-                  }`}
+                className={`p-2 rounded-lg ${
+                  isDarkMode
+                    ? "bg-gray-800 text-white hover:bg-gray-700"
+                    : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
                 title="Back"
               >
                 <MdArrowBack className="w-5 h-5" />
               </button>
-            ) :
+            ) : (
               <button
                 onClick={handleRefresh}
                 disabled={loading}
-                className={`p-2 rounded-lg transition-colors ${loading
-                  ? "opacity-50 cursor-not-allowed"
-                  : isDarkMode
-                    ? "hover:bg-gray-800 text-gray-300"
-                    : "hover:bg-gray-100 text-gray-600"
-                  }`}
+                className={`p-2 rounded-lg transition-colors ${
+                  loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                      ? "hover:bg-gray-800 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                }`}
                 title="Refresh chats"
               >
                 {loading ? (
-                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${isDarkMode ? "border-gray-300" : "border-gray-600"}`} />
+                  <div
+                    className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${isDarkMode ? "border-gray-300" : "border-gray-600"}`}
+                  />
                 ) : (
                   <MdRefresh className="w-5 h-5" />
                 )}
-              </button>}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {userInfo?.userName && !userInfo?.isAnon ? (
               <button
                 onClick={handleOpenWebsite}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${isDarkMode
-                  ? "text-gray-300 hover:text-gray-200 hover:bg-gray-800"
-                  : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-                  }`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  isDarkMode
+                    ? "text-gray-300 hover:text-gray-200 hover:bg-gray-800"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                }`}
                 title="Open on the website"
               >
                 {userInfo.userName}
@@ -1604,50 +1984,63 @@ function App() {
             ) : userInfo?.isAnonymousPlan && userInfo?.portalLink ? (
               <button
                 onClick={handleSignIn}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${isDarkMode
-                  ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
-                  : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
-                  }`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
+                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
                 title="Sign in for long-term persistence"
               >
                 <MdLogin className="w-4 h-4" />
                 <span>Sign In</span>
               </button>
             ) : null}
-            {userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined && (
-              <button
-                onClick={handleCounterClick}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkMode
-                  ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
-                  : "bg-white border-gray-300 hover:bg-gray-50"
-                  } ${userInfo.remainingSlots === 0
-                    ? "text-red-500"
-                    : userInfo.remainingSlots === 1
-                      ? "text-yellow-500"
-                      : "text-green-500"
+            {userInfo?.isAnonymousPlan &&
+              userInfo.remainingSlots !== undefined && (
+                <button
+                  onClick={handleCounterClick}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    isDarkMode
+                      ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
+                      : "bg-white border-gray-300 hover:bg-gray-50"
+                  } ${
+                    userInfo.remainingSlots === 0
+                      ? "text-red-500"
+                      : userInfo.remainingSlots === 1
+                        ? "text-yellow-500"
+                        : "text-green-500"
                   }`}
-                title={contentMetadata?.limits?.counterTooltip ?? "Click to learn about chat limits"}
-              >
-                {userInfo.remainingSlots}
-              </button>
-            )}
+                  title={
+                    contentMetadata?.limits?.counterTooltip ??
+                    "Click to learn about chat limits"
+                  }
+                >
+                  {userInfo.remainingSlots}
+                </button>
+              )}
             <button
               onClick={handleOpenWebsite}
-              className={`p-2 rounded-lg transition-colors ${isDarkMode
-                ? "hover:bg-gray-800 text-gray-300"
-                : "hover:bg-gray-100 text-gray-600"
-                }`}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              }`}
               title="Open on the website"
             >
               <MdOpenInNew className="w-5 h-5" />
             </button>
             <button
               onClick={handleFullscreen}
-              className={`p-2 rounded-lg transition-colors ${isDarkMode
-                ? "hover:bg-gray-800 text-gray-300"
-                : "hover:bg-gray-100 text-gray-600"
-                }`}
-              title={displayMode === "fullscreen" ? "Exit fullscreen" : "Enter fullscreen"}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              }`}
+              title={
+                displayMode === "fullscreen"
+                  ? "Exit fullscreen"
+                  : "Enter fullscreen"
+              }
             >
               {displayMode === "fullscreen" ? (
                 <MdFullscreenExit className="w-5 h-5" />
@@ -1660,28 +2053,36 @@ function App() {
         {/* Delete Confirmation Modal - Centered Overlay */}
         {deleteConfirmation && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 min-h-screen">
-            <div className={`w-full max-w-md rounded-lg ${isDarkMode ? "bg-gray-800" : "bg-white"
-              } p-6 shadow-xl`}>
-              <div className={`text-sm mb-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"
-                }`}>
+            <div
+              className={`w-full max-w-md rounded-lg ${
+                isDarkMode ? "bg-gray-800" : "bg-white"
+              } p-6 shadow-xl`}
+            >
+              <div
+                className={`text-sm mb-4 ${
+                  isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}
+              >
                 {alertMessage}
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={handleCancelDelete}
-                  className={`px-4 py-2 rounded text-sm font-medium ${isDarkMode
-                    ? "bg-gray-700 text-white hover:bg-gray-600"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className={`px-4 py-2 rounded text-sm font-medium ${isDarkMode
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-red-500 text-white hover:bg-red-600"
-                    }`}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-red-500 text-white hover:bg-red-600"
+                  }`}
                 >
                   Delete
                 </button>
@@ -1693,18 +2094,24 @@ function App() {
         {/* Success Alert - Dismissible OK after widgetAdd started */}
         {addSuccessAlert && (
           <div
-            className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${isDarkMode ? "bg-gray-800 border-blue-600" : "bg-blue-50 border-blue-200"
-              }`}
+            className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
+              isDarkMode
+                ? "bg-gray-800 border-blue-600"
+                : "bg-blue-50 border-blue-200"
+            }`}
           >
-            <div className={`flex-1 text-sm ${isDarkMode ? "text-gray-200" : "text-blue-900"}`}>
+            <div
+              className={`flex-1 text-sm ${isDarkMode ? "text-gray-200" : "text-blue-900"}`}
+            >
               {addSuccessAlert}
             </div>
             <button
               onClick={() => setAddSuccessAlert(null)}
-              className={`px-3 py-1.5 rounded text-sm font-medium ${isDarkMode
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
+              className={`px-3 py-1.5 rounded text-sm font-medium ${
+                isDarkMode
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
             >
               OK
             </button>
@@ -1714,145 +2121,218 @@ function App() {
         {/* Work-in-Progress Indicator - Non-dismissible while polling */}
         {pendingAddJobId && (
           <div
-            className={`flex items-center gap-3 p-3 rounded-lg border mb-2 ${isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
-              }`}
+            className={`flex items-center gap-3 p-3 rounded-lg border mb-2 ${
+              isDarkMode
+                ? "bg-gray-800 border-gray-600"
+                : "bg-gray-50 border-gray-200"
+            }`}
           >
-            <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0 ${isDarkMode ? "border-gray-300" : "border-gray-600"}`} />
-            <div className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <div
+              className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0 ${isDarkMode ? "border-gray-300" : "border-gray-600"}`}
+            />
+            <div
+              className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}
+            >
               Processing...
             </div>
           </div>
         )}
 
         {/* Alert Area - Regular alerts (not delete confirmation) */}
-        {alertMessage && !deleteConfirmation && (() => {
-          console.log("[ChatVault] Rendering alert", { alertMessage, alertPortalLink });
-          return (
-            <div
-              className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200"
-                } ${userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined
-                  ? userInfo.remainingSlots === 0
-                    ? "border-red-500"
-                    : userInfo.remainingSlots === 1
-                      ? "border-yellow-500"
-                      : "border-green-500"
-                  : "border-gray-300"
-                }`}>
-              <div className={`flex-1 text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
-                }`}>
-                {alertMessage}
-                {alertPortalLink && (
-                  <> Click <button
-                    onClick={handleAlertPortalClick}
-                    className={`underline font-medium ${isDarkMode
-                      ? "text-blue-400 hover:text-blue-300"
-                      : "text-blue-600 hover:text-blue-700"
-                      }`}
-                  >
-                    here
-                  </button> to manage your account settings.</>
-                )}
-              </div>
-              <button
-                onClick={handleCloseAlert}
-                className={`p-1 rounded ${isDarkMode
-                  ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-                  }`}
-                title="Close"
-              >
-                <MdClose className="w-4 h-4" />
-              </button>
-            </div>
-          );
-        })()}
-        {/* Header */}
-        {!showHelp && <div className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${isDarkMode ? "border-gray-700" : "border-black/5"
-          }`}>
-          <div
-            className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${selectedChat ? "cursor-pointer hover:opacity-80" : ""
-              }`}
-            onClick={selectedChat ? handleBackClick : undefined}
-            title={selectedChat ? "Back to conversations" : undefined}
-          >
-            <ChatVaultLogo />
-          </div>
-          <div className="flex-1">
-            <div
-              className={`text-base sm:text-xl font-medium ${selectedChat ? "cursor-pointer hover:opacity-80" : ""
+        {alertMessage &&
+          !deleteConfirmation &&
+          (() => {
+            console.log("[ChatVault] Rendering alert", {
+              alertMessage,
+              alertPortalLink,
+            });
+            return (
+              <div
+                className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600"
+                    : "bg-gray-50 border-gray-200"
+                } ${
+                  userInfo?.isAnonymousPlan &&
+                  userInfo.remainingSlots !== undefined
+                    ? userInfo.remainingSlots === 0
+                      ? "border-red-500"
+                      : userInfo.remainingSlots === 1
+                        ? "border-yellow-500"
+                        : "border-green-500"
+                    : "border-gray-300"
                 }`}
+              >
+                <div
+                  className={`flex-1 text-sm ${
+                    isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  {alertMessage}
+                  {alertPortalLink && (
+                    <>
+                      {" "}
+                      Click{" "}
+                      <button
+                        onClick={handleAlertPortalClick}
+                        className={`underline font-medium ${
+                          isDarkMode
+                            ? "text-blue-400 hover:text-blue-300"
+                            : "text-blue-600 hover:text-blue-700"
+                        }`}
+                      >
+                        here
+                      </button>{" "}
+                      to manage your account settings.
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={handleCloseAlert}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                  }`}
+                  title="Close"
+                >
+                  <MdClose className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })()}
+        {/* Header */}
+        {!showHelp && (
+          <div
+            className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
+              isDarkMode ? "border-gray-700" : "border-black/5"
+            }`}
+          >
+            <div
+              className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${
+                selectedChat ? "cursor-pointer hover:opacity-80" : ""
+              }`}
               onClick={selectedChat ? handleBackClick : undefined}
               title={selectedChat ? "Back to conversations" : undefined}
             >
-              The Chat Vault
+              <ChatVaultLogo />
             </div>
-            <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-              {selectedChat ? (
-                selectedChat.title
-              ) : contentMetadata?.subTitle ? (
-                <span
-                  onClick={() => {
-                    if (contentMetadata.subTitle && contentMetadata.subTitle.length > 64) {
-                      setSubTitleExpanded(!subTitleExpanded);
-                    }
-                  }}
-                  className={contentMetadata.subTitle.length > 64 ? "cursor-pointer hover:opacity-80" : ""}
-                  title={contentMetadata.subTitle.length > 64 ? (subTitleExpanded ? "Click to collapse" : "Click to expand") : ""}
-                >
-                  {subTitleExpanded || contentMetadata.subTitle.length <= 64
-                    ? contentMetadata.subTitle
-                    : `${contentMetadata.subTitle.substring(0, 64)}...`}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                // Check if limit reached for users on anonymous plan
-                if (userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0) {
-                  const maxChats = userInfo.totalChats !== undefined && userInfo.remainingSlots !== undefined
-                    ? userInfo.totalChats + userInfo.remainingSlots
-                    : (contentMetadata?.config?.freeChatLimit ?? 10);
-                  const messageTemplate = userInfo.portalLink
-                    ? (contentMetadata?.limits?.limitReachedMessageWithPortal ?? "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.")
-                    : (contentMetadata?.limits?.limitReachedMessageWithoutPortal ?? "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.");
-                  const message = messageTemplate.replace(/{maxChats}/g, String(maxChats));
-                  setAlertMessage(message);
-                  setAlertPortalLink(userInfo.portalLink || null);
-                  return;
-                }
-                // Clear alert when opening save modal
-                setAlertMessage(null);
-                setAlertPortalLink(null);
-                setShowManualSaveModal(true);
-              }}
-              disabled={paginationLoading || searchLoading || !!pendingAddJobId}
-              className={`p-2 rounded-lg transition-colors ${paginationLoading || searchLoading || pendingAddJobId
-                ? "opacity-50 cursor-not-allowed"
-                : ""
-                } ${userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
-                  ? "hover:bg-gray-100"
-                  : isDarkMode
-                    ? "bg-gray-800 text-white hover:bg-gray-700"
-                    : "bg-gray-100 text-black hover:bg-gray-200"
+            <div className="flex-1">
+              <div
+                className={`text-base sm:text-xl font-medium ${
+                  selectedChat ? "cursor-pointer hover:opacity-80" : ""
                 }`}
-              title={userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
-                ? (contentMetadata?.limits?.limitReachedTooltip ?? "Chat limit reached - delete a chat or upgrade")
-                : "Save chat manually"}
-            >
-              <MdAdd className={`w-5 h-5 ${userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
-                ? "text-red-500"
-                : ""
-                }`} />
-            </button>
-
+                onClick={selectedChat ? handleBackClick : undefined}
+                title={selectedChat ? "Back to conversations" : undefined}
+              >
+                The Chat Vault
+              </div>
+              <div
+                className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+              >
+                {selectedChat ? (
+                  selectedChat.title
+                ) : contentMetadata?.subTitle ? (
+                  <span
+                    onClick={() => {
+                      if (
+                        contentMetadata.subTitle &&
+                        contentMetadata.subTitle.length > 64
+                      ) {
+                        setSubTitleExpanded(!subTitleExpanded);
+                      }
+                    }}
+                    className={
+                      contentMetadata.subTitle.length > 64
+                        ? "cursor-pointer hover:opacity-80"
+                        : ""
+                    }
+                    title={
+                      contentMetadata.subTitle.length > 64
+                        ? subTitleExpanded
+                          ? "Click to collapse"
+                          : "Click to expand"
+                        : ""
+                    }
+                  >
+                    {subTitleExpanded || contentMetadata.subTitle.length <= 64
+                      ? contentMetadata.subTitle
+                      : `${contentMetadata.subTitle.substring(0, 64)}...`}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  // Check if limit reached for users on anonymous plan
+                  if (
+                    userInfo?.isAnonymousPlan &&
+                    userInfo.remainingSlots === 0
+                  ) {
+                    const maxChats =
+                      userInfo.totalChats !== undefined &&
+                      userInfo.remainingSlots !== undefined
+                        ? userInfo.totalChats + userInfo.remainingSlots
+                        : (contentMetadata?.config?.freeChatLimit ?? 10);
+                    const messageTemplate = userInfo.portalLink
+                      ? (contentMetadata?.limits
+                          ?.limitReachedMessageWithPortal ??
+                        "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.")
+                      : (contentMetadata?.limits
+                          ?.limitReachedMessageWithoutPortal ??
+                        "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.");
+                    const message = messageTemplate.replace(
+                      /{maxChats}/g,
+                      String(maxChats),
+                    );
+                    setAlertMessage(message);
+                    setAlertPortalLink(userInfo.portalLink || null);
+                    return;
+                  }
+                  // Clear alert when opening save modal
+                  setAlertMessage(null);
+                  setAlertPortalLink(null);
+                  setShowManualSaveModal(true);
+                }}
+                disabled={
+                  paginationLoading || searchLoading || !!pendingAddJobId
+                }
+                className={`p-2 rounded-lg transition-colors ${
+                  paginationLoading || searchLoading || pendingAddJobId
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                } ${
+                  userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                    ? "hover:bg-gray-100"
+                    : isDarkMode
+                      ? "bg-gray-800 text-white hover:bg-gray-700"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title={
+                  userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                    ? (contentMetadata?.limits?.limitReachedTooltip ??
+                      "Chat limit reached - delete a chat or upgrade")
+                    : "Save chat manually"
+                }
+              >
+                <MdAdd
+                  className={`w-5 h-5 ${
+                    userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                      ? "text-red-500"
+                      : ""
+                  }`}
+                />
+              </button>
+            </div>
           </div>
-        </div>}
+        )}
 
         {/* Search Box - Only show when not viewing a chat */}
         {!selectedChat && !showHelp && (
-          <div className={`border-b py-3 ${isDarkMode ? "border-gray-700" : "border-black/5"}`}>
+          <div
+            className={`border-b py-3 ${isDarkMode ? "border-gray-700" : "border-black/5"}`}
+          >
             <div className="flex items-center gap-2">
               <div className="flex-1 relative">
                 <input
@@ -1873,32 +2353,39 @@ function App() {
                     }
                   }}
                   placeholder="Search conversations..."
-                  className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${paginationLoading || searchLoading
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                    } ${isDarkMode
+                  className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${
+                    paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  } ${
+                    isDarkMode
                       ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
                       : "bg-white border-gray-300 text-black placeholder-gray-500"
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 />
                 {isSearching ? (
                   <button
                     onClick={handleClearSearch}
                     disabled={paginationLoading || searchLoading}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${paginationLoading || searchLoading
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                      } ${isDarkMode
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${
+                      paginationLoading || searchLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    } ${
+                      isDarkMode
                         ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                      }`}
+                    }`}
                     title="Clear search (Esc)"
                   >
                     <MdClose className="w-4 h-4" />
                   </button>
                 ) : (
-                  <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? "text-gray-400" : "text-gray-500"
-                    }`}>
+                  <div
+                    className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                      isDarkMode ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
                     <MdSearch className="w-4 h-4" />
                   </div>
                 )}
@@ -1914,13 +2401,20 @@ function App() {
                     await handleSearch(searchQuery, 0);
                   }
                 }}
-                disabled={(!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading}
-                className={`p-2 rounded-lg ${((!searchQuery.trim() && !isSearching) || searchLoading || paginationLoading)
-                  ? "opacity-50 cursor-not-allowed"
-                  : isDarkMode
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
+                disabled={
+                  (!searchQuery.trim() && !isSearching) ||
+                  searchLoading ||
+                  paginationLoading
+                }
+                className={`p-2 rounded-lg ${
+                  (!searchQuery.trim() && !isSearching) ||
+                  searchLoading ||
+                  paginationLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
                 title={isSearching ? "Clear search" : "Search"}
               >
                 {isSearching ? (
@@ -1934,744 +2428,1270 @@ function App() {
         )}
 
         {/* Content */}
-        {!showHelp && <div className="min-w-full text-sm flex flex-col py-8">
-          {selectedChat ? (
-            // Chat detail view
-            <div className="space-y-4 pb-20">
-              <div className={`p-4 rounded-lg ${isDarkMode ? "bg-gray-800" : "bg-gray-50"
-                }`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    {isEditingTitle ? (
-                      // Inline editing mode
-                      <div className="mb-1">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={editedTitle}
-                            onChange={(e) => setEditedTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleSaveTitle();
-                              } else if (e.key === "Escape") {
-                                e.preventDefault();
-                                handleCancelEditTitle();
-                              }
-                            }}
-                            disabled={isUpdatingTitle}
-                            autoFocus
-                            maxLength={2048}
-                            className={`flex-1 px-2 py-1 rounded border text-sm font-medium ${isUpdatingTitle
-                              ? "opacity-50 cursor-not-allowed"
-                              : ""
-                              } ${isDarkMode
-                                ? "bg-gray-700 border-gray-600 text-white"
-                                : "bg-white border-gray-300 text-black"
+        {!showHelp && (
+          <div className="min-w-full text-sm flex flex-col py-8">
+            {selectedChat ? (
+              // Chat detail view
+              <div className="space-y-4 pb-20">
+                <div
+                  className={`p-4 rounded-lg ${
+                    isDarkMode ? "bg-gray-800" : "bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      {isEditingTitle ? (
+                        // Inline editing mode
+                        <div className="mb-1">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editedTitle}
+                              onChange={(e) => setEditedTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveTitle();
+                                } else if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  handleCancelEditTitle();
+                                }
+                              }}
+                              disabled={isUpdatingTitle}
+                              autoFocus
+                              maxLength={2048}
+                              className={`flex-1 px-2 py-1 rounded border text-sm font-medium ${
+                                isUpdatingTitle
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              } ${
+                                isDarkMode
+                                  ? "bg-gray-700 border-gray-600 text-white"
+                                  : "bg-white border-gray-300 text-black"
                               } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                          />
-                          <button
-                            onClick={handleSaveTitle}
-                            disabled={isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${isUpdatingTitle || editedTitle.trim().length === 0 || editedTitle.trim().length > 2048
-                              ? "opacity-50 cursor-not-allowed"
-                              : isDarkMode
-                                ? "bg-green-600 text-white hover:bg-green-700"
-                                : "bg-green-600 text-white hover:bg-green-700"
+                            />
+                            <button
+                              onClick={handleSaveTitle}
+                              disabled={
+                                isUpdatingTitle ||
+                                editedTitle.trim().length === 0 ||
+                                editedTitle.trim().length > 2048
+                              }
+                              className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                isUpdatingTitle ||
+                                editedTitle.trim().length === 0 ||
+                                editedTitle.trim().length > 2048
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : isDarkMode
+                                    ? "bg-green-600 text-white hover:bg-green-700"
+                                    : "bg-green-600 text-white hover:bg-green-700"
                               }`}
-                            title="Save"
-                          >
-                            {isUpdatingTitle ? (
-                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <MdCheck className="w-3 h-3" />
-                            )}
-                          </button>
+                              title="Save"
+                            >
+                              {isUpdatingTitle ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <MdCheck className="w-3 h-3" />
+                              )}
+                            </button>
+                            <button
+                              onClick={handleCancelEditTitle}
+                              disabled={isUpdatingTitle}
+                              className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                isUpdatingTitle
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              }`}
+                              title="Cancel"
+                            >
+                              <MdClose className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {editedTitle.trim().length > 2048 && (
+                            <div
+                              className={`text-xs mt-1 ${isDarkMode ? "text-red-400" : "text-red-600"}`}
+                            >
+                              Title cannot exceed 2048 characters
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // Display mode
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="font-medium flex-1">
+                            {selectedChat.title}
+                          </div>
                           <button
-                            onClick={handleCancelEditTitle}
-                            disabled={isUpdatingTitle}
-                            className={`p-1 rounded flex items-center flex-shrink-0 ${isUpdatingTitle
-                              ? "opacity-50 cursor-not-allowed"
-                              : isDarkMode
+                            onClick={handleStartEditTitle}
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
+                              isDarkMode
                                 ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              }`}
-                            title="Cancel"
+                            }`}
+                            title="Edit title"
                           >
-                            <MdClose className="w-3 h-3" />
+                            <MdEdit className="w-3 h-3" />
                           </button>
                         </div>
-                        {editedTitle.trim().length > 2048 && (
-                          <div className={`text-xs mt-1 ${isDarkMode ? "text-red-400" : "text-red-600"}`}>
-                            Title cannot exceed 2048 characters
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      // Display mode
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="font-medium flex-1">{selectedChat.title}</div>
-                        <button
-                          onClick={handleStartEditTitle}
-                          className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
-                            ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                            }`}
-                          title="Edit title"
-                        >
-                          <MdEdit className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                    <div className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-
-                      <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                        {(() => {
-                          const currentTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
-                          return currentTurns.length === 1 && !currentTurns[0]?.response;
-                        })() ? (
-                          <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
-                        ) : (
-                          <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
-                        )}
-                        {formatDate(selectedChat.timestamp)}
-                        {(() => {
-                          const currentTurns: { prompt: string; response: string }[] = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
-                          return currentTurns.length === 1 && !currentTurns[0]?.response;
-                        })() ? (
-                          " • Note"
-                        ) : (
-                          ` • ${(() => {
-                            const currentTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
-                            return currentTurns.length;
-                          })()} turn${(() => {
-                            const currentTurns = (editedTurns.length > 0 ? editedTurns : selectedChat.turns) ?? [];
-                            return currentTurns.length !== 1 ? "s" : "";
-                          })()}`
-                        )}
-                      </div>
-
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      copyEntireChat(selectedChat);
-                    }}
-                    className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
-                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                      }`}
-                    title="Copy entire chat"
-                  >
-                    {copiedItems[`chat-${selectedChat.timestamp}`] ? (
-                      <MdCheck className="w-3 h-3 text-green-500" />
-                    ) : (
-                      <MdContentCopy className="w-3 h-3" />
-                    )}
-                  </button>
-                  {hasUnsavedChanges && (
-                    <button
-                      onClick={handleSaveChat}
-                      disabled={isSavingChat}
-                      className={`p-1 rounded flex items-center flex-shrink-0 ${isSavingChat
-                        ? "opacity-50 cursor-not-allowed"
-                        : isDarkMode
-                          ? "bg-green-600 text-white hover:bg-green-700"
-                          : "bg-green-600 text-white hover:bg-green-700"
-                        }`}
-                      title="Save changes"
-                    >
-                      {isSavingChat ? (
-                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <MdCheck className="w-3 h-3" />
                       )}
-                    </button>
-                  )}
-                </div>
-
-              {(() => {
-                const chat = selectedChat!;
-                const isNoteView = (chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response;
-                const turns = (editedTurns.length > 0 ? editedTurns : (chat.turns ?? [])) ?? [];
-                const chatTurnsJsx = turns.map((turn, index) => {
-                  const isExpanded = expandedTurns.has(index);
-                  const turnId = `${chat.id}-${index}`;
-                  const promptId = `prompt-${chat.timestamp}-${index}`;
-                  const responseId = `response-${chat.timestamp}-${index}`;
-                  const promptCopied = !!copiedItems[promptId];
-                  const responseCopied = !!copiedItems[responseId];
-                  const maxLength = 150;
-                  const promptNeedsTruncation = !turn.truncated && turn.prompt.length > maxLength;
-                  const responseNeedsTruncation = !turn.truncated && turn.response.length > maxLength;
-                  const needsExpansion = turn.truncated || promptNeedsTruncation || responseNeedsTruncation;
-                  const isLoadingTurn = loadingTurnIds.has(turnId);
-                  const fullContent = fullTurnContent[turnId];
-                  const displayPrompt = isExpanded && fullContent ? fullContent.prompt : (isExpanded ? turn.prompt : (turn.truncated ? turn.prompt : truncateText(turn.prompt)));
-                  const displayResponse = isExpanded && fullContent ? fullContent.response : (isExpanded ? turn.response : (turn.truncated ? turn.response : truncateText(turn.response)));
-                  const isEditingPrompt = editingTurn?.turnIndex === index && editingTurn?.field === 'prompt';
-                  const isEditingResponse = editingTurn?.turnIndex === index && editingTurn?.field === 'response';
-                  return (
-                    <div key={index} className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"}`}>
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}>Prompt</div>
-                          <div className="flex items-center gap-1">
-                            {!isEditingPrompt && (
-                              <>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyTurnField(index, "prompt", promptId); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Copy prompt">
-                                  {promptCopied ? <MdCheck className="w-3 h-3 text-green-500" /> : <MdContentCopy className="w-3 h-3" />}
-                                </button>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartEditTurn(index, 'prompt'); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Edit prompt"><MdEdit className="w-3 h-3" /></button>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTurn(index); }} disabled={editedTurns.length <= 1} className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}><MdDelete className="w-3 h-3" /></button>
-                              </>
-                            )}
-                            {needsExpansion && !isEditingPrompt && (
-                              <button onClick={() => toggleTurnExpansion(index)} disabled={isLoadingTurn} className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={isExpanded ? "Collapse" : "Expand"}>
-                                {isLoadingTurn ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : (isExpanded ? <MdExpandLess className="w-3 h-3" /> : <MdExpandMore className="w-3 h-3" />)}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
-                          {isEditingPrompt ? (
-                            <div className="flex-1"><div className="flex items-center gap-2">
-                              <textarea value={editingTurnValue} onChange={(e) => setEditingTurnValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSaveTurnEdit(index, 'prompt'); } else if (e.key === "Escape") { e.preventDefault(); handleCancelEditTurn(); } }} autoFocus rows={4} className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`} />
-                              <button onClick={() => handleSaveTurnEdit(index, 'prompt')} disabled={editingTurnValue.trim().length === 0} className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`} title="Save (Ctrl+Enter)"><MdCheck className="w-3 h-3" /></button>
-                              <button onClick={handleCancelEditTurn} className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Cancel (Esc)"><MdClose className="w-3 h-3" /></button>
-                            </div></div>
+                      <div
+                        className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                      >
+                        <div
+                          className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                        >
+                          {(() => {
+                            const currentTurns =
+                              (editedTurns.length > 0
+                                ? editedTurns
+                                : selectedChat.turns) ?? [];
+                            return (
+                              currentTurns.length === 1 &&
+                              !currentTurns[0]?.response
+                            );
+                          })() ? (
+                            <MdNote
+                              className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`}
+                            />
                           ) : (
-                            <div className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`} onClick={needsExpansion && !isExpanded && !isLoadingTurn ? () => toggleTurnExpansion(index) : undefined} onMouseDown={(e) => { if (isExpanded) return; if (needsExpansion) e.preventDefault(); }} dangerouslySetInnerHTML={{ __html: markdownToHtml(displayPrompt) }} />
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${isDarkMode ? "text-green-400" : "text-green-600"}`}>Response</div>
-                          <div className="flex items-center gap-1">
-                            {!isEditingResponse && (
-                              <>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyTurnField(index, "response", responseId); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Copy response">
-                                  {responseCopied ? <MdCheck className="w-3 h-3 text-green-500" /> : <MdContentCopy className="w-3 h-3" />}
-                                </button>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStartEditTurn(index, 'response'); }} className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Edit response"><MdEdit className="w-3 h-3" /></button>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTurn(index); }} disabled={editedTurns.length <= 1} className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={editedTurns.length <= 1 ? "Cannot delete the last turn" : "Delete turn"}><MdDelete className="w-3 h-3" /></button>
-                              </>
-                            )}
-                            {needsExpansion && !isEditingResponse && (
-                              <button onClick={() => toggleTurnExpansion(index)} disabled={isLoadingTurn} className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title={isExpanded ? "Collapse" : "Expand"}>{isLoadingTurn ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : (isExpanded ? <MdExpandLess className="w-3 h-3" /> : <MdExpandMore className="w-3 h-3" />)}</button>
-                            )}
-                          </div>
-                        </div>
-                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
-                          {isEditingResponse ? (
-                            <div className="flex-1"><div className="flex items-center gap-2">
-                              <textarea value={editingTurnValue} onChange={(e) => setEditingTurnValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSaveTurnEdit(index, 'response'); } else if (e.key === "Escape") { e.preventDefault(); handleCancelEditTurn(); } }} autoFocus rows={4} className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`} />
-                              <button onClick={() => handleSaveTurnEdit(index, 'response')} disabled={editingTurnValue.trim().length === 0} className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`} title="Save (Ctrl+Enter)"><MdCheck className="w-3 h-3" /></button>
-                              <button onClick={handleCancelEditTurn} className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`} title="Cancel (Esc)"><MdClose className="w-3 h-3" /></button>
-                            </div></div>
-                          ) : (
-                            <div className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`} onClick={needsExpansion && !isExpanded && !isLoadingTurn ? () => toggleTurnExpansion(index) : undefined} onMouseDown={(e) => { if (isExpanded) return; if (needsExpansion) e.preventDefault(); }} dangerouslySetInnerHTML={{ __html: markdownToHtml(displayResponse) }} />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                });
-                if (isNoteView) {
-                  const noteTurns = turns;
-                  const noteTurn = noteTurns[0] as { prompt: string; response: string; truncated?: boolean };
-                  const noteIndex = 0;
-                  const noteTurnId = `${chat.id}-${noteIndex}`;
-                  const isExpanded = expandedTurns.has(noteIndex);
-                  const noteFullContent = fullTurnContent[noteTurnId];
-                  const noteLoading = loadingTurnIds.has(noteTurnId);
-                  const noteId = `note-${chat.timestamp}`;
-                  const noteCopied = !!copiedItems[noteId];
-                  const isEditingNote = editingTurn?.turnIndex === noteIndex && editingTurn?.field === 'prompt';
-                  const maxLength = 150;
-                  const noteNeedsTruncation = noteTurn.truncated || (!noteTurn.truncated && noteTurn.prompt.length > maxLength);
-                  const noteDisplayPrompt = isExpanded && noteFullContent ? noteFullContent.prompt : (isExpanded ? noteTurn.prompt : (noteTurn.truncated ? noteTurn.prompt : truncateText(noteTurn.prompt)));
-                  return (
-                    <div key="note" className={"space-y-2 p-4 rounded-lg border " + (isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
-                      {/* Note */}
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className={`text-xs font-medium ${isDarkMode ? "text-purple-400" : "text-purple-600"
-                            }`}>
-                            Note
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {!isEditingNote && (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleCopyTurnField(noteIndex, "prompt", noteId);
-                                  }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Copy note"
-                                >
-                                  {noteCopied ? (
-                                    <MdCheck className="w-3 h-3 text-green-500" />
-                                  ) : (
-                                    <MdContentCopy className="w-3 h-3" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleStartEditTurn(noteIndex, 'prompt');
-                                  }}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Edit note"
-                                >
-                                  <MdEdit className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleDeleteTurn(noteIndex);
-                                  }}
-                                  disabled={noteTurns.length <= 1}
-                                  className={`p-0.5 rounded flex items-center flex-shrink-0 ${noteTurns.length <= 1
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : isDarkMode
-                                      ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title={noteTurns.length <= 1 ? "Cannot delete the last turn" : "Delete note"}
-                                >
-                                  <MdDelete className="w-3 h-3" />
-                                </button>
-                              </>
-                            )}
-                            {noteNeedsTruncation && !isEditingNote && (
-                              <button
-                                onClick={() => toggleTurnExpansion(noteIndex)}
-                                disabled={noteLoading}
-                                className={`p-1 rounded ${isDarkMode
-                                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  }`}
-                                title={isExpanded ? "Collapse" : "Expand"}
-                              >
-                                {noteLoading ? (
-                                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                ) : isExpanded ? (
-                                  <MdExpandLess className="w-3 h-3" />
-                                ) : (
-                                  <MdExpandMore className="w-3 h-3" />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
-                          {isEditingNote ? (
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <textarea
-                                  value={editingTurnValue}
-                                  onChange={(e) => setEditingTurnValue(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                      e.preventDefault();
-                                      handleSaveTurnEdit(noteIndex, 'prompt');
-                                    } else if (e.key === "Escape") {
-                                      e.preventDefault();
-                                      handleCancelEditTurn();
-                                    }
-                                  }}
-                                  autoFocus
-                                  rows={4}
-                                  className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode
-                                    ? "bg-gray-700 border-gray-600 text-white"
-                                    : "bg-white border-gray-300 text-black"
-                                    } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
-                                />
-                                <button
-                                  onClick={() => handleSaveTurnEdit(noteIndex, 'prompt')}
-                                  disabled={editingTurnValue.trim().length === 0}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : isDarkMode
-                                      ? "bg-green-600 text-white hover:bg-green-700"
-                                      : "bg-green-600 text-white hover:bg-green-700"
-                                    }`}
-                                  title="Save (Ctrl+Enter)"
-                                >
-                                  <MdCheck className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={handleCancelEditTurn}
-                                  className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode
-                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                    }`}
-                                  title="Cancel (Esc)"
-                                >
-                                  <MdClose className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              className={`${noteNeedsTruncation && !isExpanded && !noteLoading ? "cursor-pointer hover:opacity-80" : ""}`}
-                              onClick={noteNeedsTruncation && !isExpanded && !noteLoading ? () => toggleTurnExpansion(noteIndex) : undefined}
-                              onMouseDown={(e) => {
-                                // If expanded, allow text selection by not preventing default
-                                if (isExpanded) {
-                                  return; // Allow normal text selection
-                                }
-                                // If not expanded and clickable, prevent text selection on click
-                                if (noteNeedsTruncation) {
-                                  e.preventDefault();
-                                }
-                              }}
-                              dangerouslySetInnerHTML={{
-                                __html: markdownToHtml(noteDisplayPrompt)
-                              }}
+                            <MdMessage
+                              className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
                             />
                           )}
+                          {formatDate(selectedChat.timestamp)}
+                          {(() => {
+                            const currentTurns: {
+                              prompt: string;
+                              response: string;
+                            }[] =
+                              (editedTurns.length > 0
+                                ? editedTurns
+                                : selectedChat.turns) ?? [];
+                            return (
+                              currentTurns.length === 1 &&
+                              !currentTurns[0]?.response
+                            );
+                          })()
+                            ? " • Note"
+                            : ` • ${(() => {
+                                const currentTurns =
+                                  (editedTurns.length > 0
+                                    ? editedTurns
+                                    : selectedChat.turns) ?? [];
+                                return currentTurns.length;
+                              })()} turn${(() => {
+                                const currentTurns =
+                                  (editedTurns.length > 0
+                                    ? editedTurns
+                                    : selectedChat.turns) ?? [];
+                                return currentTurns.length !== 1 ? "s" : "";
+                              })()}`}
                         </div>
                       </div>
                     </div>
-                  );
-                } else {
-                  return (
-                    <div className="contents">
-                      {chatTurnsJsx}
-                    </div>
-                  );
-                }
-          })()}
-            </div>
-          </div>
-        ) : (
-            // Chat list view
-            <div className="space-y-2 relative pb-4">
-              {loading && chats.length === 0 ? (
-                <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  Loading chats...
-                </div>
-              ) : searchLoading && chats.length === 0 ? (
-                <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  Searching...
-                </div>
-              ) : chats.length === 0 ? (
-                <div className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                  {isSearching ? (
-                    `No chats found matching "${searchQuery}"`
-                  ) : (
-                    "No chats yet. Use the + button to save a chat manually or instruct your AI host or agent connected to the app to save the chat or a fragment"
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    {chats.map((chat) => (
-                      <div
-                        key={chat.timestamp || chat.id}
-                        className={`w-full flex items-center gap-2 p-4 rounded-lg border transition-colors ${isDarkMode
-                          ? "bg-gray-800 border-gray-700"
-                          : "bg-gray-50 border-gray-200"
-                          }`}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        copyEntireChat(selectedChat);
+                      }}
+                      className={`p-1 rounded flex items-center flex-shrink-0 ${
+                        isDarkMode
+                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                      title="Copy entire chat"
+                    >
+                      {copiedItems[`chat-${selectedChat.timestamp}`] ? (
+                        <MdCheck className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <MdContentCopy className="w-3 h-3" />
+                      )}
+                    </button>
+                    {hasUnsavedChanges && (
+                      <button
+                        onClick={handleSaveChat}
+                        disabled={isSavingChat}
+                        className={`p-1 rounded flex items-center flex-shrink-0 ${
+                          isSavingChat
+                            ? "opacity-50 cursor-not-allowed"
+                            : isDarkMode
+                              ? "bg-green-600 text-white hover:bg-green-700"
+                              : "bg-green-600 text-white hover:bg-green-700"
+                        }`}
+                        title="Save changes"
                       >
-                        <button
-                          onClick={() => handleChatClick(chat)}
-                          className="flex-1 text-left"
-                        >
-                          <div className="flex items-center gap-2 font-medium mb-1">
-
-                            {chat.title}
-                          </div>
-                          <div className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}>
-                            {(chat.isNote ?? ((chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response)) ? (
-                              <MdNote className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
-                            ) : (
-                              <MdMessage className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
-                            )}
-                            {formatDate(chat.timestamp ?? "")}
-                            {(chat.isNote ?? ((chat.turns?.length ?? 0) === 1 && !chat.turns?.[0]?.response)) ? (
-                              " • Note"
-                            ) : (
-                              ` • ${chat.turnsCount ?? chat.turns?.length ?? 0} turn${(chat.turnsCount ?? chat.turns?.length ?? 0) !== 1 ? "s" : ""}`
-                            )}
-                          </div>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteChat(chat);
-                          }}
-                          className={`p-0.5 rounded transition-colors flex-shrink-0 ${isDarkMode
-                            ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
-                            : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
-                            }`}
-                          title="Delete chat"
-                        >
-                          <MdDelete className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {/* Loading overlay for pagination/search */}
-                    {(paginationLoading || (searchLoading && chats.length > 0)) && (
-                      <div className={`absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${isDarkMode ? "bg-black/50" : "bg-white/70"
-                        }`}>
-                        <div className={`px-4 py-2 rounded-lg font-medium ${isDarkMode ? "bg-gray-800 text-white" : "bg-white text-black shadow-lg"
-                          }`}>
-                          Loading...
-                        </div>
-                      </div>
+                        {isSavingChat ? (
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <MdCheck className="w-3 h-3" />
+                        )}
+                      </button>
                     )}
                   </div>
-                  {/* Pagination */}
-                  {pagination && pagination.totalPages > 1 && (
-                    <div className="pt-4 flex items-center justify-between gap-2 mb-4">
-                      <button
-                        onClick={async () => {
-                          if (currentPage > 0 && !paginationLoading && !searchLoading) {
-                            const targetPage = currentPage - 1;
-                            if (isSearching && searchQuery) {
-                              await handleSearch(searchQuery, targetPage);
-                            } else {
-                              setPaginationLoading(true);
-                              try {
-                                const res = await app.callServerTool({
-                                  name: "loadMyChats",
-                                  arguments: { page: targetPage, size: 10, aboveTheFoldOnly: true },
-                                }) as ChatVaultToolResult | null;
-                                if (res?.structuredContent?.chats) {
-                                  setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
-                                  setPagination((res.structuredContent.pagination as Pagination) ?? null);
-                                  setCurrentPage(targetPage);
-                                  setPageInputValue(String(targetPage + 1));
-                                }
-                              } catch (err) {
-                                addLog("Error loading previous page", { error: err instanceof Error ? err.message : String(err) });
-                              } finally {
-                                setPaginationLoading(false);
-                              }
-                            }
-                          }
-                        }}
-                        disabled={paginationLoading || searchLoading || currentPage === 0}
-                        className={`px-3 py-1.5 rounded text-sm font-medium ${paginationLoading || currentPage === 0
-                          ? "opacity-50 cursor-not-allowed"
-                          : isDarkMode
-                            ? "bg-gray-800 text-white hover:bg-gray-700"
-                            : "bg-gray-100 text-black hover:bg-gray-200"
-                          }`}
-                      >
-                        Previous
-                      </button>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                          Page
-                        </span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={pageInputValue}
-                          disabled={paginationLoading || searchLoading}
-                          onChange={(e) => {
-                            if (paginationLoading || searchLoading) return;
-                            const value = e.target.value;
-                            // Only allow numbers
-                            if (value === "" || /^\d+$/.test(value)) {
-                              setPageInputValue(value);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (paginationLoading || searchLoading) return;
-                            if (e.key === "Enter") {
-                              const page = parseInt(pageInputValue) - 1;
-                              if (page >= 0 && page < pagination.totalPages && page !== currentPage && !paginationLoading && !searchLoading) {
-                                if (isSearching && searchQuery) {
-                                  handleSearch(searchQuery, page);
-                                } else {
-                                  setPaginationLoading(true);
-                                  app.callServerTool({
-                                    name: "loadMyChats",
-                                    arguments: { page, size: 10, aboveTheFoldOnly: true },
-                                  }).then((res: unknown) => {
-                                    const r = res as ChatVaultToolResult | null;
-                                    if (r?.structuredContent?.chats) {
-                                      setChats(deduplicateChats(r.structuredContent.chats as Chat[]));
-                                      setPagination((r.structuredContent.pagination as Pagination) ?? null);
-                                      setCurrentPage(page);
-                                      setPageInputValue(String(page + 1));
-                                    }
-                                  }).catch((err: unknown) => {
-                                    addLog("Error loading page", { error: err instanceof Error ? err.message : String(err) });
-                                  }).finally(() => {
-                                    setPaginationLoading(false);
-                                  });
-                                }
-                              } else {
-                                // Reset to current page if invalid
-                                setPageInputValue(String(currentPage + 1));
-                              }
-                            }
-                          }}
-                          className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${paginationLoading || searchLoading
-                            ? "opacity-50 cursor-not-allowed"
-                            : ""
-                            } ${isDarkMode
-                              ? "bg-gray-800 border-gray-600 text-white"
-                              : "bg-white border-gray-300 text-black"
-                            }`}
-                          style={{ WebkitAppearance: "none", MozAppearance: "textfield" }}
-                        />
-                        <span className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                          of {pagination.totalPages}
-                        </span>
-                        {pageInputValue !== String(currentPage + 1) && parseInt(pageInputValue) >= 1 && parseInt(pageInputValue) <= pagination.totalPages && (
-                          <button
-                            onClick={async () => {
-                              const page = parseInt(pageInputValue) - 1;
-                              if (page >= 0 && page < pagination.totalPages && page !== currentPage && !paginationLoading && !searchLoading) {
-                                if (isSearching && searchQuery) {
-                                  await handleSearch(searchQuery, page);
-                                } else {
-                              setPaginationLoading(true);
-                              try {
-                                const res = await app.callServerTool({
-                                  name: "loadMyChats",
-                                  arguments: { page, size: 10, aboveTheFoldOnly: true },
-                                }) as ChatVaultToolResult | null;
-                                if (res?.structuredContent?.chats) {
-                                  setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
-                                  setPagination((res.structuredContent.pagination as Pagination) ?? null);
-                                      setCurrentPage(page);
-                                      setPageInputValue(String(page + 1));
-                                    }
-                                  } catch (err) {
-                                    addLog("Error loading page", { error: err instanceof Error ? err.message : String(err) });
-                                  } finally {
-                                    setPaginationLoading(false);
+
+                  {(() => {
+                    const chat = selectedChat!;
+                    const isNoteView =
+                      (chat.turns?.length ?? 0) === 1 &&
+                      !chat.turns?.[0]?.response;
+                    const turns =
+                      (editedTurns.length > 0
+                        ? editedTurns
+                        : (chat.turns ?? [])) ?? [];
+                    const chatTurnsJsx = turns.map((turn, index) => {
+                      const isExpanded = expandedTurns.has(index);
+                      const turnId = `${chat.id}-${index}`;
+                      const promptId = `prompt-${chat.timestamp}-${index}`;
+                      const responseId = `response-${chat.timestamp}-${index}`;
+                      const promptCopied = !!copiedItems[promptId];
+                      const responseCopied = !!copiedItems[responseId];
+                      const maxLength = 150;
+                      const promptNeedsTruncation =
+                        !turn.truncated && turn.prompt.length > maxLength;
+                      const responseNeedsTruncation =
+                        !turn.truncated && turn.response.length > maxLength;
+                      const needsExpansion =
+                        turn.truncated ||
+                        promptNeedsTruncation ||
+                        responseNeedsTruncation;
+                      const isLoadingTurn = loadingTurnIds.has(turnId);
+                      const fullContent = fullTurnContent[turnId];
+                      const displayPrompt =
+                        isExpanded && fullContent
+                          ? fullContent.prompt
+                          : isExpanded
+                            ? turn.prompt
+                            : turn.truncated
+                              ? turn.prompt
+                              : truncateText(turn.prompt);
+                      const displayResponse =
+                        isExpanded && fullContent
+                          ? fullContent.response
+                          : isExpanded
+                            ? turn.response
+                            : turn.truncated
+                              ? turn.response
+                              : truncateText(turn.response);
+                      const isEditingPrompt =
+                        editingTurn?.turnIndex === index &&
+                        editingTurn?.field === "prompt";
+                      const isEditingResponse =
+                        editingTurn?.turnIndex === index &&
+                        editingTurn?.field === "response";
+                      return (
+                        <div
+                          key={index}
+                          className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"}`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div
+                                className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                              >
+                                Prompt
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isEditingPrompt && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCopyTurnField(
+                                          index,
+                                          "prompt",
+                                          promptId,
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Copy prompt"
+                                    >
+                                      {promptCopied ? (
+                                        <MdCheck className="w-3 h-3 text-green-500" />
+                                      ) : (
+                                        <MdContentCopy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStartEditTurn(index, "prompt");
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Edit prompt"
+                                    >
+                                      <MdEdit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTurn(index);
+                                      }}
+                                      disabled={editedTurns.length <= 1}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title={
+                                        editedTurns.length <= 1
+                                          ? "Cannot delete the last turn"
+                                          : "Delete turn"
+                                      }
+                                    >
+                                      <MdDelete className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                                {needsExpansion && !isEditingPrompt && (
+                                  <button
+                                    onClick={() => toggleTurnExpansion(index)}
+                                    disabled={isLoadingTurn}
+                                    className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                    title={isExpanded ? "Collapse" : "Expand"}
+                                  >
+                                    {isLoadingTurn ? (
+                                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : isExpanded ? (
+                                      <MdExpandLess className="w-3 h-3" />
+                                    ) : (
+                                      <MdExpandMore className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}
+                            >
+                              {isEditingPrompt ? (
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <textarea
+                                      value={editingTurnValue}
+                                      onChange={(e) =>
+                                        setEditingTurnValue(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          (e.ctrlKey || e.metaKey)
+                                        ) {
+                                          e.preventDefault();
+                                          handleSaveTurnEdit(index, "prompt");
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          handleCancelEditTurn();
+                                        }
+                                      }}
+                                      autoFocus
+                                      rows={4}
+                                      className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleSaveTurnEdit(index, "prompt")
+                                      }
+                                      disabled={
+                                        editingTurnValue.trim().length === 0
+                                      }
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`}
+                                      title="Save (Ctrl+Enter)"
+                                    >
+                                      <MdCheck className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditTurn}
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Cancel (Esc)"
+                                    >
+                                      <MdClose className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`}
+                                  onClick={
+                                    needsExpansion &&
+                                    !isExpanded &&
+                                    !isLoadingTurn
+                                      ? () => toggleTurnExpansion(index)
+                                      : undefined
                                   }
+                                  onMouseDown={(e) => {
+                                    if (isExpanded) return;
+                                    if (needsExpansion) e.preventDefault();
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: markdownToHtml(displayPrompt),
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div
+                                className={`text-xs font-medium ${isDarkMode ? "text-green-400" : "text-green-600"}`}
+                              >
+                                Response
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isEditingResponse && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCopyTurnField(
+                                          index,
+                                          "response",
+                                          responseId,
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Copy response"
+                                    >
+                                      {responseCopied ? (
+                                        <MdCheck className="w-3 h-3 text-green-500" />
+                                      ) : (
+                                        <MdContentCopy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStartEditTurn(index, "response");
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Edit response"
+                                    >
+                                      <MdEdit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTurn(index);
+                                      }}
+                                      disabled={editedTurns.length <= 1}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title={
+                                        editedTurns.length <= 1
+                                          ? "Cannot delete the last turn"
+                                          : "Delete turn"
+                                      }
+                                    >
+                                      <MdDelete className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                                {needsExpansion && !isEditingResponse && (
+                                  <button
+                                    onClick={() => toggleTurnExpansion(index)}
+                                    disabled={isLoadingTurn}
+                                    className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                    title={isExpanded ? "Collapse" : "Expand"}
+                                  >
+                                    {isLoadingTurn ? (
+                                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : isExpanded ? (
+                                      <MdExpandLess className="w-3 h-3" />
+                                    ) : (
+                                      <MdExpandMore className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}
+                            >
+                              {isEditingResponse ? (
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <textarea
+                                      value={editingTurnValue}
+                                      onChange={(e) =>
+                                        setEditingTurnValue(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          (e.ctrlKey || e.metaKey)
+                                        ) {
+                                          e.preventDefault();
+                                          handleSaveTurnEdit(index, "response");
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          handleCancelEditTurn();
+                                        }
+                                      }}
+                                      autoFocus
+                                      rows={4}
+                                      className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleSaveTurnEdit(index, "response")
+                                      }
+                                      disabled={
+                                        editingTurnValue.trim().length === 0
+                                      }
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`}
+                                      title="Save (Ctrl+Enter)"
+                                    >
+                                      <MdCheck className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditTurn}
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Cancel (Esc)"
+                                    >
+                                      <MdClose className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`}
+                                  onClick={
+                                    needsExpansion &&
+                                    !isExpanded &&
+                                    !isLoadingTurn
+                                      ? () => toggleTurnExpansion(index)
+                                      : undefined
+                                  }
+                                  onMouseDown={(e) => {
+                                    if (isExpanded) return;
+                                    if (needsExpansion) e.preventDefault();
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: markdownToHtml(displayResponse),
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                    if (isNoteView) {
+                      const noteTurns = turns;
+                      const noteTurn = noteTurns[0] as {
+                        prompt: string;
+                        response: string;
+                        truncated?: boolean;
+                      };
+                      const noteIndex = 0;
+                      const noteTurnId = `${chat.id}-${noteIndex}`;
+                      const isExpanded = expandedTurns.has(noteIndex);
+                      const noteFullContent = fullTurnContent[noteTurnId];
+                      const noteLoading = loadingTurnIds.has(noteTurnId);
+                      const noteId = `note-${chat.timestamp}`;
+                      const noteCopied = !!copiedItems[noteId];
+                      const isEditingNote =
+                        editingTurn?.turnIndex === noteIndex &&
+                        editingTurn?.field === "prompt";
+                      const maxLength = 150;
+                      const noteNeedsTruncation =
+                        noteTurn.truncated ||
+                        (!noteTurn.truncated &&
+                          noteTurn.prompt.length > maxLength);
+                      const noteDisplayPrompt =
+                        isExpanded && noteFullContent
+                          ? noteFullContent.prompt
+                          : isExpanded
+                            ? noteTurn.prompt
+                            : noteTurn.truncated
+                              ? noteTurn.prompt
+                              : truncateText(noteTurn.prompt);
+                      return (
+                        <div
+                          key="note"
+                          className={
+                            "space-y-2 p-4 rounded-lg border " +
+                            (isDarkMode
+                              ? "bg-gray-800 border-gray-700"
+                              : "bg-gray-50 border-gray-200")
+                          }
+                        >
+                          {/* Note */}
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div
+                                className={`text-xs font-medium ${
+                                  isDarkMode
+                                    ? "text-purple-400"
+                                    : "text-purple-600"
+                                }`}
+                              >
+                                Note
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isEditingNote && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCopyTurnField(
+                                          noteIndex,
+                                          "prompt",
+                                          noteId,
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                        isDarkMode
+                                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title="Copy note"
+                                    >
+                                      {noteCopied ? (
+                                        <MdCheck className="w-3 h-3 text-green-500" />
+                                      ) : (
+                                        <MdContentCopy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStartEditTurn(
+                                          noteIndex,
+                                          "prompt",
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                        isDarkMode
+                                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title="Edit note"
+                                    >
+                                      <MdEdit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTurn(noteIndex);
+                                      }}
+                                      disabled={noteTurns.length <= 1}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                        noteTurns.length <= 1
+                                          ? "opacity-50 cursor-not-allowed"
+                                          : isDarkMode
+                                            ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title={
+                                        noteTurns.length <= 1
+                                          ? "Cannot delete the last turn"
+                                          : "Delete note"
+                                      }
+                                    >
+                                      <MdDelete className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                                {noteNeedsTruncation && !isEditingNote && (
+                                  <button
+                                    onClick={() =>
+                                      toggleTurnExpansion(noteIndex)
+                                    }
+                                    disabled={noteLoading}
+                                    className={`p-1 rounded ${
+                                      isDarkMode
+                                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
+                                    title={isExpanded ? "Collapse" : "Expand"}
+                                  >
+                                    {noteLoading ? (
+                                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : isExpanded ? (
+                                      <MdExpandLess className="w-3 h-3" />
+                                    ) : (
+                                      <MdExpandMore className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}
+                            >
+                              {isEditingNote ? (
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <textarea
+                                      value={editingTurnValue}
+                                      onChange={(e) =>
+                                        setEditingTurnValue(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          (e.ctrlKey || e.metaKey)
+                                        ) {
+                                          e.preventDefault();
+                                          handleSaveTurnEdit(
+                                            noteIndex,
+                                            "prompt",
+                                          );
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          handleCancelEditTurn();
+                                        }
+                                      }}
+                                      autoFocus
+                                      rows={4}
+                                      className={`flex-1 px-2 py-1 rounded border text-sm ${
+                                        isDarkMode
+                                          ? "bg-gray-700 border-gray-600 text-white"
+                                          : "bg-white border-gray-300 text-black"
+                                      } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleSaveTurnEdit(noteIndex, "prompt")
+                                      }
+                                      disabled={
+                                        editingTurnValue.trim().length === 0
+                                      }
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                        editingTurnValue.trim().length === 0
+                                          ? "opacity-50 cursor-not-allowed"
+                                          : isDarkMode
+                                            ? "bg-green-600 text-white hover:bg-green-700"
+                                            : "bg-green-600 text-white hover:bg-green-700"
+                                      }`}
+                                      title="Save (Ctrl+Enter)"
+                                    >
+                                      <MdCheck className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditTurn}
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                        isDarkMode
+                                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title="Cancel (Esc)"
+                                    >
+                                      <MdClose className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`${noteNeedsTruncation && !isExpanded && !noteLoading ? "cursor-pointer hover:opacity-80" : ""}`}
+                                  onClick={
+                                    noteNeedsTruncation &&
+                                    !isExpanded &&
+                                    !noteLoading
+                                      ? () => toggleTurnExpansion(noteIndex)
+                                      : undefined
+                                  }
+                                  onMouseDown={(e) => {
+                                    // If expanded, allow text selection by not preventing default
+                                    if (isExpanded) {
+                                      return; // Allow normal text selection
+                                    }
+                                    // If not expanded and clickable, prevent text selection on click
+                                    if (noteNeedsTruncation) {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: markdownToHtml(noteDisplayPrompt),
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      return <div className="contents">{chatTurnsJsx}</div>;
+                    }
+                  })()}
+                </div>
+              </div>
+            ) : (
+              // Chat list view
+              <div className="space-y-2 relative pb-4">
+                {loading && chats.length === 0 ? (
+                  <div
+                    className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                  >
+                    Loading chats...
+                  </div>
+                ) : searchLoading && chats.length === 0 ? (
+                  <div
+                    className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                  >
+                    Searching...
+                  </div>
+                ) : chats.length === 0 ? (
+                  <div
+                    className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                  >
+                    {isSearching
+                      ? `No chats found matching "${searchQuery}"`
+                      : "No chats yet. Use the + button to save a chat manually or instruct your AI host or agent connected to the app to save the chat or a fragment."}
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      {chats.map((chat) => (
+                        <div
+                          key={chat.timestamp || chat.id}
+                          className={`w-full flex items-center gap-2 p-4 rounded-lg border transition-colors ${
+                            isDarkMode
+                              ? "bg-gray-800 border-gray-700"
+                              : "bg-gray-50 border-gray-200"
+                          }`}
+                        >
+                          <button
+                            onClick={() => handleChatClick(chat)}
+                            className="flex-1 text-left"
+                          >
+                            <div className="flex items-center gap-2 font-medium mb-1">
+                              {chat.title}
+                            </div>
+                            <div
+                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                            >
+                              {(chat.isNote ??
+                              ((chat.turns?.length ?? 0) === 1 &&
+                                !chat.turns?.[0]?.response)) ? (
+                                <MdNote
+                                  className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`}
+                                />
+                              ) : (
+                                <MdMessage
+                                  className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                                />
+                              )}
+                              {formatDate(chat.timestamp ?? "")}
+                              {(chat.isNote ??
+                              ((chat.turns?.length ?? 0) === 1 &&
+                                !chat.turns?.[0]?.response))
+                                ? " • Note"
+                                : ` • ${chat.turnsCount ?? chat.turns?.length ?? 0} turn${(chat.turnsCount ?? chat.turns?.length ?? 0) !== 1 ? "s" : ""}`}
+                            </div>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteChat(chat);
+                            }}
+                            className={`p-0.5 rounded transition-colors flex-shrink-0 ${
+                              isDarkMode
+                                ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                                : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
+                            }`}
+                            title="Delete chat"
+                          >
+                            <MdDelete className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {/* Loading overlay for pagination/search */}
+                      {(paginationLoading ||
+                        (searchLoading && chats.length > 0)) && (
+                        <div
+                          className={`absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                            isDarkMode ? "bg-black/50" : "bg-white/70"
+                          }`}
+                        >
+                          <div
+                            className={`px-4 py-2 rounded-lg font-medium ${
+                              isDarkMode
+                                ? "bg-gray-800 text-white"
+                                : "bg-white text-black shadow-lg"
+                            }`}
+                          >
+                            Loading...
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Pagination */}
+                    {pagination && pagination.totalPages > 1 && (
+                      <div className="pt-4 flex items-center justify-between gap-2 mb-4">
+                        <button
+                          onClick={async () => {
+                            if (
+                              currentPage > 0 &&
+                              !paginationLoading &&
+                              !searchLoading
+                            ) {
+                              const targetPage = currentPage - 1;
+                              if (isSearching && searchQuery) {
+                                await handleSearch(searchQuery, targetPage);
+                              } else {
+                                setPaginationLoading(true);
+                                try {
+                                  const res = (await app.callServerTool({
+                                    name: "loadMyChats",
+                                    arguments: {
+                                      page: targetPage,
+                                      size: 10,
+                                      aboveTheFoldOnly: true,
+                                    },
+                                  })) as ChatVaultToolResult | null;
+                                  if (res?.structuredContent?.chats) {
+                                    setChats(
+                                      deduplicateChats(
+                                        res.structuredContent.chats as Chat[],
+                                      ),
+                                    );
+                                    setPagination(
+                                      (res.structuredContent
+                                        .pagination as Pagination) ?? null,
+                                    );
+                                    setCurrentPage(targetPage);
+                                    setPageInputValue(String(targetPage + 1));
+                                  }
+                                } catch (err) {
+                                  addLog("Error loading previous page", {
+                                    error:
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                  });
+                                } finally {
+                                  setPaginationLoading(false);
+                                }
+                              }
+                            }
+                          }}
+                          disabled={
+                            paginationLoading ||
+                            searchLoading ||
+                            currentPage === 0
+                          }
+                          className={`px-3 py-1.5 rounded text-sm font-medium ${
+                            paginationLoading || currentPage === 0
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
+                                ? "bg-gray-800 text-white hover:bg-gray-700"
+                                : "bg-gray-100 text-black hover:bg-gray-200"
+                          }`}
+                        >
+                          Previous
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}
+                          >
+                            Page
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={pageInputValue}
+                            disabled={paginationLoading || searchLoading}
+                            onChange={(e) => {
+                              if (paginationLoading || searchLoading) return;
+                              const value = e.target.value;
+                              // Only allow numbers
+                              if (value === "" || /^\d+$/.test(value)) {
+                                setPageInputValue(value);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (paginationLoading || searchLoading) return;
+                              if (e.key === "Enter") {
+                                const page = parseInt(pageInputValue) - 1;
+                                if (
+                                  page >= 0 &&
+                                  page < pagination.totalPages &&
+                                  page !== currentPage &&
+                                  !paginationLoading &&
+                                  !searchLoading
+                                ) {
+                                  if (isSearching && searchQuery) {
+                                    handleSearch(searchQuery, page);
+                                  } else {
+                                    setPaginationLoading(true);
+                                    app
+                                      .callServerTool({
+                                        name: "loadMyChats",
+                                        arguments: {
+                                          page,
+                                          size: 10,
+                                          aboveTheFoldOnly: true,
+                                        },
+                                      })
+                                      .then((res: unknown) => {
+                                        const r =
+                                          res as ChatVaultToolResult | null;
+                                        if (r?.structuredContent?.chats) {
+                                          setChats(
+                                            deduplicateChats(
+                                              r.structuredContent
+                                                .chats as Chat[],
+                                            ),
+                                          );
+                                          setPagination(
+                                            (r.structuredContent
+                                              .pagination as Pagination) ??
+                                              null,
+                                          );
+                                          setCurrentPage(page);
+                                          setPageInputValue(String(page + 1));
+                                        }
+                                      })
+                                      .catch((err: unknown) => {
+                                        addLog("Error loading page", {
+                                          error:
+                                            err instanceof Error
+                                              ? err.message
+                                              : String(err),
+                                        });
+                                      })
+                                      .finally(() => {
+                                        setPaginationLoading(false);
+                                      });
+                                  }
+                                } else {
+                                  // Reset to current page if invalid
+                                  setPageInputValue(String(currentPage + 1));
                                 }
                               }
                             }}
-                            disabled={paginationLoading || searchLoading}
-                            className={`px-2 py-1 rounded text-xs font-medium ${paginationLoading || searchLoading
-                              ? "opacity-50 cursor-not-allowed"
-                              : isDarkMode
-                                ? "bg-gray-700 text-white hover:bg-gray-600"
-                                : "bg-gray-200 text-black hover:bg-gray-300"
-                              }`}
+                            className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${
+                              paginationLoading || searchLoading
+                                ? "opacity-50 cursor-not-allowed"
+                                : ""
+                            } ${
+                              isDarkMode
+                                ? "bg-gray-800 border-gray-600 text-white"
+                                : "bg-white border-gray-300 text-black"
+                            }`}
+                            style={{
+                              WebkitAppearance: "none",
+                              MozAppearance: "textfield",
+                            }}
+                          />
+                          <span
+                            className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}
                           >
-                            Go
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={async () => {
-                          if (pagination.hasMore && !paginationLoading && !searchLoading) {
-                            const targetPage = currentPage + 1;
-                            if (isSearching && searchQuery) {
-                              await handleSearch(searchQuery, targetPage);
-                            } else {
-                              setPaginationLoading(true);
-                              try {
-                                const res = await app.callServerTool({
-                                  name: "loadMyChats",
-                                  arguments: { page: targetPage, size: 10, aboveTheFoldOnly: true },
-                                }) as ChatVaultToolResult | null;
-                                if (res?.structuredContent?.chats) {
-                                  setChats(deduplicateChats(res.structuredContent.chats as Chat[]));
-                                  setPagination((res.structuredContent.pagination as Pagination) ?? null);
-                                  setCurrentPage(targetPage);
-                                  setPageInputValue(String(targetPage + 1));
+                            of {pagination.totalPages}
+                          </span>
+                          {pageInputValue !== String(currentPage + 1) &&
+                            parseInt(pageInputValue) >= 1 &&
+                            parseInt(pageInputValue) <=
+                              pagination.totalPages && (
+                              <button
+                                onClick={async () => {
+                                  const page = parseInt(pageInputValue) - 1;
+                                  if (
+                                    page >= 0 &&
+                                    page < pagination.totalPages &&
+                                    page !== currentPage &&
+                                    !paginationLoading &&
+                                    !searchLoading
+                                  ) {
+                                    if (isSearching && searchQuery) {
+                                      await handleSearch(searchQuery, page);
+                                    } else {
+                                      setPaginationLoading(true);
+                                      try {
+                                        const res = (await app.callServerTool({
+                                          name: "loadMyChats",
+                                          arguments: {
+                                            page,
+                                            size: 10,
+                                            aboveTheFoldOnly: true,
+                                          },
+                                        })) as ChatVaultToolResult | null;
+                                        if (res?.structuredContent?.chats) {
+                                          setChats(
+                                            deduplicateChats(
+                                              res.structuredContent
+                                                .chats as Chat[],
+                                            ),
+                                          );
+                                          setPagination(
+                                            (res.structuredContent
+                                              .pagination as Pagination) ??
+                                              null,
+                                          );
+                                          setCurrentPage(page);
+                                          setPageInputValue(String(page + 1));
+                                        }
+                                      } catch (err) {
+                                        addLog("Error loading page", {
+                                          error:
+                                            err instanceof Error
+                                              ? err.message
+                                              : String(err),
+                                        });
+                                      } finally {
+                                        setPaginationLoading(false);
+                                      }
+                                    }
+                                  }
+                                }}
+                                disabled={paginationLoading || searchLoading}
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  paginationLoading || searchLoading
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
+                                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                                      : "bg-gray-200 text-black hover:bg-gray-300"
+                                }`}
+                              >
+                                Go
+                              </button>
+                            )}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (
+                              pagination.hasMore &&
+                              !paginationLoading &&
+                              !searchLoading
+                            ) {
+                              const targetPage = currentPage + 1;
+                              if (isSearching && searchQuery) {
+                                await handleSearch(searchQuery, targetPage);
+                              } else {
+                                setPaginationLoading(true);
+                                try {
+                                  const res = (await app.callServerTool({
+                                    name: "loadMyChats",
+                                    arguments: {
+                                      page: targetPage,
+                                      size: 10,
+                                      aboveTheFoldOnly: true,
+                                    },
+                                  })) as ChatVaultToolResult | null;
+                                  if (res?.structuredContent?.chats) {
+                                    setChats(
+                                      deduplicateChats(
+                                        res.structuredContent.chats as Chat[],
+                                      ),
+                                    );
+                                    setPagination(
+                                      (res.structuredContent
+                                        .pagination as Pagination) ?? null,
+                                    );
+                                    setCurrentPage(targetPage);
+                                    setPageInputValue(String(targetPage + 1));
+                                  }
+                                } catch (err) {
+                                  addLog("Error loading next page", {
+                                    error:
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                  });
+                                } finally {
+                                  setPaginationLoading(false);
                                 }
-                              } catch (err) {
-                                addLog("Error loading next page", { error: err instanceof Error ? err.message : String(err) });
-                              } finally {
-                                setPaginationLoading(false);
                               }
                             }
+                          }}
+                          disabled={
+                            paginationLoading ||
+                            searchLoading ||
+                            !pagination.hasMore
                           }
-                        }}
-                        disabled={paginationLoading || searchLoading || !pagination.hasMore}
-                        className={`px-3 py-1.5 rounded text-sm font-medium ${paginationLoading || searchLoading || !pagination.hasMore
-                          ? "opacity-50 cursor-not-allowed"
-                          : isDarkMode
-                            ? "bg-gray-800 text-white hover:bg-gray-700"
-                            : "bg-gray-100 text-black hover:bg-gray-200"
+                          className={`px-3 py-1.5 rounded text-sm font-medium ${
+                            paginationLoading ||
+                            searchLoading ||
+                            !pagination.hasMore
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
+                                ? "bg-gray-800 text-white hover:bg-gray-700"
+                                : "bg-gray-100 text-black hover:bg-gray-200"
                           }`}
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                  {pagination && pagination.totalPages <= 1 && chats.length > 0 && !pagination.hasMore && (
-                    <div className={`pt-2 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
-                      {isSearching
-                        ? `Showing all ${chats.length} result${chats.length !== 1 ? "s" : ""}`
-                        : `Showing all ${pagination.total} chat${pagination.total !== 1 ? "s" : ""}`
-                      }
-                    </div>
-                  )}
-                  {pagination?.hasMore && chats.length > 0 && pagination.totalPages <= 1 && (
-                    <div className="pt-2 text-center">
-                      <button
-                        onClick={loadMoreChats}
-                        disabled={loading || paginationLoading || searchLoading}
-                        className={`px-3 py-1.5 rounded text-sm font-medium ${loading || paginationLoading || searchLoading ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-black hover:bg-gray-200"}`}
-                      >
-                        Load more
-                      </button>
-                    </div>
-                  )}
-                  {userInfo?.message && (
-                    <div className={`mt-4 p-3 rounded-lg border ${userInfo.messageType === 'success'
-                      ? isDarkMode
-                        ? "bg-green-900/30 border-green-700/50 text-green-200"
-                        : "bg-green-50 border-green-200 text-green-800"
-                      : userInfo.messageType === 'error'
-                        ? isDarkMode
-                          ? "bg-red-900/30 border-red-700/50 text-red-200"
-                          : "bg-red-50 border-red-200 text-red-800"
-                        : userInfo.messageType === 'alert'
-                          ? isDarkMode
-                            ? "bg-yellow-900/30 border-yellow-700/50 text-yellow-200"
-                            : "bg-yellow-50 border-yellow-200 text-yellow-800"
-                          : isDarkMode
-                            ? "bg-gray-800/50 border-gray-700 text-gray-300"
-                            : "bg-gray-50 border-gray-200 text-gray-700"
-                      }`}>
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                    {pagination &&
+                      pagination.totalPages <= 1 &&
+                      chats.length > 0 &&
+                      !pagination.hasMore && (
+                        <div
+                          className={`pt-2 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}
+                        >
+                          {isSearching
+                            ? `Showing all ${chats.length} result${chats.length !== 1 ? "s" : ""}`
+                            : `Showing all ${pagination.total} chat${pagination.total !== 1 ? "s" : ""}`}
+                        </div>
+                      )}
+                    {pagination?.hasMore &&
+                      chats.length > 0 &&
+                      pagination.totalPages <= 1 && (
+                        <div className="pt-2 text-center">
+                          <button
+                            onClick={loadMoreChats}
+                            disabled={
+                              loading || paginationLoading || searchLoading
+                            }
+                            className={`px-3 py-1.5 rounded text-sm font-medium ${loading || paginationLoading || searchLoading ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-black hover:bg-gray-200"}`}
+                          >
+                            Load more
+                          </button>
+                        </div>
+                      )}
+                    {userInfo?.message && (
                       <div
-                        className="text-sm"
-                        dangerouslySetInnerHTML={{ __html: markdownToHtml(userInfo.message) }}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-}
+                        className={`mt-4 p-3 rounded-lg border ${
+                          userInfo.messageType === "success"
+                            ? isDarkMode
+                              ? "bg-green-900/30 border-green-700/50 text-green-200"
+                              : "bg-green-50 border-green-200 text-green-800"
+                            : userInfo.messageType === "error"
+                              ? isDarkMode
+                                ? "bg-red-900/30 border-red-700/50 text-red-200"
+                                : "bg-red-50 border-red-200 text-red-800"
+                              : userInfo.messageType === "alert"
+                                ? isDarkMode
+                                  ? "bg-yellow-900/30 border-yellow-700/50 text-yellow-200"
+                                  : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                : isDarkMode
+                                  ? "bg-gray-800/50 border-gray-700 text-gray-300"
+                                  : "bg-gray-50 border-gray-200 text-gray-700"
+                        }`}
+                      >
+                        <div
+                          className="text-sm"
+                          dangerouslySetInnerHTML={{
+                            __html: markdownToHtml(userInfo.message),
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Debug Panel - Toggle with Ctrl+Alt+D */}
         {showDebug && (
-          <div className={`mt-4 pt-4 border-t ${isDarkMode ? "border-gray-700" : "border-black/5"
-            }`}>
+          <div
+            className={`mt-4 pt-4 border-t ${
+              isDarkMode ? "border-gray-700" : "border-black/5"
+            }`}
+          >
             <button
               onClick={() => {
                 const newState = !showDebug;
@@ -2683,27 +3703,47 @@ function App() {
                   localStorage.removeItem("chatvault-debug-enabled");
                 }
               }}
-              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${isDarkMode
-                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
+              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
+                isDarkMode
+                  ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
             >
               {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-              <span className="ml-2 text-xs opacity-60">(Ctrl+Alt+D to toggle)</span>
+              <span className="ml-2 text-xs opacity-60">
+                (Ctrl+Alt+D to toggle)
+              </span>
             </button>
             {showDebug && (
-              <div className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${isDarkMode ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-800"
-                }`}>
-                <div className={`mb-3 pb-3 border-b ${isDarkMode ? "border-gray-700" : "border-gray-300"
-                  }`}>
-                  <div className="font-semibold mb-1">Widget Version: v{WIDGET_VERSION}</div>
-                  <div className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}>Mode: MCP App</div>
+              <div
+                className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
+                  isDarkMode
+                    ? "bg-gray-950 text-gray-300"
+                    : "bg-gray-50 text-gray-800"
+                }`}
+              >
+                <div
+                  className={`mb-3 pb-3 border-b ${
+                    isDarkMode ? "border-gray-700" : "border-gray-300"
+                  }`}
+                >
+                  <div className="font-semibold mb-1">
+                    Widget Version: v{WIDGET_VERSION}
+                  </div>
+                  <div
+                    className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                  >
+                    Mode: MCP App
+                  </div>
                 </div>
                 {debugLogs.length === 0 ? (
                   <div className="opacity-60">No logs yet</div>
                 ) : (
                   debugLogs.map((log, idx) => (
-                    <div key={idx} className="mb-2 border-b border-gray-700 pb-2">
+                    <div
+                      key={idx}
+                      className="mb-2 border-b border-gray-700 pb-2"
+                    >
                       <div className="opacity-60 text-xs">{log.timestamp}</div>
                       <div className="mt-1">{log.message}</div>
                       {log.data && (
@@ -2722,19 +3762,26 @@ function App() {
         {/* Manual Save Modal */}
         {showManualSaveModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`w-full max-w-2xl rounded-lg ${isDarkMode ? "bg-gray-800" : "bg-white"
-              } p-6 max-h-[90vh] flex flex-col`}>
+            <div
+              className={`w-full max-w-2xl rounded-lg ${
+                isDarkMode ? "bg-gray-800" : "bg-white"
+              } p-6 max-h-[90vh] flex flex-col`}
+            >
               <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
-                  }`}>
+                <h2
+                  className={`text-lg font-semibold ${
+                    isDarkMode ? "text-white" : "text-black"
+                  }`}
+                >
                   Save Chat Manually
                 </h2>
                 <button
                   onClick={handleCloseManualSaveModal}
-                  className={`p-1 rounded ${isDarkMode
-                    ? "hover:bg-gray-700 text-gray-300"
-                    : "hover:bg-gray-100 text-gray-600"
-                    }`}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "hover:bg-gray-700 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
                 >
                   <MdClose className="w-5 h-5" />
                 </button>
@@ -2743,8 +3790,11 @@ function App() {
               <div className="flex-1 overflow-y-auto px-2">
                 <div className="space-y-4">
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? "text-gray-300" : "text-gray-700"
-                      }`}>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        isDarkMode ? "text-gray-300" : "text-gray-700"
+                      }`}
+                    >
                       Title (optional)
                     </label>
                     <input
@@ -2752,16 +3802,20 @@ function App() {
                       value={manualSaveTitle}
                       onChange={(e) => setManualSaveTitle(e.target.value)}
                       placeholder="manual"
-                      className={`w-full px-3 py-2 rounded-lg border ${isDarkMode
-                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                        : "bg-white border-gray-300 text-black placeholder-gray-500"
-                        } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      className={`w-full px-3 py-2 rounded-lg border ${
+                        isDarkMode
+                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                          : "bg-white border-gray-300 text-black placeholder-gray-500"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? "text-gray-300" : "text-gray-700"
-                      }`}>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        isDarkMode ? "text-gray-300" : "text-gray-700"
+                      }`}
+                    >
                       Paste Chat Conversation or Note
                     </label>
                     <textarea
@@ -2773,7 +3827,9 @@ function App() {
                           setManualSaveHtml("");
                         }
                       }}
-                      onPaste={(e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+                      onPaste={(
+                        e: React.ClipboardEvent<HTMLTextAreaElement>,
+                      ) => {
                         e.preventDefault();
                         const clipboardData = e.clipboardData;
                         if (!clipboardData) return;
@@ -2785,8 +3841,13 @@ function App() {
                         if (html && html.trim().length > 0) {
                           // HTML found - store it and display plain text in textarea
                           setManualSaveHtml(html);
-                          setManualSaveContent(plainText || html.replace(/<[^>]*>/g, "").trim());
-                          addLog("Pasted HTML content", { htmlLength: html.length, textLength: plainText.length });
+                          setManualSaveContent(
+                            plainText || html.replace(/<[^>]*>/g, "").trim(),
+                          );
+                          addLog("Pasted HTML content", {
+                            htmlLength: html.length,
+                            textLength: plainText.length,
+                          });
                         } else if (plainText) {
                           // Only plain text available
                           setManualSaveHtml("");
@@ -2795,18 +3856,27 @@ function App() {
                       }}
                       placeholder="Paste the copied conversation here..."
                       rows={2}
-                      className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${isDarkMode
-                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
-                        : "bg-white border-gray-300 text-black placeholder-gray-500"
-                        } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                      className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
+                        isDarkMode
+                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                          : "bg-white border-gray-300 text-black placeholder-gray-500"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
                     />
                   </div>
 
                   {manualSaveError && (
-                    <div className={`p-3 rounded-lg ${isDarkMode ? "bg-red-900/30 border border-red-700" : "bg-red-50 border border-red-200"
-                      }`}>
-                      <p className={`text-sm ${isDarkMode ? "text-red-300" : "text-red-700"
-                        }`}>
+                    <div
+                      className={`p-3 rounded-lg ${
+                        isDarkMode
+                          ? "bg-red-900/30 border border-red-700"
+                          : "bg-red-50 border border-red-200"
+                      }`}
+                    >
+                      <p
+                        className={`text-sm ${
+                          isDarkMode ? "text-red-300" : "text-red-700"
+                        }`}
+                      >
                         {manualSaveError}
                       </p>
                     </div>
@@ -2817,10 +3887,11 @@ function App() {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={handleCloseManualSaveModal}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${isDarkMode
-                    ? "bg-gray-700 text-white hover:bg-gray-600"
-                    : "bg-gray-100 text-black hover:bg-gray-200"
-                    }`}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
                   disabled={isSaving}
                 >
                   Cancel
@@ -2828,12 +3899,13 @@ function App() {
                 <button
                   onClick={handleManualSave}
                   disabled={isSaving || !manualSaveContent.trim()}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${isSaving || !manualSaveContent.trim()
-                    ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                    : isDarkMode
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isSaving || !manualSaveContent.trim()
+                      ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                      : isDarkMode
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
                 >
                   {isSaving ? "Processing..." : "Save"}
                 </button>
@@ -2844,10 +3916,13 @@ function App() {
 
         {/* Error message at bottom */}
         {error && (
-          <div className={`mt-4 p-3 rounded-lg border ${isDarkMode
-            ? "bg-red-900/30 border-red-700/50 text-red-300"
-            : "bg-red-50 border-red-200 text-red-700"
-            }`}>
+          <div
+            className={`mt-4 p-3 rounded-lg border ${
+              isDarkMode
+                ? "bg-red-900/30 border-red-700/50 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 text-sm">
                 <div className="font-medium mb-1">Error</div>
@@ -2855,10 +3930,11 @@ function App() {
               </div>
               <button
                 onClick={() => setError(null)}
-                className={`p-1 rounded flex-shrink-0 ${isDarkMode
-                  ? "text-red-300 hover:text-red-200 hover:bg-red-800/50"
-                  : "text-red-700 hover:text-red-800 hover:bg-red-100"
-                  }`}
+                className={`p-1 rounded flex-shrink-0 ${
+                  isDarkMode
+                    ? "text-red-300 hover:text-red-200 hover:bg-red-800/50"
+                    : "text-red-700 hover:text-red-800 hover:bg-red-100"
+                }`}
                 title="Dismiss error"
               >
                 <MdClose className="w-4 h-4" />
@@ -2871,10 +3947,11 @@ function App() {
         {!showHelp && (
           <button
             onClick={handleHelpClick}
-            className={`absolute bottom-4 right-4 w-6 h-6 mt-4 flex items-center justify-center transition-colors z-50 ${isDarkMode
-              ? "text-gray-400 hover:text-gray-300"
-              : "text-gray-500 hover:text-gray-700"
-              }`}
+            className={`absolute bottom-4 right-4 w-6 h-6 mt-4 flex items-center justify-center transition-colors z-50 ${
+              isDarkMode
+                ? "text-gray-400 hover:text-gray-300"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
             title="Help"
           >
             <MdHelp className="w-5 h-5" />
@@ -2884,42 +3961,63 @@ function App() {
 
       {/* Help Area - Fixed bottom */}
       {showHelp && (
-        <div className={` h-fullfixed top-0 left-4 right-4  rounded-t-lg z-40 flex flex-col ${isDarkMode
-          ? "bg-gray-900  text-white "
-          : "bg-gray-200  text-black"
-          }`} style={{ maxHeight: 'calc(100vh)' }}>
-          <div className={`flex items-center justify-between px-6 py-3 border-b dark:border-gray-800 border-gray-300 flex-shrink-0            }`} style={{ minHeight: '40px', height: '40px' }}>
-            <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-black"
-              }`}>
+        <div
+          className={` h-fullfixed top-0 left-4 right-4  rounded-t-lg z-40 flex flex-col ${
+            isDarkMode ? "bg-gray-900  text-white " : "bg-gray-200  text-black"
+          }`}
+          style={{ maxHeight: "calc(100vh)" }}
+        >
+          <div
+            className={`flex items-center justify-between px-6 py-3 border-b dark:border-gray-800 border-gray-300 flex-shrink-0            }`}
+            style={{ minHeight: "40px", height: "40px" }}
+          >
+            <h3
+              className={`text-lg font-semibold ${
+                isDarkMode ? "text-white" : "text-black"
+              }`}
+            >
               Help
             </h3>
             <button
               onClick={() => setShowHelp(false)}
-              className={`p-1.5 rounded flex-shrink-0 ${isDarkMode
-                ? "text-white hover:bg-gray-700"
-                : "text-black hover:bg-gray-200"
-                }`}
+              className={`p-1.5 rounded flex-shrink-0 ${
+                isDarkMode
+                  ? "text-white hover:bg-gray-700"
+                  : "text-black hover:bg-gray-200"
+              }`}
               title="Close help"
             >
               <MdClose className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 min-h-0 px-6 pt-6 relative" style={{ paddingRight: 'calc(1.5rem + 8px)', maxHeight: '100%' }}>
+          <div
+            className="flex-1 min-h-0 px-6 pt-6 relative"
+            style={{ paddingRight: "calc(1.5rem + 8px)", maxHeight: "100%" }}
+          >
             {helpTextLoading && (
-              <div className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? "bg-gray-900/80" : "bg-gray-200/80"}`}>
-                <div className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+              <div
+                className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? "bg-gray-900/80" : "bg-gray-200/80"}`}
+              >
+                <div
+                  className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}
+                >
                   Loading...
                 </div>
               </div>
             )}
             {helpText ? (
               <div
-                className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"
-                  }`}
-                dangerouslySetInnerHTML={{ __html: markdownToHtml(helpText ?? "") }}
+                className={`text-sm ${
+                  isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}
+                dangerouslySetInnerHTML={{
+                  __html: markdownToHtml(helpText ?? ""),
+                }}
               />
             ) : !helpTextLoading ? (
-              <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+              <div
+                className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}
+              >
                 No help text available.
               </div>
             ) : null}
