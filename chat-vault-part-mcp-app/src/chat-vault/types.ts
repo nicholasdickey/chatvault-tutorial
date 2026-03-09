@@ -63,7 +63,6 @@ export interface Pagination {
 /** Delete confirmation state */
 export interface DeleteConfirmation {
   chatId: string;
-  userId: string;
   title?: string;
 }
 

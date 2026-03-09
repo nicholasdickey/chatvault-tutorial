@@ -501,7 +501,6 @@ function App() {
     setDeleteConfirmation({
       chatId: chat.id,
       title: chat.title,
-      userId: chat.userId || (chats.length > 0 && chats[0].userId) || "",
     });
     setAlertMessage(`Are you sure you want to delete "${chat.title}"?`);
     setAlertPortalLink(null);
@@ -510,7 +509,7 @@ function App() {
   const handleConfirmDelete = async () => {
     if (!deleteConfirmation) return;
 
-    const { chatId, userId } = deleteConfirmation;
+    const { chatId } = deleteConfirmation;
     setDeleteConfirmation(null);
     setAlertMessage(null);
     setAlertPortalLink(null);
@@ -519,14 +518,10 @@ function App() {
     setPaginationLoading(true);
 
     try {
-      if (!userId) {
-        throw new Error("User ID not available. Please refresh and try again.");
-      }
-
-      addLog("Calling deleteChat tool", { chatId, userId });
+      addLog("Calling deleteChat tool", { chatId });
       const result = (await app.callServerTool({
         name: "deleteChat",
-        arguments: { chatId, userId },
+        arguments: { chatId },
       })) as ChatVaultToolResult | null;
 
       addLog("Delete chat result", result);
@@ -616,22 +611,11 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      const userId =
-        selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
-      if (!userId) {
-        throw new Error("User ID not available. Please refresh and try again.");
-      }
-
-      addLog("Calling updateChat tool", {
-        chatId,
-        userId,
-        title: trimmedTitle,
-      });
+      addLog("Calling updateChat tool", { chatId, title: trimmedTitle });
       const result = (await app.callServerTool({
         name: "updateChat",
         arguments: {
           chatId,
-          userId,
           chat: {
             title: trimmedTitle,
           },
@@ -690,12 +674,9 @@ function App() {
 
     if (turn.truncated && !fullTurnContent[turnId]) {
       try {
-        const userId =
-          selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
-        if (!userId) throw new Error("User ID not available");
         const result = (await app.callServerTool({
           name: "loadFullTurn",
-          arguments: { chatId: selectedChat.id, userId, turnIndex },
+          arguments: { chatId: selectedChat.id, turnIndex },
         })) as ChatVaultToolResult | null;
         const turnData = result?.structuredContent?.turn as
           | { prompt: string; response: string }
@@ -802,22 +783,14 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      const userId =
-        selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
-      if (!userId) {
-        throw new Error("User ID not available. Please refresh and try again.");
-      }
-
       addLog("Calling updateChat tool with turns", {
         chatId,
-        userId,
         turnsCount: editedTurns.length,
       });
       const result = (await app.callServerTool({
         name: "updateChat",
         arguments: {
           chatId,
-          userId,
           chat: {
             turns: editedTurns,
           },
@@ -1047,17 +1020,10 @@ function App() {
     setHelpTextLoading(true);
 
     try {
-      const userId =
-        selectedChat?.userId || (chats.length > 0 && chats[0].userId) || "";
-
-      if (!userId) {
-        throw new Error("User ID not available. Please refresh and try again.");
-      }
-
-      addLog("Calling explainHowToUse tool", { userId });
+      addLog("Calling explainHowToUse tool");
       const result = (await app.callServerTool({
         name: "explainHowToUse",
-        arguments: { userId },
+        arguments: {},
       })) as ChatVaultToolResult | null;
 
       addLog("explainHowToUse result", result);
@@ -1107,14 +1073,9 @@ function App() {
     if (needsFetch) {
       setLoadingTurnIds((prev) => new Set(prev).add(turnId));
       try {
-        const userId =
-          selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
-        if (!userId) {
-          throw new Error("User ID not available");
-        }
         const result = (await app.callServerTool({
           name: "loadFullTurn",
-          arguments: { chatId: selectedChat.id, userId, turnIndex: index },
+          arguments: { chatId: selectedChat.id, turnIndex: index },
         })) as ChatVaultToolResult | null;
         const turnData = result?.structuredContent?.turn as
           | { prompt: string; response: string }
@@ -1155,12 +1116,9 @@ function App() {
       return { prompt: turn.prompt, response: turn.response };
     if (fullTurnContent[turnId]) return fullTurnContent[turnId];
     try {
-      const userId =
-        selectedChat.userId || (chats.length > 0 && chats[0].userId) || "";
-      if (!userId) return null;
       const result = (await app.callServerTool({
         name: "loadFullTurn",
-        arguments: { chatId: selectedChat.id, userId, turnIndex },
+        arguments: { chatId: selectedChat.id, turnIndex },
       })) as ChatVaultToolResult | null;
       const turnData = result?.structuredContent?.turn as
         | { prompt: string; response: string }
