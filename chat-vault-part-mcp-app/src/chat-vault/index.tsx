@@ -3643,79 +3643,77 @@ function App() {
           </div>
         )}
 
-        {/* Debug Panel - Toggle with Ctrl+Alt+D */}
-        {showDebug && (
-          <div
-            className={`mt-4 pt-4 border-t ${
-              isDarkMode ? "border-gray-700" : "border-black/5"
+        {/* Debug Panel - Toggle with Ctrl+Alt+D or on-screen button */}
+        <div
+          className={`mt-4 pt-4 border-t ${
+            isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}
+        >
+          <button
+            onClick={() => {
+              const newState = !showDebug;
+              setShowDebug(newState);
+              // Persist in localStorage
+              if (newState) {
+                localStorage.setItem("chatvault-debug-enabled", "true");
+              } else {
+                localStorage.removeItem("chatvault-debug-enabled");
+              }
+            }}
+            className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
+              isDarkMode
+                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
-            <button
-              onClick={() => {
-                const newState = !showDebug;
-                setShowDebug(newState);
-                // Persist in localStorage
-                if (newState) {
-                  localStorage.setItem("chatvault-debug-enabled", "true");
-                } else {
-                  localStorage.removeItem("chatvault-debug-enabled");
-                }
-              }}
-              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
+            {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
+            <span className="ml-2 text-xs opacity-60">
+              (Ctrl+Alt+D to toggle)
+            </span>
+          </button>
+          {showDebug && (
+            <div
+              className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
                 isDarkMode
-                  ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  ? "bg-gray-950 text-gray-300"
+                  : "bg-gray-50 text-gray-800"
               }`}
             >
-              {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-              <span className="ml-2 text-xs opacity-60">
-                (Ctrl+Alt+D to toggle)
-              </span>
-            </button>
-            {showDebug && (
               <div
-                className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
-                  isDarkMode
-                    ? "bg-gray-950 text-gray-300"
-                    : "bg-gray-50 text-gray-800"
+                className={`mb-3 pb-3 border-b ${
+                  isDarkMode ? "border-gray-700" : "border-gray-300"
                 }`}
               >
-                <div
-                  className={`mb-3 pb-3 border-b ${
-                    isDarkMode ? "border-gray-700" : "border-gray-300"
-                  }`}
-                >
-                  <div className="font-semibold mb-1">
-                    Widget Version: v{WIDGET_VERSION}
-                  </div>
-                  <div
-                    className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
-                  >
-                    Mode: MCP App
-                  </div>
+                <div className="font-semibold mb-1">
+                  Widget Version: v{WIDGET_VERSION}
                 </div>
-                {debugLogs.length === 0 ? (
-                  <div className="opacity-60">No logs yet</div>
-                ) : (
-                  debugLogs.map((log, idx) => (
-                    <div
-                      key={idx}
-                      className="mb-2 border-b border-gray-700 pb-2"
-                    >
-                      <div className="opacity-60 text-xs">{log.timestamp}</div>
-                      <div className="mt-1">{log.message}</div>
-                      {log.data && (
-                        <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
-                          {log.data}
-                        </pre>
-                      )}
-                    </div>
-                  ))
-                )}
+                <div
+                  className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                >
+                  Mode: MCP App
+                </div>
               </div>
-            )}
-          </div>
-        )}
+              {debugLogs.length === 0 ? (
+                <div className="opacity-60">No logs yet</div>
+              ) : (
+                debugLogs.map((log, idx) => (
+                  <div
+                    key={idx}
+                    className="mb-2 border-b border-gray-700 pb-2"
+                  >
+                    <div className="opacity-60 text-xs">{log.timestamp}</div>
+                    <div className="mt-1">{log.message}</div>
+                    {log.data && (
+                      <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
+                        {log.data}
+                      </pre>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Manual Save Modal */}
         {showManualSaveModal && (
