@@ -186,6 +186,29 @@ function App() {
     };
   }, []);
 
+  // Listen for host-side Agentsyx logs (forwarded via postMessage from MCP App host)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as any;
+      if (!data || typeof data !== "object") return;
+      if (data.type !== "agentsyx-log" || data.source !== "mcp-host") return;
+
+      const level =
+        typeof data.level === "string" ? (data.level as string) : "info";
+      const message =
+        typeof data.message === "string" ? (data.message as string) : "Host log";
+      const context =
+        data.context && typeof data.context === "object" ? data.context : null;
+
+      addLog(`[host/${level}] ${message}`, context);
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
   // Load initial data from embedded script or call loadMyChats
   // Only run once on mount
   const hasLoadedInitial = useRef(false);
