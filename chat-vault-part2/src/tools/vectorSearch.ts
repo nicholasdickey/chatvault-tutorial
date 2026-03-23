@@ -5,6 +5,7 @@
 import { db } from "../db/index.js";
 import { sql } from "drizzle-orm";
 import { generateEmbedding } from "../utils/embeddings.js";
+import { getMergedUserIdScopeForReads } from "../user/userMerge.js";
 
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
@@ -92,8 +93,8 @@ export async function performVectorSearch(
 
     // Convert embedding array to pgvector format string
     const embeddingString = `[${queryEmbedding.join(",")}]`;
-    // Escape single quotes in userId to prevent SQL injection
-    const safeUserId = userId.replace(/'/g, "''");
+    const scope = await getMergedUserIdScopeForReads(userId);
+    const safeUserIds = scope.map((id) => `'${id.replace(/'/g, "''")}'`).join(", ");
 
     // Perform vector similarity search using pgvector cosine distance operator (<=>)
     // We use 1 - distance to get similarity (higher is better)
@@ -120,7 +121,7 @@ export async function performVectorSearch(
         turns,
         1 - (embedding <=> '${embeddingString}'::vector) as similarity
       FROM chats
-      WHERE user_id = '${safeUserId}'
+      WHERE user_id IN (${safeUserIds})
         AND embedding IS NOT NULL
         AND 1 - (embedding <=> '${embeddingString}'::vector) >= ${minSimilarity}
       ORDER BY embedding <=> '${embeddingString}'::vector

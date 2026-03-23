@@ -2,12 +2,32 @@
  * Upstash Redis utilities for async ChatVault job queue
  */
 
+import { createHash } from "node:crypto";
 import { Redis } from "@upstash/redis";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
 export const CHAT_SAVE_QUEUE = process.env.CHATVAULT_CHAT_SAVE_QUEUE ?? "queue:mcp:chat-save";
+
+/** Composite user-merge cache: SHA-256 of from + NUL + to (keep in sync with mcp-worker mergeCacheKey). */
+export function buildUserMergeCacheKey(fromUserId: string, toUserId: string): string {
+    const h = createHash("sha256")
+        .update(fromUserId, "utf8")
+        .update("\0", "utf8")
+        .update(toUserId, "utf8")
+        .digest("hex");
+    return `chatvault:user_merge:v1:${h}`;
+}
+
+function getUserMergeCacheTtlSeconds(): number {
+    const raw = process.env.CHATVAULT_USER_MERGE_CACHE_TTL_SEC?.trim();
+    if (raw) {
+        const n = Number.parseInt(raw, 10);
+        if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 604800; // 7d default
+}
 const STATUS_KEY_PREFIX = "chatvault:job:";
 const STATUS_TTL_SECONDS = 180;
 
@@ -63,6 +83,14 @@ export interface ChatSaveJobPayload {
     source: "saveChat" | "saveChatTurnsFinalize" | "widgetAdd";
 }
 
+/** Async user-id row migration; same queue as chat save (mcp-worker processChatSaveJob). */
+export interface UserMergeQueuePayload {
+    jobId: string;
+    source: "userMerge";
+    fromUserId: string;
+    toUserId: string;
+}
+
 export interface JobStatus {
     status: "pending" | "completed" | "failed" | "expired";
     chatId?: string;
@@ -102,6 +130,42 @@ export async function pushChatSaveJob(payload: ChatSaveJobPayload): Promise<stri
         queue: CHAT_SAVE_QUEUE,
         statusKey,
     });
+    return payload.jobId;
+}
+
+/**
+ * True if Redis has the merge pair marker (mapping known; repair/migration may still run via DB row check).
+ */
+export async function getMergeCachedComplete(fromUserId: string, toUserId: string): Promise<boolean> {
+    if (!isRedisConfigured()) return false;
+    const redis = getRedis();
+    const key = buildUserMergeCacheKey(fromUserId, toUserId);
+    const v = await redis.get(key);
+    return v != null;
+}
+
+export async function setMergeCachedComplete(fromUserId: string, toUserId: string): Promise<void> {
+    if (!isRedisConfigured()) return;
+    const redis = getRedis();
+    const key = buildUserMergeCacheKey(fromUserId, toUserId);
+    const ttl = getUserMergeCacheTtlSeconds();
+    await redis.set(key, "1", { ex: ttl });
+}
+
+/**
+ * Enqueue user merge migration (UPDATE chats / chat_save_jobs). No job status key (fire-and-forget).
+ */
+export async function pushUserMergeJob(payload: UserMergeQueuePayload): Promise<string> {
+    const redis = getRedis();
+    const payloadJson = JSON.stringify(payload);
+    console.log("[redis] pushUserMergeJob", {
+        jobId: payload.jobId,
+        queue: CHAT_SAVE_QUEUE,
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        bytes: payloadJson.length,
+    });
+    await redis.lpush(CHAT_SAVE_QUEUE, payloadJson);
     return payload.jobId;
 }
 

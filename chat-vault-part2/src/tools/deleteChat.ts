@@ -5,6 +5,7 @@
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 
 export interface DeleteChatParams {
     chatId: string;
@@ -34,11 +35,12 @@ export async function deleteChat(params: DeleteChatParams): Promise<DeleteChatRe
             throw new Error("userId is required");
         }
 
+        const userIdScope = await getMergedUserIdScopeForReads(userId);
         // Verify chat exists and belongs to user (security check)
         const existingChat = await db
             .select({ id: chats.id })
             .from(chats)
-            .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+            .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
             .limit(1);
 
         if (existingChat.length === 0) {
@@ -48,7 +50,7 @@ export async function deleteChat(params: DeleteChatParams): Promise<DeleteChatRe
         // Delete the chat
         const deletedChats = await db
             .delete(chats)
-            .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+            .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
             .returning({ id: chats.id });
 
         if (deletedChats.length === 0) {

@@ -4,9 +4,10 @@
 
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
 import type { UserContext } from "../server.js";
+import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
@@ -177,6 +178,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     if (!userId) {
       throw new Error("userId is required");
     }
+    const userIdScope = await getMergedUserIdScopeForReads(userId);
     const contentMetadata = {
 
       subTitle: `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save to the right.`,
@@ -214,7 +216,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const allChatsForUser = await db
         .select()
         .from(chats)
-        .where(eq(chats.userId, userId));
+        .where(chatsUserIdInScope(userIdScope));
       const totalChats = allChatsForUser.length;
 
       // Filter expired chats for anonymous users
@@ -269,7 +271,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     const allChatResults = await db
       .select()
       .from(chats)
-      .where(eq(chats.userId, userId))
+      .where(chatsUserIdInScope(userIdScope))
       .orderBy(desc(chats.timestamp));
 
     console.log("[loadMyChats] Retrieved", allChatResults.length, "chats before deduplication");

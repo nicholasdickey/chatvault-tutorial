@@ -65,3 +65,19 @@ export type ChatSaveJob = typeof chatSaveJobs.$inferSelect;
 export type NewChatSaveJob = typeof chatSaveJobs.$inferInsert;
 export type ChatSaveJobTurn = typeof chatSaveJobTurns.$inferSelect;
 export type NewChatSaveJobTurn = typeof chatSaveJobTurns.$inferInsert;
+
+/** Idempotent map: declared/tool user id → trusted canonical user id (Findexar/A6). */
+export const userIdMerges = pgTable(
+    "user_id_merges",
+    {
+        fromUserId: text("from_user_id").primaryKey(),
+        toUserId: text("to_user_id").notNull(),
+        mergedAt: timestamp("merged_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        toUserIdIdx: index("user_id_merges_to_user_id_idx").on(table.toUserId),
+    })
+);
+
+export type UserIdMerge = typeof userIdMerges.$inferSelect;
+export type NewUserIdMerge = typeof userIdMerges.$inferInsert;

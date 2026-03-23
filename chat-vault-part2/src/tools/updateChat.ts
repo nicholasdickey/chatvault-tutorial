@@ -5,6 +5,7 @@
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 import { generateEmbedding, combineChatText } from "../utils/embeddings.js";
 
 export interface UpdateChatParams {
@@ -49,11 +50,12 @@ export async function updateChat(params: UpdateChatParams): Promise<UpdateChatRe
             throw new Error("At least one of chat.title or chat.turns must be provided");
         }
 
+        const userIdScope = await getMergedUserIdScopeForReads(userId);
         // Verify chat exists and belongs to user (security check)
         const existingChat = await db
             .select({ id: chats.id, title: chats.title, turns: chats.turns })
             .from(chats)
-            .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+            .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
             .limit(1);
 
         if (existingChat.length === 0) {
@@ -110,7 +112,7 @@ export async function updateChat(params: UpdateChatParams): Promise<UpdateChatRe
         const updatedChats = await db
             .update(chats)
             .set(updateData)
-            .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+            .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
             .returning({ id: chats.id, title: chats.title, turns: chats.turns });
 
         if (updatedChats.length === 0) {

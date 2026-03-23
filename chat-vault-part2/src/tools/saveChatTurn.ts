@@ -6,6 +6,7 @@
 import { db } from "../db/index.js";
 import { chatSaveJobs, chatSaveJobTurns } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { getMergedUserIdScopeForReads, chatSaveJobsUserIdInScope } from "../user/userMerge.js";
 
 export interface SaveChatTurnParams {
     userId: string;
@@ -38,11 +39,12 @@ export async function saveChatTurn(params: SaveChatTurnParams): Promise<SaveChat
         throw new Error("turn must have prompt and response as strings");
     }
 
+    const userIdScope = await getMergedUserIdScopeForReads(userId);
     // Verify job exists and belongs to user
     const [job] = await db
         .select()
         .from(chatSaveJobs)
-        .where(and(eq(chatSaveJobs.id, jobId), eq(chatSaveJobs.userId, userId)))
+        .where(and(eq(chatSaveJobs.id, jobId), chatSaveJobsUserIdInScope(userIdScope)))
         .limit(1);
 
     if (!job) {

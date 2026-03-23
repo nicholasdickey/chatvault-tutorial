@@ -5,6 +5,7 @@
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 
 export interface LoadFullTurnParams {
   chatId: string;
@@ -29,10 +30,11 @@ export async function loadFullTurn(params: LoadFullTurnParams): Promise<LoadFull
     throw new Error("chatId, userId, and turnIndex (>= 0) are required");
   }
 
+  const userIdScope = await getMergedUserIdScopeForReads(userId);
   const [row] = await db
     .select({ turns: chats.turns })
     .from(chats)
-    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+    .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
     .limit(1);
 
   if (!row) {

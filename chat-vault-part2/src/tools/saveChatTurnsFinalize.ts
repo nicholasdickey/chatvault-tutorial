@@ -7,6 +7,7 @@
 import { db } from "../db/index.js";
 import { chatSaveJobs, chatSaveJobTurns } from "../db/schema.js";
 import { eq, and, asc } from "drizzle-orm";
+import { getMergedUserIdScopeForReads, chatSaveJobsUserIdInScope } from "../user/userMerge.js";
 import { pushChatSaveJob, isRedisConfigured, getRedisConfigStatus } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
 
@@ -29,11 +30,12 @@ export async function saveChatTurnsFinalize(
         throw new Error("jobId is required");
     }
 
+    const userIdScope = await getMergedUserIdScopeForReads(userId);
     // Verify job exists and belongs to user
     const [job] = await db
         .select()
         .from(chatSaveJobs)
-        .where(and(eq(chatSaveJobs.id, jobId), eq(chatSaveJobs.userId, userId)))
+        .where(and(eq(chatSaveJobs.id, jobId), chatSaveJobsUserIdInScope(userIdScope)))
         .limit(1);
 
     if (!job) {

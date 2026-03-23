@@ -29,6 +29,7 @@ import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
 import { updateChat } from "./tools/updateChat.js";
 import { getJobStatus } from "./utils/redis.js";
+import { resolveDeclaredUserIdWithMerge } from "./user/userMerge.js";
 
 dotenv.config();
 
@@ -449,7 +450,10 @@ async function handleListTools(request: ListToolsRequest) {
 async function handleCallTool(request: CallToolRequest, userContext?: UserContext, headers?: Record<string, string | string[] | undefined>) {
     const requestId = (request as unknown as { id?: string | number }).id;
     const toolName = request.params.name;
-    const args = request.params.arguments ?? {};
+    let args: Record<string, unknown> = {
+        ...((request.params.arguments ?? {}) as Record<string, unknown>),
+    };
+    args = await resolveDeclaredUserIdWithMerge(args, headers);
 
     console.log(
         "[MCP Handler] handleCallTool - request id:",
@@ -787,7 +791,7 @@ export async function handleMcpRequest(
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "content-type, mcp-session-id, authorization"
+        "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -1039,7 +1043,7 @@ const server = createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
             "Access-Control-Allow-Headers",
-            "content-type, mcp-session-id, authorization"
+            "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
         );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.writeHead(204);
