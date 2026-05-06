@@ -16,7 +16,7 @@ export interface ChatPreview {
   isNote: boolean;
 }
 
-/** Chat item from loadMyChats/searchMyChats - preview or full */
+/** Chat item from loadSavedEntries/searchKnowledge - preview or full */
 export interface Chat {
   id: string;
   title: string;
@@ -53,7 +53,7 @@ export interface UserInfo {
   messageType?: string;
 }
 
-/** Pagination info from loadMyChats */
+/** Pagination info from loadSavedEntries */
 export interface Pagination {
   totalPages: number;
   hasMore: boolean;

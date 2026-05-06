@@ -17,7 +17,7 @@ const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
  * Create and configure the MCP Apps server for ChatVault Part MCP App.
  *
  * This server:
- * - Exposes the browseMySavedChats tool
+ * - Exposes the browseMyChatVault tool
  * - Registers the MCP App UI resource at ui://chat-vault/mcp-app.html
  */
 export function createMcpAppsServer(): McpServer {
@@ -28,31 +28,37 @@ export function createMcpAppsServer(): McpServer {
 
   const resourceUri = "ui://chat-vault/mcp-app.html";
 
-  const browseMySavedChatsInputSchema = {
-    shortAnonId: z.string().optional(),
+  const browseMyChatVaultInputSchema = z.object({
     isAnon: z.boolean().optional(),
-    portalLink: z.string().url().optional(),
     loginLink: z.string().url().optional(),
-  };
+    portalLink: z.string().url().optional(),
+    shortAnonId: z.string().optional(),
+  }).strict();
 
   registerAppTool(
     server,
-    "browseMySavedChats",
+    "browseMyChatVault",
     {
-      title: "Browse Saved Chats",
+      title: "Browse Chat Vault",
       description:
-        "Open the ChatVault widget to browse, search, and manage saved chats.",
-      inputSchema: browseMySavedChatsInputSchema,
+        "Open the Chat Vault widget to browse, search, and manage saved knowledge.",
+      inputSchema: browseMyChatVaultInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
       _meta: {
         ui: {
           resourceUri,
         },
+        "ui/resourceUri": resourceUri,
       },
     },
     async (args) => {
-      console.log("[MCP] browseMySavedChats handler called", { argsKeys: args ? Object.keys(args) : [] });
+      console.log("[MCP] browseMyChatVault handler called", { argsKeys: args ? Object.keys(args) : [] });
       const text =
-        "Opened ChatVault! Use the widget to browse, search, and manage your saved chats.";
+        "Opened Chat Vault. Use the widget to browse, search, and manage your saved knowledge.";
       return {
         content: [{ type: "text" as const, text }],
         _meta: {

@@ -209,7 +209,7 @@ function App() {
     };
   }, []);
 
-  // Load initial data from embedded script or call loadMyChats
+  // Load initial data from embedded script or call loadSavedEntries
   // Only run once on mount
   const hasLoadedInitial = useRef(false);
   useEffect(() => {
@@ -243,10 +243,10 @@ function App() {
           }
         }
 
-        // Fallback: call loadMyChats
+        // Fallback: call loadSavedEntries
         try {
           const result = (await app.callServerTool({
-            name: "loadMyChats",
+            name: "loadSavedEntries",
             arguments: {
               page: 0,
               size: 10,
@@ -254,7 +254,7 @@ function App() {
               widgetVersion: WIDGET_VERSION,
             },
           })) as ChatVaultToolResult | null;
-          addLog("loadMyChats result", result);
+          addLog("loadSavedEntries result", result);
 
           const rawChats = result?.structuredContent?.chats;
           const chatList = Array.isArray(rawChats) ? rawChats : [];
@@ -277,7 +277,7 @@ function App() {
           }
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          addLog("Error calling loadMyChats", { error: errorMessage });
+          addLog("Error calling loadSavedEntries", { error: errorMessage });
           setError(`Failed to load chats: ${errorMessage}`);
         }
 
@@ -377,7 +377,7 @@ function App() {
     setEditingTurnValue("");
     setHasUnsavedChanges(false);
 
-    // Chats always come from loadMyChats (with truncated or full turns)
+    // Chats always come from loadSavedEntries (with truncated or full turns)
     setSelectedChat({ ...chat });
     setEditedTurns((chat.turns ?? []).map((turn) => ({ ...turn })));
   };
@@ -420,15 +420,15 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      addLog("Calling loadMyChats");
-      addLog("loadMyChats parameters", {
+      addLog("Calling loadSavedEntries");
+      addLog("loadSavedEntries parameters", {
         page: 0,
         size: 10,
         aboveTheFoldOnly: true,
         widgetVersion: WIDGET_VERSION,
       });
       const result = (await app.callServerTool({
-        name: "loadMyChats",
+        name: "loadSavedEntries",
         arguments: {
           page: 0,
           size: 10,
@@ -436,7 +436,7 @@ function App() {
           widgetVersion: WIDGET_VERSION,
         },
       })) as ChatVaultToolResult | null;
-      addLog("loadMyChats result", result);
+      addLog("loadSavedEntries result", result);
       if (result?.structuredContent?.chats) {
         setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
         setPagination(
@@ -541,10 +541,10 @@ function App() {
     setPaginationLoading(true);
 
     try {
-      addLog("Calling deleteChat tool", { chatId });
+      addLog("Calling deleteSavedEntry tool", { chatId });
       const result = (await app.callServerTool({
-        name: "deleteChat",
-        arguments: { chatId },
+        name: "deleteSavedEntry",
+        arguments: { entryId: chatId },
       })) as ChatVaultToolResult | null;
 
       addLog("Delete chat result", result);
@@ -634,12 +634,12 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      addLog("Calling updateChat tool", { chatId, title: trimmedTitle });
+      addLog("Calling updateSavedEntry tool", { chatId, title: trimmedTitle });
       const result = (await app.callServerTool({
-        name: "updateChat",
+        name: "updateSavedEntry",
         arguments: {
-          chatId,
-          chat: {
+          entryId: chatId,
+          entry: {
             title: trimmedTitle,
           },
         },
@@ -699,7 +699,7 @@ function App() {
       try {
         const result = (await app.callServerTool({
           name: "loadFullTurn",
-          arguments: { chatId: selectedChat.id, turnIndex },
+          arguments: { entryId: selectedChat.id, turnIndex },
         })) as ChatVaultToolResult | null;
         const turnData = result?.structuredContent?.turn as
           | { prompt: string; response: string }
@@ -806,15 +806,15 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      addLog("Calling updateChat tool with turns", {
+      addLog("Calling updateSavedEntry tool with turns", {
         chatId,
         turnsCount: editedTurns.length,
       });
       const result = (await app.callServerTool({
-        name: "updateChat",
+        name: "updateSavedEntry",
         arguments: {
-          chatId,
-          chat: {
+          entryId: chatId,
+          entry: {
             turns: editedTurns,
           },
         },
@@ -1098,7 +1098,7 @@ function App() {
       try {
         const result = (await app.callServerTool({
           name: "loadFullTurn",
-          arguments: { chatId: selectedChat.id, turnIndex: index },
+          arguments: { entryId: selectedChat.id, turnIndex: index },
         })) as ChatVaultToolResult | null;
         const turnData = result?.structuredContent?.turn as
           | { prompt: string; response: string }
@@ -1141,7 +1141,7 @@ function App() {
     try {
       const result = (await app.callServerTool({
         name: "loadFullTurn",
-        arguments: { chatId: selectedChat.id, turnIndex },
+        arguments: { entryId: selectedChat.id, turnIndex },
       })) as ChatVaultToolResult | null;
       const turnData = result?.structuredContent?.turn as
         | { prompt: string; response: string }
@@ -1346,7 +1346,7 @@ function App() {
     setPaginationLoading(true);
     try {
       const loadResult = (await app.callServerTool({
-        name: "loadMyChats",
+        name: "loadSavedEntries",
         arguments: {
           page: 0,
           size: 10,
@@ -1591,14 +1591,14 @@ function App() {
         error?: string;
       } | null> => {
         if (pollCount === 0) {
-          addLog("First poll: calling getChatSaveJobStatus with jobId", {
+          addLog("First poll: calling getSaveJobStatus with jobId", {
             jobId,
             jobIdLength: jobId.length,
           });
         }
         pollCount += 1;
         const statusResult = (await app.callServerTool({
-          name: "getChatSaveJobStatus",
+          name: "getSaveJobStatus",
           arguments: { jobId },
         })) as ChatVaultToolResult | null;
         const statusSc = statusResult?.structuredContent as
@@ -1716,7 +1716,7 @@ function App() {
 
     try {
       const result = (await app.callServerTool({
-        name: "loadMyChats",
+        name: "loadSavedEntries",
         arguments: {
           query: query.trim(),
           page,
@@ -1758,7 +1758,7 @@ function App() {
 
     try {
       const result = (await app.callServerTool({
-        name: "loadMyChats",
+        name: "loadSavedEntries",
         arguments: {
           page: 0,
           size: 10,
@@ -1793,7 +1793,7 @@ function App() {
     try {
       if (isSearching && searchQuery) {
         const result = (await app.callServerTool({
-          name: "loadMyChats",
+          name: "loadSavedEntries",
           arguments: {
             query: searchQuery.trim(),
             page: nextPage,
@@ -1813,7 +1813,7 @@ function App() {
         }
       } else {
         const result = (await app.callServerTool({
-          name: "loadMyChats",
+          name: "loadSavedEntries",
           arguments: {
             page: nextPage,
             size: 10,
@@ -3322,7 +3322,7 @@ function App() {
                                 setPaginationLoading(true);
                                 try {
                                   const res = (await app.callServerTool({
-                                    name: "loadMyChats",
+                                    name: "loadSavedEntries",
                                     arguments: {
                                       page: targetPage,
                                       size: 10,
@@ -3407,7 +3407,7 @@ function App() {
                                     setPaginationLoading(true);
                                     app
                                       .callServerTool({
-                                        name: "loadMyChats",
+                                        name: "loadSavedEntries",
                                         arguments: {
                                           page,
                                           size: 10,
@@ -3490,7 +3490,7 @@ function App() {
                                       setPaginationLoading(true);
                                       try {
                                         const res = (await app.callServerTool({
-                                          name: "loadMyChats",
+                                          name: "loadSavedEntries",
                                           arguments: {
                                             page,
                                             size: 10,
@@ -3552,7 +3552,7 @@ function App() {
                                 setPaginationLoading(true);
                                 try {
                                   const res = (await app.callServerTool({
-                                    name: "loadMyChats",
+                                    name: "loadSavedEntries",
                                     arguments: {
                                       page: targetPage,
                                       size: 10,

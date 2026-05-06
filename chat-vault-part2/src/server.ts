@@ -83,54 +83,43 @@ function createMcpServer(): Server {
 // Define available tools
 const chatVaultTools: Tool[] = [
     {
-        name: "deleteChat",
-        description: "USED INSIDE THE WIDGET. Delete selected chat by the widget using chatId",
+        name: "deleteSavedEntry",
+        description: "USED INSIDE THE WIDGET. Delete a selected saved entry from Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                chatId: {
-                    type: "string",
-                    description: "Chat ID to delete (required)",
-                },
+                userId: { type: "string", description: "User ID (required)" },
+                entryId: { type: "string", description: "Saved entry ID to delete (required)" },
             },
-            required: ["userId", "chatId"],
+            required: ["userId", "entryId"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
-            destructiveHint: true
+            openWorldHint: false,
+            destructiveHint: true,
         },
-
     },
+
     {
-        name: "updateChat",
-        description: "USED INSIDE THE WIDGET. Update a chat's properties (title and/or turns). When turns are updated, embeddings are regenerated.",
+        name: "updateSavedEntry",
+        description:
+            "USED INSIDE THE WIDGET. Update a saved entry's title and/or conversation turns. When content is updated, embeddings are regenerated.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                chatId: {
-                    type: "string",
-                    description: "Chat ID to update (required)",
-                },
-                chat: {
+                userId: { type: "string", description: "User ID (required)" },
+                entryId: { type: "string", description: "Saved entry ID to update (required)" },
+                entry: {
                     type: "object",
-                    description: "Chat properties to update (at least one of title or turns must be provided)",
+                    description: "Saved entry properties to update; provide title and/or turns.",
                     properties: {
                         title: {
                             type: "string",
-                            description: "New title for the chat (optional, max 2048 characters)",
+                            description: "New title for the saved entry (optional, max 2048 characters)",
                         },
                         turns: {
                             type: "array",
-                            description: "Updated turns array (optional, must be non-empty if provided)",
+                            description: "Updated conversation turns; must be non-empty if provided.",
                             items: {
                                 type: "object",
                                 properties: {
@@ -143,31 +132,27 @@ const chatVaultTools: Tool[] = [
                     },
                 },
             },
-            required: ["userId", "chatId", "chat"],
+            required: ["userId", "entryId", "entry"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
         },
     },
+
     {
-        name: "saveChat",
-        description: "Save a short chat with up to 3 short turns. Queues for async processing; returns jobId. Poll getChatSaveJobStatus for completion. For longer chats, use saveChatTurnsBegin, saveChatTurn, and saveChatTurnsFinalize instead.",
+        name: "saveConversation",
+        description:
+            "LLM: Save a short chat or conversation selected by the user, up to 3 short turns. Queues content for async processing and returns jobId. For longer conversations, use saveConversationBegin, saveConversationTurn, and saveConversationFinalize instead.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                title: {
-                    type: "string",
-                    description: "Chat title",
-                },
+                userId: { type: "string", description: "User ID (required)" },
+                title: { type: "string", description: "Title for the saved conversation" },
                 turns: {
                     type: "array",
-                    description: "Array of  verbatim chat turns (prompt and response pairs)",
+                    description: "Array of conversation turns, with prompt and response pairs.",
                     items: {
                         type: "object",
                         properties: {
@@ -182,54 +167,55 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
-        }
+        },
     },
+
     {
-        name: "saveChatTurnsBegin",
-        description: "Primary tool for saving chats by LLM.Begin an iterative chat save session for large conversations. Call this FIRST when the chat has many turns that would exceed context limits. Returns a jobId — pass this to every saveChatTurn call and finally to saveChatTurnsFinalize. Saves the full verbatim chat without summarizing. Flow: 1) saveChatTurnsBegin 2) saveChatTurn for each turn in order 3) saveChatTurnsFinalize.",
+        name: "saveConversationBegin",
+        description:
+            "LLM: Begin saving a multi-turn chat or conversation selected by the user. Call this first for longer conversations, then call saveConversationTurn for each turn in order, then call saveConversationFinalize.",
         inputSchema: {
             type: "object",
             properties: {
                 userId: {
                     type: "string",
-                    description: "User ID (required, injected by A6 connector)",
+                    description: "User ID (required, injected by connector)",
                 },
-                title: {
-                    type: "string",
-                    description: "Chat title (required)",
-                },
+                title: { type: "string", description: "Title for the saved conversation" },
             },
             required: ["userId", "title"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
         },
     },
+
     {
-        name: "saveChatTurn",
-        description: "Add one turn to a chat save session. Call after saveChatTurnsBegin, once per turn, with turnIndex 0, 1, 2, ... in order. Pass the jobId from saveChatTurnsBegin. Do not skip indices. Call saveChatTurnsFinalize after the last turn.",
+        name: "saveConversationTurn",
+        description:
+            "LLM: Add one turn to an active conversation save session. Call after saveConversationBegin, once per turn, with turnIndex 0, 1, 2, and so on. Do not skip indices.",
         inputSchema: {
             type: "object",
             properties: {
                 userId: {
                     type: "string",
-                    description: "User ID (required, injected by A6 connector)",
+                    description: "User ID (required, injected by connector)",
                 },
                 jobId: {
                     type: "string",
-                    description: "Job ID from saveChatTurnsBegin (required)",
+                    description: "Job ID from saveConversationBegin (required)",
                 },
                 turnIndex: {
                     type: "number",
-                    description: "0-based turn index (0, 1, 2, ...)",
+                    description: "0-based turn index",
                 },
                 turn: {
                     type: "object",
-                    description: "Turn with prompt and response",
+                    description: "Conversation turn with prompt and response",
                     properties: {
                         prompt: { type: "string" },
                         response: { type: "string" },
@@ -241,190 +227,64 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
         },
     },
+
     {
-        name: "saveChatTurnsFinalize",
-        description: "Finalize a chat save session. Call AFTER all turns have been added via saveChatTurn. Queues for async embeddings; returns jobId. Poll getChatSaveJobStatus for completion. Removes temporary data.",
+        name: "saveConversationFinalize",
+        description:
+            "LLM: Finalize a multi-turn conversation save session after all turns have been added. Queues content for async processing and returns jobId.",
         inputSchema: {
             type: "object",
             properties: {
                 userId: {
                     type: "string",
-                    description: "User ID (required, injected by A6 connector)",
+                    description: "User ID (required, injected by connector)",
                 },
                 jobId: {
                     type: "string",
-                    description: "Job ID from saveChatTurnsBegin (required)",
+                    description: "Job ID from saveConversationBegin (required)",
                 },
             },
             required: ["userId", "jobId"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
         },
     },
+
     {
-        name: "loadMyChats",
-        description: "USED INSIDE THE WIDGET. Load paginated chat data for a user with optional text search filter",
+        name: "loadSavedEntries",
+        description:
+            "USED INSIDE THE WIDGET. Load paginated saved entries for display, with optional text filtering.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
+                userId: { type: "string", description: "User ID (required)" },
                 page: {
                     type: "number",
-                    description: "Page number (0-indexed, default 0)",
+                    description: "Page number, 0-indexed. Default is 0.",
                 },
                 size: {
                     type: "number",
-                    description: "Number of chats per page (default 10)",
+                    description: "Number of saved entries per page. Default is 10.",
                 },
                 query: {
                     type: "string",
-                    description: "Optional search query to filter chats by title or content",
+                    description: "Optional text query to filter saved entries by title or content.",
                 },
                 aboveTheFoldOnly: {
                     type: "boolean",
-                    description: "When true, return chats with truncated turns (first 150 chars). Use loadFullTurn when user expands a turn.",
+                    description:
+                        "When true, return saved entries with truncated content. Use loadFullTurn when the user expands a turn.",
                 },
                 widgetVersion: {
                     type: "string",
-                    description: "Widget version (optional, for tracking which widget version is calling)",
-                },
-            },
-            required: ["userId"],
-        },
-
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
-        name: "loadFullTurn",
-        description: "Load full prompt and response for a single turn. Call when user expands a truncated turn.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                chatId: {
-                    type: "string",
-                    description: "Chat ID (required)",
-                },
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                turnIndex: {
-                    type: "number",
-                    description: "0-based turn index (required)",
-                },
-            },
-            required: ["chatId", "userId", "turnIndex"],
-        },
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
-        name: "searchMyChats",
-        description: "LLM: Search chats using vector similarity search. Access user's knowledge base and long-term memory and include with your context.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                query: {
-                    type: "string",
-                    description: "Search query text (required)",
-                },
-                page: {
-                    type: "number",
-                    description: "Page number (0-indexed, default 0)",
-                },
-                size: {
-                    type: "number",
-                    description: "Number of results per page (default 10)",
-                },
-            },
-            required: ["userId", "query"],
-        },
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
-        name: "getChatSaveJobStatus",
-        description: "USED INSIDE THE WIDGET. Poll status of an async chat save job. Call after saveChat, saveChatTurnsFinalize, or widgetAdd returns jobId. Returns status: pending, completed, or failed.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                jobId: {
-                    type: "string",
-                    description: "Job ID from saveChat, saveChatTurnsFinalize, or widgetAdd (required)",
-                },
-            },
-            required: ["jobId"],
-        },
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        },
-    },
-    {
-        name: "widgetAdd",
-        description: "INTERNAL USE ONLY: This tool is strictly for in-widget operations. Queues pasted chat for async save; returns jobId. Poll getChatSaveJobStatus for completion.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                htmlContent: {
-                    type: "string",
-                    description: "The pasted HTML/text content from ChatGPT conversation",
-                },
-                title: {
-                    type: "string",
-                    description: "Optional title for the chat (defaults to 'manual save [timestamp]')",
-                },
-                widgetVersion: {
-                    type: "string",
-                    description: "Widget version (optional, for tracking which widget version is calling)",
-                },
-            },
-            required: ["userId", "htmlContent"],
-        },
-        annotations: {
-            readOnlyHint: false,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
-        name: "explainHowToUse",
-        description: "Get help text explaining how to use ChatVault",
-        inputSchema: {
-            type: "object",
-            properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
+                    description: "Widget version, optional.",
                 },
             },
             required: ["userId"],
@@ -433,7 +293,128 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: true,
             openWorldHint: false,
             destructiveHint: false,
-        }
+        },
+    },
+
+    {
+        name: "loadFullTurn",
+        description:
+            "USED INSIDE THE WIDGET. Load the full content for one saved turn when the user expands a truncated entry.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                entryId: { type: "string", description: "Saved entry ID (required)" },
+                userId: { type: "string", description: "User ID (required)" },
+                turnIndex: {
+                    type: "number",
+                    description: "0-based turn index (required)",
+                },
+            },
+            required: ["entryId", "userId", "turnIndex"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+    },
+
+    {
+        name: "searchKnowledge",
+        description:
+            "LLM: Search the user's saved knowledge using semantic search. Use relevant results as context when answering.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+                query: {
+                    type: "string",
+                    description: "Natural-language search query (required)",
+                },
+                page: {
+                    type: "number",
+                    description: "Page number, 0-indexed. Default is 0.",
+                },
+                size: {
+                    type: "number",
+                    description: "Number of results per page. Default is 10.",
+                },
+            },
+            required: ["userId", "query"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+    },
+
+    {
+        name: "getSaveJobStatus",
+        description:
+            "Poll the status of an async save job. Call after saveConversation, saveConversationFinalize, or widgetAdd returns jobId.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                jobId: {
+                    type: "string",
+                    description: "Job ID from saveConversation, saveConversationFinalize, or widgetAdd (required)",
+                },
+            },
+            required: ["jobId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+    },
+
+    {
+        name: "widgetAdd",
+        description:
+            "INTERNAL USE ONLY. Used by the widget to save user-provided text or conversation content. Queues content for async processing and returns jobId.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+                htmlContent: {
+                    type: "string",
+                    description: "User-provided HTML or text content to save",
+                },
+                title: {
+                    type: "string",
+                    description: "Optional title for the saved entry",
+                },
+                widgetVersion: {
+                    type: "string",
+                    description: "Widget version, optional.",
+                },
+            },
+            required: ["userId", "htmlContent"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+    },
+
+    {
+        name: "explainHowToUse",
+        description: "Get help text explaining how to use Chat Vault.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+            },
+            required: ["userId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
     },
 ];
 
@@ -466,7 +447,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
         JSON.stringify(userContext)
     );
     // Debug: Check if portalLink is in arguments (maybe nested or with different casing)
-    if (toolName === "loadMyChats") {
+    if (toolName === "loadSavedEntries") {
         console.log("[MCP Handler] Debug - checking for portalLink in args:", {
             hasPortalLink: !!(args as any).portalLink,
             hasPortal_link: !!(args as any).portal_link,
@@ -477,31 +458,31 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
     }
 
     try {
-        if (toolName === "saveChat") {
+        if (toolName === "saveConversation") {
             const result = await saveChat(args as { userId: string; title: string; turns: Array<{ prompt: string; response: string }> });
-            console.log("[MCP Handler] handleCallTool - saveChat result:", JSON.stringify(result));
+            console.log("[MCP Handler] handleCallTool - saveConversation result:", JSON.stringify(result));
             const text = "jobId" in result
-                ? `Chat save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getChatSaveJobStatus for completion.`
+                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getSaveJobStatus for completion.`
                 : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
             return {
                 content: [{ type: "text", text }],
                 structuredContent: result,
             };
-        } else if (toolName === "saveChatTurnsBegin") {
+        } else if (toolName === "saveConversationBegin") {
             const result = await saveChatTurnsBegin(args as { userId: string; title: string });
-            console.log("[MCP Handler] handleCallTool - saveChatTurnsBegin result:", result.jobId);
+            console.log("[MCP Handler] handleCallTool - saveConversationBegin result:", result.jobId);
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Save session started. Job ID: ${result.jobId}. Call saveChatTurn for each turn, then saveChatTurnsFinalize when done.`,
+                        text: `Save session started. Job ID: ${result.jobId}. Call saveConversationTurn for each turn, then saveConversationFinalize when done.`,
                     },
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "saveChatTurn") {
+        } else if (toolName === "saveConversationTurn") {
             const result = await saveChatTurn(args as { userId: string; jobId: string; turnIndex: number; turn: { prompt: string; response: string } });
-            console.log("[MCP Handler] handleCallTool - saveChatTurn result:", result.turnIndex);
+            console.log("[MCP Handler] handleCallTool - saveConversationTurn result:", result.turnIndex);
             return {
                 content: [
                     {
@@ -511,17 +492,17 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "saveChatTurnsFinalize") {
+        } else if (toolName === "saveConversationFinalize") {
             const result = await saveChatTurnsFinalize(args as { userId: string; jobId: string });
-            console.log("[MCP Handler] handleCallTool - saveChatTurnsFinalize result:", JSON.stringify(result));
+            console.log("[MCP Handler] handleCallTool - saveConversationFinalize result:", JSON.stringify(result));
             const text = "jobId" in result
-                ? `Chat save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getChatSaveJobStatus for completion.`
+                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getSaveJobStatus for completion.`
                 : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
             return {
                 content: [{ type: "text", text }],
                 structuredContent: result,
             };
-        } else if (toolName === "loadMyChats") {
+        } else if (toolName === "loadSavedEntries") {
             // Findexar may inject portalLink and isAnon into arguments as well
             // Use arguments as fallback if not in headers
             const finalUserContext: UserContext = {
@@ -536,19 +517,22 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 userContext: finalUserContext,
                 headers: headers, // Pass all headers for logging
             });
-            console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats", "userInfo:", result.userInfo);
+            console.log("[MCP Handler] handleCallTool - loadSavedEntries result:", result.chats.length, "entries", "userInfo:", result.userInfo);
             // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Loaded ${result.chats.length} chats`,
+                        text: `Loaded ${result.chats.length} saved entries`,
                     },
                 ],
                 structuredContent: result,
             };
         } else if (toolName === "loadFullTurn") {
-            const result = await loadFullTurn(args as { chatId: string; userId: string; turnIndex: number });
+            const result = await loadFullTurn({
+                ...(args as { userId: string; turnIndex: number }),
+                chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
+            });
             if (!result) {
                 throw new Error("Turn not found or does not belong to user");
             }
@@ -561,15 +545,15 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "searchMyChats") {
+        } else if (toolName === "searchKnowledge") {
             const result = await searchMyChats(args as { userId: string; query: string; page?: number; size?: number });
-            console.log("[MCP Handler] handleCallTool - searchMyChats result:", result.chats.length, "chats");
+            console.log("[MCP Handler] handleCallTool - searchKnowledge result:", result.chats.length, "entries");
             // Return in Part 1 compatible format: structuredContent with chats, search, and pagination
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Found ${result.chats.length} chats matching "${result.search.query}"`,
+                        text: `Found ${result.chats.length} saved entries matching "${result.search.query}"`,
                     },
                 ],
                 structuredContent: {
@@ -610,16 +594,16 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             const text = result.error
                 ? `Error: ${result.message}`
                 : result.jobId
-                    ? `Chat save queued. Job ID: ${result.jobId} (${result.turnsCount} turns). Poll getChatSaveJobStatus for completion.`
+                    ? `Content save queued. Job ID: ${result.jobId} (${result.turnsCount} turns). Poll getSaveJobStatus for completion.`
                     : `Chat saved. ID: ${result.chatId} (${result.turnsCount} turns).`;
             return {
                 content: [{ type: "text", text }],
                 structuredContent: result,
             };
-        } else if (toolName === "getChatSaveJobStatus") {
+        } else if (toolName === "getSaveJobStatus") {
             const receivedJobId = (args as { jobId?: string }).jobId;
             const statusKey = receivedJobId ? `chatvault:job:${receivedJobId}` : "(no jobId)";
-            console.log("[MCP Handler] getChatSaveJobStatus ENTRY:", {
+            console.log("[MCP Handler] getSaveJobStatus ENTRY:", {
                 requestId,
                 receivedJobId: receivedJobId ?? "(missing)",
                 receivedJobIdLength: receivedJobId?.length ?? 0,
@@ -627,10 +611,10 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 allArgKeys: Object.keys(args),
             });
             if (!receivedJobId || typeof receivedJobId !== "string") {
-                console.log("[MCP Handler] getChatSaveJobStatus ERROR: jobId missing or invalid");
+                console.log("[MCP Handler] getSaveJobStatus ERROR: jobId missing or invalid");
             }
             const result = await getJobStatus(receivedJobId ?? "");
-            console.log("[MCP Handler] getChatSaveJobStatus EXIT:", {
+            console.log("[MCP Handler] getSaveJobStatus EXIT:", {
                 requestId,
                 receivedJobId: receivedJobId ?? "(missing)",
                 lookupResult: result ? { status: result.status, chatId: result.chatId } : "null (not found or expired)",
@@ -658,26 +642,33 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "deleteChat") {
-            const result = await deleteChat(args as { userId: string; chatId: string });
-            console.log("[MCP Handler] handleCallTool - deleteChat result:", JSON.stringify(result));
+        } else if (toolName === "deleteSavedEntry") {
+            const result = await deleteChat({
+                userId: String((args as { userId?: unknown }).userId ?? ""),
+                chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
+            });
+            console.log("[MCP Handler] handleCallTool - deleteSavedEntry result:", JSON.stringify(result));
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Chat deleted successfully with ID: ${result.chatId}`,
+                        text: `Saved entry deleted successfully with ID: ${result.chatId}`,
                     },
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "updateChat") {
-            const result = await updateChat(args as { userId: string; chatId: string; chat: { title?: string; turns?: Array<{ prompt: string; response: string }> } });
-            console.log("[MCP Handler] handleCallTool - updateChat result:", JSON.stringify(result));
+        } else if (toolName === "updateSavedEntry") {
+            const result = await updateChat({
+                userId: String((args as { userId?: unknown }).userId ?? ""),
+                chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
+                chat: (args as { entry?: { title?: string; turns?: Array<{ prompt: string; response: string }> }; chat?: { title?: string; turns?: Array<{ prompt: string; response: string }> } }).entry ?? (args as { chat?: { title?: string; turns?: Array<{ prompt: string; response: string }> } }).chat ?? {},
+            });
+            console.log("[MCP Handler] handleCallTool - updateSavedEntry result:", JSON.stringify(result));
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Chat updated successfully with ID: ${result.chatId}`,
+                        text: `Saved entry updated successfully with ID: ${result.chatId}`,
                     },
                 ],
                 structuredContent: result,
@@ -803,7 +794,7 @@ export async function handleMcpRequest(
             hasSessionHeader: Boolean(req.headers["mcp-session-id"]),
         });
         const auth = isAuthorized(req);
-        if (!auth.ok) {
+        if (auth.ok === false) {
             console.log("[MCP] Auth failed:", { status: auth.status, message: auth.message });
             res.setHeader("WWW-Authenticate", "Bearer");
             res.writeHead(auth.status, { "Content-Type": "application/json" });
