@@ -9,7 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { db } from "../db/index.js";
 import { chats } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 import { pushChatSaveJob, isRedisConfigured, getRedisConfigStatus } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
 import { parsePastedChatWithLLM } from "../utils/parsePastedChatWithLLM.js";
@@ -37,10 +37,11 @@ export interface WidgetAddResult {
  * Count non-expired chats for anonymous users
  */
 async function countNonExpiredChats(userId: string): Promise<number> {
+    const scope = await getMergedUserIdScopeForReads(userId);
     const allChats = await db
         .select({ timestamp: chats.timestamp })
         .from(chats)
-        .where(eq(chats.userId, userId));
+        .where(chatsUserIdInScope(scope));
 
     const now = new Date();
     const expiryDate = new Date(now.getTime() - ANON_CHAT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
