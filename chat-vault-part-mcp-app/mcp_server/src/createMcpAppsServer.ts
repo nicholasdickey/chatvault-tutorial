@@ -28,12 +28,12 @@ export function createMcpAppsServer(): McpServer {
 
   const resourceUri = "ui://chat-vault/mcp-app.html";
 
-  const browseMyChatVaultInputSchema = z.object({
+  const browseMyChatVaultInputSchema = {
     isAnon: z.boolean().optional(),
     loginLink: z.string().url().optional(),
     portalLink: z.string().url().optional(),
     shortAnonId: z.string().optional(),
-  }).strict();
+  };
 
   registerAppTool(
     server,
@@ -43,6 +43,9 @@ export function createMcpAppsServer(): McpServer {
       description:
         "Open the Chat Vault widget to browse, search, and manage saved knowledge.",
       inputSchema: browseMyChatVaultInputSchema,
+      // OpenAI recommends outputSchema so models can understand results.
+      // This tool returns a standard CallToolResult; keep schema permissive.
+      outputSchema: z.any(),
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
