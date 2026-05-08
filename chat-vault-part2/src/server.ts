@@ -81,6 +81,138 @@ function createMcpServer(): Server {
 }
 
 // Define available tools
+const GENERIC_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    description: "Tool result payload (structuredContent).",
+    additionalProperties: true,
+};
+
+// More specific output schemas for LLM-facing tools (match structuredContent shapes).
+const SAVE_CONVERSATION_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: true,
+    properties: {
+        jobId: { type: "string" },
+        chatId: { type: "string" },
+        saved: { type: "boolean" },
+    },
+    anyOf: [
+        { required: ["jobId"] },
+        { required: ["chatId", "saved"] },
+    ],
+};
+
+const SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["jobId"],
+    properties: {
+        jobId: { type: "string" },
+    },
+};
+
+const SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["ok", "turnIndex"],
+    properties: {
+        ok: { type: "boolean" },
+        turnIndex: { type: "number" },
+    },
+};
+
+const SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: true,
+    properties: {
+        jobId: { type: "string" },
+        chatId: { type: "string" },
+    },
+    anyOf: [
+        { required: ["jobId"] },
+        { required: ["chatId"] },
+    ],
+};
+
+const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["chats", "search", "pagination"],
+    properties: {
+        chats: {
+            type: "array",
+            items: {
+                type: "object",
+                additionalProperties: true,
+                required: ["id", "userId", "title", "timestamp", "turns"],
+                properties: {
+                    id: { type: "string" },
+                    userId: { type: "string" },
+                    title: { type: "string" },
+                    timestamp: { type: "string", description: "ISO date-time string" },
+                    turns: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["prompt", "response"],
+                            properties: {
+                                prompt: { type: "string" },
+                                response: { type: "string" },
+                            },
+                        },
+                    },
+                    similarity: { type: "number" },
+                },
+            },
+        },
+        search: {
+            type: "object" as const,
+            additionalProperties: false,
+            required: ["query"],
+            properties: {
+                query: { type: "string" },
+            },
+        },
+        pagination: {
+            type: "object" as const,
+            additionalProperties: false,
+            required: ["page", "limit", "total", "totalPages", "hasMore"],
+            properties: {
+                page: { type: "number" },
+                limit: { type: "number" },
+                total: { type: "number" },
+                totalPages: { type: "number" },
+                hasMore: { type: "boolean" },
+            },
+        },
+    },
+};
+
+const GET_SAVE_JOB_STATUS_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["status"],
+    properties: {
+        status: {
+            type: "string",
+            enum: ["pending", "completed", "failed", "expired"],
+        },
+        chatId: { type: "string" },
+        chatIds: { type: "array", items: { type: "string" } },
+        error: { type: "string" },
+    },
+};
+
+const EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["helpText"],
+    properties: {
+        helpText: { type: "string" },
+    },
+};
+
 const chatVaultTools: Tool[] = [
     {
         name: "deleteSavedEntry",
@@ -98,6 +230,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: true,
         },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
     },
 
     {
@@ -139,6 +272,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
     },
 
     {
@@ -170,6 +304,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: SAVE_CONVERSATION_OUTPUT_SCHEMA,
     },
 
     {
@@ -192,6 +327,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA,
     },
 
     {
@@ -230,6 +366,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA,
     },
 
     {
@@ -255,6 +392,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA,
     },
 
     {
@@ -294,6 +432,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
     },
 
     {
@@ -317,6 +456,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
     },
 
     {
@@ -347,6 +487,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: SEARCH_KNOWLEDGE_OUTPUT_SCHEMA,
     },
 
     {
@@ -368,6 +509,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: GET_SAVE_JOB_STATUS_OUTPUT_SCHEMA,
     },
 
     {
@@ -398,6 +540,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
     },
 
     {
@@ -415,6 +558,7 @@ const chatVaultTools: Tool[] = [
             openWorldHint: false,
             destructiveHint: false,
         },
+        outputSchema: EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA,
     },
 ];
 
