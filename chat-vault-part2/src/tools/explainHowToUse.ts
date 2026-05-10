@@ -10,45 +10,61 @@ export interface ExplainHowToUseParams {
 export interface ExplainHowToUseResult {
     helpText: string;
 }
-export const helpText = `# How to Use The Chat Vault App
+export const helpText = `# How to Use Chat Vault
 
-Chat Vault helps you save, organize, and search your Claude, Gemini, ChatGPT, etc. "aha! moments" and knowledge-building conversations. Think of it as a secure personal archive for your most valuable chats. Your knowldge base. Your AI chatbots' long-term memory. That you own and can take with you to any new platform or AI environment.
+Chat Vault is a personal knowledge base that helps you turn saved notes and conversations into distilled, accessible long-term knowledge using AI.
 
-## Saving Conversations
+Use Chat Vault to save useful ideas, research, conversations, and insights so they can be searched and retrieved later using natural language.
 
-You have three flexible ways to save conversations to your vault:
+## Saving Knowledge
 
-### 1. Ask the Chatbot to Save
-Simply ask ChatGPT or the chatbot you are using to save the current conversation to your vault. You can specify:
-- **By subject**: "Save this conversation about [topic] to my ChatVault"
-- **By number of turns**: "Save the last 5 turns to my ChatVault"
-- **The entire conversation**: "Add this entire chat to my ChatVault"
-Note, in works best when the start is from a fresh chat, and the chatbot is not already in the middle of a long conversation.
-If the chatbot is having trouble saving a verbatim chat - you can copy the chat manually, start a new chat, paste the chat into the new chat, and ask the chatbot to parse and save the chat turn-by-turn into the vault.
+You can save conversations, notes, or other useful content into your vault in several ways.
 
-### 2. Paste the copied chat into the connected chat and ask the host to parse it turn-by-turn and save into the vault.
-Simply ask ChatGPT or the chatbot you are using to parse and save the pasted conversation to your vault turn by turn..
+### 1. Ask the AI Assistant to Save the Conversation
+You can ask the AI assistant to save the current conversation or selected turns into Chat Vault.
 
-### 3. Manual Save via Widget
-Use the '+' button in the ChatVault widget to manually add conversations or notes:
-1. Copy a conversation from Claude, ChatGPT, Gemini, etc. (or anywhere)
-2. Click the '+' button in the ChatVault widget header
-3. Paste the conversation into the text area
-4. Optionally add a custom title
+Examples:
+- "Save this conversation to Chat Vault"
+- "Save the last 5 turns to Chat Vault"
+- "Save this discussion about vector databases"
+
+For best results, save from shorter focused conversations.
+
+### 2. Paste Content Into the Chat
+You can paste copied conversation text or notes into the chat and ask the assistant to save it into Chat Vault.
+
+Examples:
+- "Save this pasted conversation to Chat Vault"
+- "Parse and save this conversation"
+
+### 3. Manual Save Using the Widget
+Use the '+' button in the Chat Vault widget to manually save conversations or notes.
+
+1. Copy a conversation, note, or text
+2. Click the '+' button in the Chat Vault widget
+3. Paste the content
+4. Optionally add a title
 5. Click "Save"
 
-## Accessing Your Vault
+## Searching Your Knowledge
 
-Just ask Claude, ChatGPT or whatever the chatbot you are using to 'browse my chats' or to find a chat in the vault by topic, date, or other criteria.
-To leverage the true power of Chat Vault, you can ask the chatbot to user the chat vault as your personal knowledge base and search it automatically to include in the context when researching or any other agentic tasks. 
+Ask the assistant to search Chat Vault using natural language.
 
-## Getting Started in ChatGPT
+Examples:
+- "Search my knowledge about embeddings"
+- "Find saved conversations about MCP"
+- "What do I already know about RAG pipelines?"
 
-The easiest way to start is to simply ask ChatGPT: "Save this conversation to my ChatVault" or "Add this chat about [topic] to my vault". ChatGPT will handle the rest!
+You can also ask the assistant to use Chat Vault as additional context during research, brainstorming, or other AI-assisted workflows.
 
-For manual saves, use the '+' button in the widget and paste your conversation. The widget will automatically format and save it.
+## Getting Started
 
-Need help? Ask ChatGPT or check the widget interface for more options!`;
+A simple way to begin is:
+
+- "Save this conversation to Chat Vault"
+- "Search my saved knowledge about AI agents"
+
+You can also manually save content using the Chat Vault widget.`;
 
 /**
  * Generate help text explaining how to use ChatVault
