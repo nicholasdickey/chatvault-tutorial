@@ -147,6 +147,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
   const isAnonymousPlan = userContext?.isAnonymousPlan;
   const portalLink = userContext?.portalLink ?? null;
   const loginLink = userContext?.loginLink ?? null;
+  const shouldShowFreeLimitMetadata = isAnon || isAnonymousPlan === true;
 
   // Extract userName from x-a6-username header
   let userName: string | null = null;
@@ -230,7 +231,9 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const filteredHasMore = pageNum + 1 < filteredTotalPages;
       const filteredOffset = pageNum * sizeNum;
       const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
-      console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
+      if (shouldShowFreeLimitMetadata) {
+        console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
+      }
 
       const chatsToReturn = paginatedFilteredChats.map((chat) => ({
         id: chat.id,
@@ -256,7 +259,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
           totalChats,
           userName,
-          ...(isAnonymousPlan !== undefined && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+          ...(shouldShowFreeLimitMetadata && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
         //content: contentMetadata,
 
@@ -324,11 +327,11 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
         totalChats,
         userName,
-        ...(isAnonymousPlan !== undefined && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+        ...(shouldShowFreeLimitMetadata && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         //message: "This is a **test message** with markdown. Check out [OpenAI](https://openai.com) and [ChatGPT](https://chat.openai.com) for more info.", // TODO: Replace with dynamic message logic
         //messageType: widgetVersion === "1.0.0" ? "normal" : "success",
       },
-      content: contentMetadata,
+      ...(shouldShowFreeLimitMetadata && { content: contentMetadata }),
     };
 
     console.log(
