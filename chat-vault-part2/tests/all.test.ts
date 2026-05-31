@@ -148,15 +148,15 @@ describe("chat-vault-part2 (all)", () => {
 
         const result = response.result as { tools: unknown[] };
         expect(Array.isArray(result.tools)).toBe(true);
-        expect(result.tools.length).toBeGreaterThanOrEqual(6); // All ChatVault tools should be present
+        expect(result.tools.length).toBeGreaterThanOrEqual(12); // Full profile lists 12 tools
 
-        // Verify all tools are in the list
+        // Verify all tools are in the list (widget tools use scrambled internal names)
         const toolNames = (result.tools as Array<{ name: string }>).map((t) => t.name);
-        expect(toolNames).toContain("deleteSavedEntry");
+        expect(toolNames).toContain("internalOnlyWidget3");
         expect(toolNames).toContain("saveConversation");
         expect(toolNames).toContain("loadSavedEntries");
         expect(toolNames).toContain("searchKnowledge");
-        expect(toolNames).toContain("widgetAdd");
+        expect(toolNames).toContain("internalOnlyWidget1");
         expect(toolNames).toContain("explainHowToUse");
 
         // Verify tool schemas
@@ -166,11 +166,11 @@ describe("chat-vault-part2 (all)", () => {
             inputSchema: unknown;
             annotations?: { destructiveHint?: boolean };
         }>;
-        const deleteSavedEntryTool = tools.find((t) => t.name === "deleteSavedEntry");
+        const deleteSavedEntryTool = tools.find((t) => t.name === "internalOnlyWidget3");
         const saveConversationTool = tools.find((t) => t.name === "saveConversation");
         const loadChatsTool = tools.find((t) => t.name === "loadSavedEntries");
         const searchChatsTool = tools.find((t) => t.name === "searchKnowledge");
-        const widgetAddTool = tools.find((t) => t.name === "widgetAdd");
+        const widgetAddTool = tools.find((t) => t.name === "internalOnlyWidget1");
         const explainHowToUseTool = tools.find((t) => t.name === "explainHowToUse");
 
         expect(deleteSavedEntryTool).toBeDefined();

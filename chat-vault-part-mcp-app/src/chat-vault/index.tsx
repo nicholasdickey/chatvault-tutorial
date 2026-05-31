@@ -541,9 +541,9 @@ function App() {
     setPaginationLoading(true);
 
     try {
-      addLog("Calling deleteSavedEntry tool", { chatId });
+      addLog("Calling internalOnlyWidget3 tool", { chatId });
       const result = (await app.callServerTool({
-        name: "deleteSavedEntry",
+        name: "internalOnlyWidget3",
         arguments: { entryId: chatId },
       })) as ChatVaultToolResult | null;
 
@@ -634,9 +634,9 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      addLog("Calling updateSavedEntry tool", { chatId, title: trimmedTitle });
+      addLog("Calling internalOnlyWidget2 tool", { chatId, title: trimmedTitle });
       const result = (await app.callServerTool({
-        name: "updateSavedEntry",
+        name: "internalOnlyWidget2",
         arguments: {
           entryId: chatId,
           entry: {
@@ -806,12 +806,12 @@ function App() {
     const chatId = selectedChat.id;
 
     try {
-      addLog("Calling updateSavedEntry tool with turns", {
+      addLog("Calling internalOnlyWidget2 tool with turns", {
         chatId,
         turnsCount: editedTurns.length,
       });
       const result = (await app.callServerTool({
-        name: "updateSavedEntry",
+        name: "internalOnlyWidget2",
         arguments: {
           entryId: chatId,
           entry: {
@@ -1417,8 +1417,8 @@ function App() {
         widgetVersion: WIDGET_VERSION,
       };
 
-      addLog("📤 [WIDGET] Calling widgetAdd tool", {
-        toolName: "widgetAdd",
+      addLog("📤 [WIDGET] Calling internalOnlyWidget1 tool", {
+        toolName: "internalOnlyWidget1",
         args: {
           htmlContentLength: toolArgs.htmlContent.length,
           htmlContentPreview: toolArgs.htmlContent.substring(0, 200),
@@ -1434,7 +1434,7 @@ function App() {
       });
 
       const callToolPromise = app.callServerTool({
-        name: "widgetAdd",
+        name: "internalOnlyWidget1",
         arguments: toolArgs,
       });
 
@@ -1591,14 +1591,14 @@ function App() {
         error?: string;
       } | null> => {
         if (pollCount === 0) {
-          addLog("First poll: calling getSaveJobStatus with jobId", {
+          addLog("First poll: calling internalOnlyWidget4 with jobId", {
             jobId,
             jobIdLength: jobId.length,
           });
         }
         pollCount += 1;
         const statusResult = (await app.callServerTool({
-          name: "getSaveJobStatus",
+          name: "internalOnlyWidget4",
           arguments: { jobId },
         })) as ChatVaultToolResult | null;
         const statusSc = statusResult?.structuredContent as

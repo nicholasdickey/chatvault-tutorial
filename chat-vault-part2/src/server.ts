@@ -213,10 +213,33 @@ const EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA = {
     },
 };
 
-const chatVaultTools: Tool[] = [
-    {
-        name: "deleteSavedEntry",
-        description: "USED INSIDE THE WIDGET. Delete a selected saved entry from Chat Vault.",
+type ToolMetadataProfile = "full" | "gpt";
+
+function getToolMetadataProfile(): ToolMetadataProfile {
+    const raw = (process.env.CHATVAULT_TOOL_METADATA_PROFILE ?? "full").toLowerCase();
+    if (raw === "gpt" || raw === "limited") return "gpt";
+    return "full";
+}
+
+const INTERNAL_ONLY_WIDGET_DESC =
+    "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant/model responses.";
+
+/** Maps scrambled public tool names to legacy handler keys (widgetAdd, updateSavedEntry, etc.). */
+const TOOL_NAME_ALIASES: Record<string, string> = {
+    internalOnlyWidget1: "widgetAdd",
+    internalOnlyWidget2: "updateSavedEntry",
+    internalOnlyWidget3: "deleteSavedEntry",
+    internalOnlyWidget4: "getSaveJobStatus",
+};
+
+function normalizeToolName(toolName: string): string {
+    return TOOL_NAME_ALIASES[toolName] ?? toolName;
+}
+
+// internalOnlyWidget3 = deleteSavedEntry
+const internalOnlyWidget3Tool: Tool = {
+        name: "internalOnlyWidget3",
+        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget delete operation.`,
         inputSchema: {
             type: "object",
             properties: {
@@ -231,12 +254,12 @@ const chatVaultTools: Tool[] = [
             destructiveHint: true,
         },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
-    },
+};
 
-    {
-        name: "updateSavedEntry",
-        description:
-            "USED INSIDE THE WIDGET. Update a saved entry's title and/or conversation turns. When content is updated, embeddings are regenerated.",
+// internalOnlyWidget2 = updateSavedEntry
+const internalOnlyWidget2Tool: Tool = {
+        name: "internalOnlyWidget2",
+        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget title/turn update operation.`,
         inputSchema: {
             type: "object",
             properties: {
@@ -273,9 +296,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const llmSaveConversationTool: Tool = {
         name: "saveConversation",
         description:
             "LLM: Save a short chat or conversation selected by the user, up to 3 short turns. Queues content for async processing and returns jobId. For longer conversations, use saveConversationBegin, saveConversationTurn, and saveConversationFinalize instead.",
@@ -305,9 +328,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: SAVE_CONVERSATION_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const llmSaveConversationBeginTool: Tool = {
         name: "saveConversationBegin",
         description:
             "LLM: Begin saving a multi-turn chat or conversation selected by the user. Call this first for longer conversations, then call saveConversationTurn for each turn in order, then call saveConversationFinalize.",
@@ -328,9 +351,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const llmSaveConversationTurnTool: Tool = {
         name: "saveConversationTurn",
         description:
             "LLM: Add one turn to an active conversation save session. Call after saveConversationBegin, once per turn, with turnIndex 0, 1, 2, and so on. Do not skip indices.",
@@ -367,9 +390,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const llmSaveConversationFinalizeTool: Tool = {
         name: "saveConversationFinalize",
         description:
             "LLM: Finalize a multi-turn conversation save session after all turns have been added. Queues content for async processing and returns jobId.",
@@ -393,9 +416,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const loadSavedEntriesTool: Tool = {
         name: "loadSavedEntries",
         description:
             "USED INSIDE THE WIDGET. Load paginated saved entries for display, with optional text filtering.",
@@ -433,9 +456,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const loadFullTurnTool: Tool = {
         name: "loadFullTurn",
         description:
             "USED INSIDE THE WIDGET. Load the full content for one saved turn when the user expands a truncated entry.",
@@ -457,9 +480,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const searchKnowledgeTool: Tool = {
         name: "searchKnowledge",
         description:
             "LLM: Search the user's saved knowledge using semantic search. Use relevant results as context when answering.",
@@ -488,18 +511,18 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: SEARCH_KNOWLEDGE_OUTPUT_SCHEMA,
-    },
+};
 
-    {
-        name: "getSaveJobStatus",
-        description:
-            "Poll the status of an async save job. Call after saveConversation, saveConversationFinalize, or widgetAdd returns jobId.",
+// internalOnlyWidget4 = getSaveJobStatus
+const internalOnlyWidget4Tool: Tool = {
+        name: "internalOnlyWidget4",
+        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget async save job polling.`,
         inputSchema: {
             type: "object",
             properties: {
                 jobId: {
                     type: "string",
-                    description: "Job ID from saveConversation, saveConversationFinalize, or widgetAdd (required)",
+                    description: "Job ID from internalOnlyWidget1 or LLM save tools (required)",
                 },
             },
             required: ["jobId"],
@@ -510,12 +533,12 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: GET_SAVE_JOB_STATUS_OUTPUT_SCHEMA,
-    },
+};
 
-    {
-        name: "widgetAdd",
-        description:
-            "INTERNAL USE ONLY. Used by the widget to save user-provided text or conversation content. Queues content for async processing and returns jobId.",
+// internalOnlyWidget1 = widgetAdd
+const internalOnlyWidget1Tool: Tool = {
+        name: "internalOnlyWidget1",
+        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget manual save operation (htmlContent).`,
         inputSchema: {
             type: "object",
             properties: {
@@ -541,9 +564,9 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
-    },
+};
 
-    {
+const explainHowToUseTool: Tool = {
         name: "explainHowToUse",
         description: "Get help text explaining how to use Chat Vault.",
         inputSchema: {
@@ -559,14 +582,46 @@ const chatVaultTools: Tool[] = [
             destructiveHint: false,
         },
         outputSchema: EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA,
-    },
+};
+
+const internalWidgetTools: Tool[] = [
+    internalOnlyWidget1Tool,
+    internalOnlyWidget2Tool,
+    internalOnlyWidget3Tool,
+    internalOnlyWidget4Tool,
 ];
+
+const llmSaveTools: Tool[] = [
+    llmSaveConversationTool,
+    llmSaveConversationBeginTool,
+    llmSaveConversationTurnTool,
+    llmSaveConversationFinalizeTool,
+];
+
+const readSearchTools: Tool[] = [
+    loadSavedEntriesTool,
+    loadFullTurnTool,
+    searchKnowledgeTool,
+    explainHowToUseTool,
+];
+
+function getListedTools(): Tool[] {
+    const profile = getToolMetadataProfile();
+    if (profile === "gpt") {
+        return readSearchTools;
+    }
+    return [...internalWidgetTools, ...llmSaveTools, ...readSearchTools];
+}
+
+export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
 
 // Handler for tools/list
 async function handleListTools(request: ListToolsRequest) {
     const requestId = (request as unknown as { id?: string | number }).id;
-    console.log("[MCP Handler] handleListTools - request id:", requestId);
-    const result = { tools: chatVaultTools };
+    const profile = getToolMetadataProfile();
+    const tools = getListedTools();
+    console.log("[MCP Handler] handleListTools - request id:", requestId, "profile:", profile);
+    const result = { tools };
     console.log("[MCP Handler] handleListTools - returning", result.tools.length, "tools");
     return result;
 }
@@ -574,7 +629,8 @@ async function handleListTools(request: ListToolsRequest) {
 // Handler for tools/call
 async function handleCallTool(request: CallToolRequest, userContext?: UserContext, headers?: Record<string, string | string[] | undefined>) {
     const requestId = (request as unknown as { id?: string | number }).id;
-    const toolName = request.params.name;
+    const requestedToolName = request.params.name;
+    const toolName = normalizeToolName(requestedToolName);
     let args: Record<string, unknown> = {
         ...((request.params.arguments ?? {}) as Record<string, unknown>),
     };
@@ -584,7 +640,8 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
         "[MCP Handler] handleCallTool - request id:",
         requestId,
         "tool:",
-        toolName,
+        requestedToolName,
+        toolName !== requestedToolName ? `(normalized: ${toolName})` : "",
         "arguments:",
         JSON.stringify(args),
         "userContext:",
@@ -1238,6 +1295,7 @@ async function startServer() {
             console.log(`ChatVault Part 2 MCP server listening on http://localhost:${PORT}`);
             console.log(`  MCP endpoint: POST http://localhost:${PORT}/mcp`);
             console.log(`  CORS preflight: OPTIONS http://localhost:${PORT}/mcp`);
+            console.log(`  Tool metadata profile: ${getToolMetadataProfile()} (${getListedTools().length} tools listed)`);
         });
     } catch (error) {
         console.error("[Server] Failed to start server:", error);
