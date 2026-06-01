@@ -13,26 +13,26 @@ const GPT_SAFE_TOOL_NAMES = [
     "explainHowToUse",
 ];
 
-const EXCLUDED_FROM_GPT = [
+const LLM_SAVE_TOOL_NAMES = [
     "saveConversation",
     "saveConversationBegin",
     "saveConversationTurn",
     "saveConversationFinalize",
+];
+
+const LEGACY_WIDGET_TOOL_NAMES = [
     "widgetAdd",
     "updateSavedEntry",
     "deleteSavedEntry",
     "getSaveJobStatus",
+];
+
+const GPT_PROFILE_TOOL_NAMES = [
     "internalOnlyWidget1",
     "internalOnlyWidget2",
     "internalOnlyWidget3",
     "internalOnlyWidget4",
-];
-
-const BROAD_SCHEMA_MARKERS = [
-    "htmlContent",
-    "turns",
-    "turn.prompt",
-    "turn.response",
+    ...GPT_SAFE_TOOL_NAMES,
 ];
 
 describe("tool metadata profiles", () => {
@@ -81,23 +81,38 @@ describe("tool metadata profiles", () => {
         expect(tools).toHaveLength(12);
     });
 
-    it("lists only GPT-safe tools in gpt profile", () => {
+    it("lists scrambled widget tools plus read/search tools in gpt profile", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
         const tools = getListedTools();
         const names = tools.map((tool) => tool.name).sort();
 
-        expect(names).toEqual([...GPT_SAFE_TOOL_NAMES].sort());
-        expect(names.some((name) => EXCLUDED_FROM_GPT.includes(name))).toBe(false);
+        expect(names).toEqual([...GPT_PROFILE_TOOL_NAMES].sort());
+        expect(names.some((name) => LLM_SAVE_TOOL_NAMES.includes(name))).toBe(false);
+        expect(names.some((name) => LEGACY_WIDGET_TOOL_NAMES.includes(name))).toBe(false);
+        expect(tools).toHaveLength(8);
     });
 
-    it("does not expose broad save/import input schemas in gpt profile", () => {
-        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
-        const inputSchemas = getListedTools().map((tool) => tool.inputSchema);
-        const serialized = JSON.stringify(inputSchemas);
+    it("uses the same scrambled widget metadata in gpt and full profiles", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
+        const fullWidgetTools = getListedTools().filter((tool) =>
+            tool.name.startsWith("internalOnlyWidget"),
+        );
 
-        for (const marker of BROAD_SCHEMA_MARKERS) {
-            expect(serialized.includes(marker)).toBe(false);
-        }
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
+        const gptWidgetTools = getListedTools().filter((tool) =>
+            tool.name.startsWith("internalOnlyWidget"),
+        );
+
+        expect(gptWidgetTools).toEqual(fullWidgetTools);
+    });
+
+    it("does not expose LLM save/import tools in gpt profile", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
+        const saveToolNames = getListedTools()
+            .map((tool) => tool.name)
+            .filter((name) => name.startsWith("saveConversation"));
+
+        expect(saveToolNames).toEqual([]);
     });
 
     it("normalizes scrambled widget tool names to legacy handlers", () => {

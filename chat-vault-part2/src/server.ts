@@ -607,10 +607,11 @@ const readSearchTools: Tool[] = [
 
 function getListedTools(): Tool[] {
     const profile = getToolMetadataProfile();
+    const sharedTools = [...internalWidgetTools, ...readSearchTools];
     if (profile === "gpt") {
-        return readSearchTools;
+        return sharedTools;
     }
-    return [...internalWidgetTools, ...llmSaveTools, ...readSearchTools];
+    return [...sharedTools, ...llmSaveTools];
 }
 
 export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
