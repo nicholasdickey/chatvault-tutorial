@@ -12,7 +12,7 @@ import { chats } from "../db/schema.js";
 import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 import { pushChatSaveJob, isRedisConfigured, getRedisConfigStatus } from "../utils/redis.js";
 import { saveChatCore } from "../utils/saveChatCore.js";
-import { parsePastedChatWithLLM } from "../utils/parsePastedChatWithLLM.js";
+import { parseAndVerifyPastedChat } from "../utils/parseAndVerifyPastedChat.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 
@@ -158,11 +158,11 @@ export async function widgetAdd(
             return { jobId, turnsCount: 0 };
         }
 
-        // SYNC PATH: Parse with LLM, then saveChatCore
-        console.log("[widgetAdd] Taking SYNC path - parsing with LLM, then saveChatCore");
-        const turns = await parsePastedChatWithLLM(htmlContent);
-        if (turns == null || turns.length === 0) {
-            console.warn("[widgetAdd] ❌ LLM parse failed or returned empty");
+        // SYNC PATH: Parse + verify with dual LLM, then saveChatCore
+        console.log("[widgetAdd] Taking SYNC path - parseAndVerifyPastedChat, then saveChatCore");
+        const parseResult = await parseAndVerifyPastedChat(htmlContent);
+        if (parseResult == null || parseResult.turns.length === 0) {
+            console.warn("[widgetAdd] ❌ Parse/verify failed or returned empty");
             return {
                 turnsCount: 0,
                 error: "parse_error" as const,
@@ -170,8 +170,13 @@ export async function widgetAdd(
                 portalLink: null,
             };
         }
+        const { turns } = parseResult;
         const result = await saveChatCore({ userId, title: finalTitle, turns });
-        console.log("[widgetAdd] ===== EXIT (sync, saved) =====", { chatId: result.chatId, turnsCount: turns.length });
+        console.log("[widgetAdd] ===== EXIT (sync, saved) =====", {
+            chatId: result.chatId,
+            turnsCount: turns.length,
+            parseAttempts: parseResult.attempts,
+        });
         return { chatId: result.chatId, turnsCount: turns.length };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
