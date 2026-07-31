@@ -13,6 +13,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 
+/** Bump with widget HTML deploys so hosts can bust Redis/memory caches. */
+const WIDGET_VERSION =
+  process.env.WIDGET_VERSION?.trim() ||
+  process.env.ACTIVE_WIDGET_VERSION?.trim() ||
+  "1.0.1";
+
 /**
  * Create and configure the MCP Apps server for ChatVault Part MCP App.
  *
@@ -35,6 +41,11 @@ export function createMcpAppsServer(): McpServer {
     shortAnonId: z.string().optional(),
   };
 
+  const uiMeta = {
+    resourceUri,
+    widgetVersion: WIDGET_VERSION,
+  };
+
   registerAppTool(
     server,
     "browseMyChatVault",
@@ -51,10 +62,9 @@ export function createMcpAppsServer(): McpServer {
         destructiveHint: false,
       },
       _meta: {
-        ui: {
-          resourceUri,
-        },
+        ui: uiMeta,
         "ui/resourceUri": resourceUri,
+        "ui/widgetVersion": WIDGET_VERSION,
       },
     },
     async (args) => {
@@ -64,8 +74,9 @@ export function createMcpAppsServer(): McpServer {
       return {
         content: [{ type: "text" as const, text }],
         _meta: {
-          ui: { resourceUri },
+          ui: uiMeta,
           "ui/resourceUri": resourceUri,
+          "ui/widgetVersion": WIDGET_VERSION,
         },
       };
     },
@@ -118,6 +129,12 @@ export function createMcpAppsServer(): McpServer {
               "openai/widgetPrefersBorder": true,
               "openai/widgetDomain": widgetDomain,
               "openai/widgetCSP": widgetCSP,
+              ui: {
+                resourceUri,
+                widgetVersion: WIDGET_VERSION,
+                csp: widgetCSP,
+              },
+              "ui/widgetVersion": WIDGET_VERSION,
             },
           },
         ],
