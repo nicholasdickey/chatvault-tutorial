@@ -221,9 +221,6 @@ function getToolMetadataProfile(): ToolMetadataProfile {
     return "full";
 }
 
-const INTERNAL_ONLY_WIDGET_DESC =
-    "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant/model responses.";
-
 /** Maps scrambled public tool names to legacy handler keys (widgetAdd, updateSavedEntry, etc.). */
 const TOOL_NAME_ALIASES: Record<string, string> = {
     internalOnlyWidget1: "widgetAdd",
@@ -239,7 +236,9 @@ function normalizeToolName(toolName: string): string {
 // internalOnlyWidget3 = deleteSavedEntry
 const internalOnlyWidget3Tool: Tool = {
         name: "internalOnlyWidget3",
-        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget delete operation.`,
+        title: "Widget delete (internal)",
+        description:
+            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Deletes a saved entry from Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
@@ -259,7 +258,9 @@ const internalOnlyWidget3Tool: Tool = {
 // internalOnlyWidget2 = updateSavedEntry
 const internalOnlyWidget2Tool: Tool = {
         name: "internalOnlyWidget2",
-        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget title/turn update operation.`,
+        title: "Widget update (internal)",
+        description:
+            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Updates title and/or turns on a saved entry already stored in Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
@@ -300,8 +301,9 @@ const internalOnlyWidget2Tool: Tool = {
 
 const llmSaveConversationTool: Tool = {
         name: "saveConversation",
+        title: "Save conversation",
         description:
-            "LLM: Save a short chat or conversation selected by the user, up to 3 short turns. Queues content for async processing and returns jobId. For longer conversations, use saveConversationBegin, saveConversationTurn, and saveConversationFinalize instead.",
+            "Save a short conversation the user selected (up to about 3 turns). The conversation content is sent to Chat Vault and stored in the user's personal vault. Prefer this for short saves. On success, tell the user their conversation was saved (or is being saved). For longer conversations, use saveConversationBegin, then saveConversationTurn for each turn in order, then saveConversationFinalize.",
         inputSchema: {
             type: "object",
             properties: {
@@ -332,8 +334,9 @@ const llmSaveConversationTool: Tool = {
 
 const llmSaveConversationBeginTool: Tool = {
         name: "saveConversationBegin",
+        title: "Start multi-turn save",
         description:
-            "LLM: Begin saving a multi-turn chat or conversation selected by the user. Call this first for longer conversations, then call saveConversationTurn for each turn in order, then call saveConversationFinalize.",
+            "Begin a multi-turn save session for a longer conversation. Call this first, then call saveConversationTurn for each turn in order, then call saveConversationFinalize. After finalize, the conversation content is sent to Chat Vault and stored in the user's personal vault. Pass the returned jobId into each saveConversationTurn and into saveConversationFinalize. Do not poll job status yourself.",
         inputSchema: {
             type: "object",
             properties: {
@@ -355,8 +358,9 @@ const llmSaveConversationBeginTool: Tool = {
 
 const llmSaveConversationTurnTool: Tool = {
         name: "saveConversationTurn",
+        title: "Add save turn",
         description:
-            "LLM: Add one turn to an active conversation save session. Call after saveConversationBegin, once per turn, with turnIndex 0, 1, 2, and so on. Do not skip indices.",
+            "Add one turn (prompt and response) to an open multi-turn save session. Call after saveConversationBegin, once per turn, with the session jobId and turnIndex 0, 1, 2, and so on without skipping. Content is accumulated and will be sent to Chat Vault and stored when saveConversationFinalize is called.",
         inputSchema: {
             type: "object",
             properties: {
@@ -394,8 +398,9 @@ const llmSaveConversationTurnTool: Tool = {
 
 const llmSaveConversationFinalizeTool: Tool = {
         name: "saveConversationFinalize",
+        title: "Finalize multi-turn save",
         description:
-            "LLM: Finalize a multi-turn conversation save session after all turns have been added. Queues content for async processing and returns jobId.",
+            "Finalize a multi-turn save session after all turns have been added (pass the session jobId from saveConversationBegin). The full conversation content is sent to Chat Vault and stored in the user's personal vault. On success, tell the user their conversation was saved (or is being saved). Do not poll job status yourself.",
         inputSchema: {
             type: "object",
             properties: {
@@ -420,8 +425,9 @@ const llmSaveConversationFinalizeTool: Tool = {
 
 const loadSavedEntriesTool: Tool = {
         name: "loadSavedEntries",
+        title: "Load saved entries",
         description:
-            "USED INSIDE THE WIDGET. Load paginated saved entries for display, with optional text filtering.",
+            "Load a paginated list of the user's saved Chat Vault entries, with optional text filtering. Used to browse or inspect what is already stored.",
         inputSchema: {
             type: "object",
             properties: {
@@ -460,8 +466,9 @@ const loadSavedEntriesTool: Tool = {
 
 const loadFullTurnTool: Tool = {
         name: "loadFullTurn",
+        title: "Load full turn",
         description:
-            "USED INSIDE THE WIDGET. Load the full content for one saved turn when the user expands a truncated entry.",
+            "Load the full content of one saved turn when a listed entry was returned truncated. Requires entryId and turnIndex.",
         inputSchema: {
             type: "object",
             properties: {
@@ -484,8 +491,9 @@ const loadFullTurnTool: Tool = {
 
 const searchKnowledgeTool: Tool = {
         name: "searchKnowledge",
+        title: "Search saved knowledge",
         description:
-            "LLM: Search the user's saved knowledge using semantic search. Use relevant results as context when answering.",
+            "Search the user's Chat Vault with semantic search. Use matching saved conversations as context when answering. Only searches content the user has previously stored in Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
@@ -516,7 +524,9 @@ const searchKnowledgeTool: Tool = {
 // internalOnlyWidget4 = getSaveJobStatus
 const internalOnlyWidget4Tool: Tool = {
         name: "internalOnlyWidget4",
-        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget async save job polling.`,
+        title: "Save job status (internal)",
+        description:
+            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Polls status of an async save job (pending, completed, failed, or expired).",
         inputSchema: {
             type: "object",
             properties: {
@@ -538,7 +548,9 @@ const internalOnlyWidget4Tool: Tool = {
 // internalOnlyWidget1 = widgetAdd
 const internalOnlyWidget1Tool: Tool = {
         name: "internalOnlyWidget1",
-        description: `${INTERNAL_ONLY_WIDGET_DESC} Widget manual save operation (htmlContent).`,
+        title: "Widget save (internal)",
+        description:
+            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Saves user-pasted HTML or text; content is sent to Chat Vault and stored after parsing.",
         inputSchema: {
             type: "object",
             properties: {
@@ -568,7 +580,9 @@ const internalOnlyWidget1Tool: Tool = {
 
 const explainHowToUseTool: Tool = {
         name: "explainHowToUse",
-        description: "Get help text explaining how to use Chat Vault.",
+        title: "How to use Chat Vault",
+        description:
+            "Return help text explaining how to save conversations to Chat Vault, search stored knowledge, and open the Chat Vault browser.",
         inputSchema: {
             type: "object",
             properties: {
