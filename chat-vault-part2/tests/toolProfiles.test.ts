@@ -115,6 +115,48 @@ describe("tool metadata profiles", () => {
         expect(saveToolNames).toEqual([]);
     });
 
+    it("gives every listed tool a human-readable title", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
+        const tools = getListedTools();
+
+        for (const tool of tools) {
+            expect(tool.title).toBeTruthy();
+            expect(tool.title).not.toBe(tool.name);
+        }
+
+        const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool.title]));
+        expect(byName.saveConversation).toBe("Save conversation");
+        expect(byName.saveConversationBegin).toBe("Start multi-turn save");
+        expect(byName.saveConversationTurn).toBe("Add save turn");
+        expect(byName.saveConversationFinalize).toBe("Finalize multi-turn save");
+        expect(byName.searchKnowledge).toBe("Search saved knowledge");
+        expect(byName.explainHowToUse).toBe("How to use Chat Vault");
+        expect(byName.loadSavedEntries).toBe("Load saved entries");
+        expect(byName.loadFullTurn).toBe("Load full turn");
+        expect(byName.internalOnlyWidget1).toBe("Widget save (internal)");
+        expect(byName.internalOnlyWidget2).toBe("Widget update (internal)");
+        expect(byName.internalOnlyWidget3).toBe("Widget delete (internal)");
+        expect(byName.internalOnlyWidget4).toBe("Save job status (internal)");
+    });
+
+    it("discloses Chat Vault storage in LLM save tool descriptions", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
+        const saveTools = getListedTools().filter((tool) =>
+            LLM_SAVE_TOOL_NAMES.includes(tool.name),
+        );
+
+        expect(saveTools).toHaveLength(4);
+        for (const tool of saveTools) {
+            expect(tool.description).toMatch(/sent to Chat Vault and stored/i);
+        }
+        const begin = saveTools.find((tool) => tool.name === "saveConversationBegin");
+        const finalize = saveTools.find((tool) => tool.name === "saveConversationFinalize");
+        expect(begin?.description).toMatch(/Do not poll job status yourself/);
+        expect(finalize?.description).toMatch(/Do not poll job status yourself/);
+        expect(begin?.description).not.toMatch(/internalOnlyWidget4/);
+        expect(finalize?.description).not.toMatch(/internalOnlyWidget4/);
+    });
+
     it("normalizes scrambled widget tool names to legacy handlers", () => {
         expect(normalizeToolName("internalOnlyWidget1")).toBe("widgetAdd");
         expect(normalizeToolName("internalOnlyWidget2")).toBe("updateSavedEntry");
