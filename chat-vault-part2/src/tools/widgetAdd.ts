@@ -100,14 +100,14 @@ export async function widgetAdd(
             throw new Error("htmlContent is required");
         }
 
-        // Content size check: anonymous/free plan 20k, authenticated paid 1M
+        // Content size check: anonymous/free plan 40k, authenticated paid 2M
         const contentLength = htmlContent.length;
         const isFreePlan = isAnon || isAnonymousPlan === true;
-        const maxLength = isFreePlan ? 20000 : 1000000;
+        const maxLength = isFreePlan ? 40_000 : 2_000_000;
         if (contentLength > maxLength) {
-            const limitType = isFreePlan ? "20,000 characters" : "1,000,000 characters";
+            const limitType = isFreePlan ? "40,000 characters" : "2,000,000 characters";
             const message = isFreePlan
-                ? `Content exceeds the ${limitType} limit for users on the free plan. Please shorten your content or sign in to save longer chats and notes (up to 1,000,000 characters).`
+                ? `Content exceeds the ${limitType} limit for users on the free plan. Please shorten your content or sign in to save longer chats and notes (up to 2,000,000 characters).`
                 : `Content exceeds the ${limitType} limit. Please shorten your content.`;
             console.log("[widgetAdd] ❌ Content size limit exceeded:", { contentLength, maxLength });
             return {
