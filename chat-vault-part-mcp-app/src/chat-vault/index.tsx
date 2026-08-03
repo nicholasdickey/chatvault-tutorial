@@ -1884,20 +1884,6 @@ function App() {
     </svg>
   );
 
-  if (loading && chats.length === 0) {
-    return (
-      <div
-        className={`antialiased w-full px-4 py-6 border rounded-2xl sm:rounded-3xl overflow-hidden ${
-          isDarkMode
-            ? "bg-gray-900 border-gray-700 text-white"
-            : "bg-white border-black/10 text-black"
-        }`}
-      >
-        <div className="text-center text-sm opacity-60">Loading chats...</div>
-      </div>
-    );
-  }
-
   return (
     <div
       className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-hidden ${
@@ -3209,15 +3195,47 @@ function App() {
               <div className="space-y-2 relative pb-4">
                 {loading && chats.length === 0 ? (
                   <div
-                    className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                    className={`relative min-h-[240px] rounded-lg ${
+                      isDarkMode ? "bg-gray-800/40" : "bg-gray-50"
+                    }`}
                   >
-                    Loading chats...
+                    <div
+                      className={`absolute inset-0 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                        isDarkMode ? "bg-black/50" : "bg-white/70"
+                      }`}
+                    >
+                      <div
+                        className={`px-4 py-2 rounded-lg font-medium ${
+                          isDarkMode
+                            ? "bg-gray-800 text-white"
+                            : "bg-white text-black shadow-lg"
+                        }`}
+                      >
+                        Loading...
+                      </div>
+                    </div>
                   </div>
                 ) : searchLoading && chats.length === 0 ? (
                   <div
-                    className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                    className={`relative min-h-[240px] rounded-lg ${
+                      isDarkMode ? "bg-gray-800/40" : "bg-gray-50"
+                    }`}
                   >
-                    Searching...
+                    <div
+                      className={`absolute inset-0 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                        isDarkMode ? "bg-black/50" : "bg-white/70"
+                      }`}
+                    >
+                      <div
+                        className={`px-4 py-2 rounded-lg font-medium ${
+                          isDarkMode
+                            ? "bg-gray-800 text-white"
+                            : "bg-white text-black shadow-lg"
+                        }`}
+                      >
+                        Searching...
+                      </div>
+                    </div>
                   </div>
                 ) : chats.length === 0 ? (
                   <div
