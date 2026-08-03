@@ -11,8 +11,8 @@ import { prepareRawPasteForLLM } from "./preprocessPastedChat.js";
 
 dotenv.config();
 
-const DEFAULT_MAX_INPUT_LENGTH = 1_000_000;
-const DEFAULT_MAX_TURNS_JSON_LENGTH = 500_000;
+const DEFAULT_MAX_INPUT_LENGTH = 2_000_000;
+const DEFAULT_MAX_TURNS_JSON_LENGTH = 1_000_000;
 
 export const VERIFY_CHAT_LLM_MODEL =
     process.env.VERIFY_CHAT_LLM_MODEL?.trim() || "gpt-5.5";

@@ -13,7 +13,7 @@ dotenv.config();
 
 export type { ChatTurn } from "./chatTurnTypes.js";
 
-const DEFAULT_MAX_INPUT_LENGTH = 1_000_000;
+const DEFAULT_MAX_INPUT_LENGTH = 10_000_000;
 
 export const PARSE_CHAT_LLM_MODEL =
     process.env.PARSE_CHAT_LLM_MODEL?.trim() || "gpt-5.5";

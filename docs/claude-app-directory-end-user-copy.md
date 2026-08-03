@@ -33,7 +33,7 @@ Chat Vault is your personal knowledge base. Capture conversations from any AI ch
 
 **Who it's for**
 
-Anyone building a durable personal knowledge base from AI conversations, ideas, and notes, and who wants that knowledge available again inside Claude and other AI chats.
+Anyone who wants a durable personal knowledge base from AI conversations, ideas, and notes, and wants that knowledge available again inside Claude and other AI chats.
 
 ---
 
