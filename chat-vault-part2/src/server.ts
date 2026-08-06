@@ -300,7 +300,7 @@ const llmSaveConversationTool: Tool = {
         name: "saveConversation",
         title: "Save conversation",
         description:
-            "Save a short conversation the user selected (up to about 3 turns). The conversation content is sent to Chat Vault and stored in the user's personal vault. Prefer this for short saves. On success, tell the user their conversation was saved (or is being saved). For longer conversations, use saveConversationBegin, then saveConversationTurn for each turn in order, then saveConversationFinalize.",
+            "Save a short conversation selected in the Chat Vault app, or explicitly requested by the user through a supported model (up to about 3 turns). The conversation content is sent to Chat Vault and stored in the user's personal vault. Prefer this for short saves. For longer conversations, use saveConversationBegin, then saveConversationTurn for each turn in order, then saveConversationFinalize.",
         inputSchema: {
             type: "object",
             properties: {
@@ -326,7 +326,7 @@ const llmSaveConversationTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
-        _meta: { ui: { visibility: ["model"] } },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: SAVE_CONVERSATION_OUTPUT_SCHEMA,
 };
 
@@ -334,7 +334,7 @@ const llmSaveConversationBeginTool: Tool = {
         name: "saveConversationBegin",
         title: "Start multi-turn save",
         description:
-            "Begin a multi-turn save session for a longer conversation. Call this first, then call saveConversationTurn for each turn in order, then call saveConversationFinalize. After finalize, the conversation content is sent to Chat Vault and stored in the user's personal vault. Pass the returned jobId into each saveConversationTurn and into saveConversationFinalize. Do not poll job status yourself.",
+            "Begin a multi-turn save session for a longer conversation. Used by the Chat Vault app, and by supported models when the user explicitly asks to save a conversation longer than about 3 turns. Call this first, then call saveConversationTurn for each turn in order, then call saveConversationFinalize. After finalize, the conversation content is sent to Chat Vault and stored in the user's personal vault. Pass the returned jobId into each subsequent call. Do not poll job status yourself.",
         inputSchema: {
             type: "object",
             properties: {
@@ -351,7 +351,7 @@ const llmSaveConversationBeginTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
-        _meta: { ui: { visibility: ["model"] } },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA,
 };
 
@@ -359,7 +359,7 @@ const llmSaveConversationTurnTool: Tool = {
         name: "saveConversationTurn",
         title: "Add save turn",
         description:
-            "Add one turn (prompt and response) to an open multi-turn save session. Call after saveConversationBegin, once per turn, with the session jobId and turnIndex 0, 1, 2, and so on without skipping. Content is accumulated and will be sent to Chat Vault and stored when saveConversationFinalize is called.",
+            "Add one turn (prompt and response) to an open multi-turn save session started by the Chat Vault app or saveConversationBegin. Call once per turn in order, with turnIndex 0, 1, 2, and so on without skipping. Content is accumulated and will be sent to Chat Vault and stored when saveConversationFinalize is called.",
         inputSchema: {
             type: "object",
             properties: {
@@ -392,7 +392,7 @@ const llmSaveConversationTurnTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
-        _meta: { ui: { visibility: ["model"] } },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA,
 };
 
@@ -400,7 +400,7 @@ const llmSaveConversationFinalizeTool: Tool = {
         name: "saveConversationFinalize",
         title: "Finalize multi-turn save",
         description:
-            "Finalize a multi-turn save session after all turns have been added (pass the session jobId from saveConversationBegin). The full conversation content is sent to Chat Vault and stored in the user's personal vault. On success, tell the user their conversation was saved (or is being saved). Do not poll job status yourself.",
+            "Finalize a multi-turn save session started by the Chat Vault app or saveConversationBegin after all turns have been added. Pass the session jobId. The full conversation content is sent to Chat Vault and stored in the user's personal vault. On success, tell the user their conversation was saved (or is being saved). Do not poll job status yourself.",
         inputSchema: {
             type: "object",
             properties: {
@@ -420,7 +420,7 @@ const llmSaveConversationFinalizeTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
-        _meta: { ui: { visibility: ["model"] } },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA,
 };
 
@@ -610,7 +610,7 @@ const internalWidgetTools: Tool[] = [
     getSaveJobStatusTool,
 ];
 
-const llmSaveTools: Tool[] = [
+const conversationSaveTools: Tool[] = [
     llmSaveConversationTool,
     llmSaveConversationBeginTool,
     llmSaveConversationTurnTool,
@@ -626,11 +626,17 @@ const readSearchTools: Tool[] = [
 
 function getListedTools(): Tool[] {
     const profile = getToolMetadataProfile();
-    const sharedTools = [...internalWidgetTools, ...readSearchTools];
-    if (profile === "gpt") {
-        return sharedTools;
-    }
-    return [...sharedTools, ...llmSaveTools];
+    const profileConversationSaveTools = conversationSaveTools.map((tool) => ({
+        ...tool,
+        _meta: {
+            ...tool._meta,
+            ui: {
+                ...(tool._meta?.ui ?? {}),
+                visibility: profile === "gpt" ? ["app"] : ["model", "app"],
+            },
+        },
+    }));
+    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools];
 }
 
 export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
