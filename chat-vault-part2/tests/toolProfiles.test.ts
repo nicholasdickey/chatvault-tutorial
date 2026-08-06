@@ -20,18 +20,15 @@ const LLM_SAVE_TOOL_NAMES = [
     "saveConversationFinalize",
 ];
 
-const LEGACY_WIDGET_TOOL_NAMES = [
-    "widgetAdd",
+const WIDGET_TOOL_NAMES = [
+    "savePastedContent",
     "updateSavedEntry",
     "deleteSavedEntry",
     "getSaveJobStatus",
 ];
 
 const GPT_PROFILE_TOOL_NAMES = [
-    "internalOnlyWidget1",
-    "internalOnlyWidget2",
-    "internalOnlyWidget3",
-    "internalOnlyWidget4",
+    ...WIDGET_TOOL_NAMES,
     ...GPT_SAFE_TOOL_NAMES,
 ];
 
@@ -59,17 +56,14 @@ describe("tool metadata profiles", () => {
         expect(getToolMetadataProfile()).toBe("gpt");
     });
 
-    it("lists full metadata with scrambled internal widget names", () => {
+    it("lists functional widget tools and model save tools in full profile", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
         const tools = getListedTools();
         const names = tools.map((tool) => tool.name);
 
         expect(names).toEqual(
             expect.arrayContaining([
-                "internalOnlyWidget1",
-                "internalOnlyWidget2",
-                "internalOnlyWidget3",
-                "internalOnlyWidget4",
+                ...WIDGET_TOOL_NAMES,
                 "saveConversation",
                 "saveConversationBegin",
                 "saveConversationTurn",
@@ -77,33 +71,34 @@ describe("tool metadata profiles", () => {
                 ...GPT_SAFE_TOOL_NAMES,
             ]),
         );
-        expect(names).not.toEqual(expect.arrayContaining(["widgetAdd", "updateSavedEntry", "deleteSavedEntry", "getSaveJobStatus"]));
         expect(tools).toHaveLength(12);
     });
 
-    it("lists scrambled widget tools plus read/search tools in gpt profile", () => {
+    it("lists app-only widget tools plus read/search tools in gpt profile", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
         const tools = getListedTools();
         const names = tools.map((tool) => tool.name).sort();
 
         expect(names).toEqual([...GPT_PROFILE_TOOL_NAMES].sort());
         expect(names.some((name) => LLM_SAVE_TOOL_NAMES.includes(name))).toBe(false);
-        expect(names.some((name) => LEGACY_WIDGET_TOOL_NAMES.includes(name))).toBe(false);
         expect(tools).toHaveLength(8);
     });
 
-    it("uses the same scrambled widget metadata in gpt and full profiles", () => {
+    it("uses the same app-only widget metadata in gpt and full profiles", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
         const fullWidgetTools = getListedTools().filter((tool) =>
-            tool.name.startsWith("internalOnlyWidget"),
+            WIDGET_TOOL_NAMES.includes(tool.name),
         );
 
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
         const gptWidgetTools = getListedTools().filter((tool) =>
-            tool.name.startsWith("internalOnlyWidget"),
+            WIDGET_TOOL_NAMES.includes(tool.name),
         );
 
         expect(gptWidgetTools).toEqual(fullWidgetTools);
+        for (const tool of gptWidgetTools) {
+            expect((tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["app"]);
+        }
     });
 
     it("does not expose LLM save/import tools in gpt profile", () => {
@@ -133,10 +128,10 @@ describe("tool metadata profiles", () => {
         expect(byName.explainHowToUse).toBe("How to use Chat Vault");
         expect(byName.loadSavedEntries).toBe("Load saved entries");
         expect(byName.loadFullTurn).toBe("Load full turn");
-        expect(byName.internalOnlyWidget1).toBe("Widget save (internal)");
-        expect(byName.internalOnlyWidget2).toBe("Widget update (internal)");
-        expect(byName.internalOnlyWidget3).toBe("Widget delete (internal)");
-        expect(byName.internalOnlyWidget4).toBe("Save job status (internal)");
+        expect(byName.savePastedContent).toBe("Save pasted content");
+        expect(byName.updateSavedEntry).toBe("Update saved entry");
+        expect(byName.deleteSavedEntry).toBe("Delete saved entry");
+        expect(byName.getSaveJobStatus).toBe("Get save job status");
     });
 
     it("discloses Chat Vault storage in LLM save tool descriptions", () => {
@@ -153,16 +148,27 @@ describe("tool metadata profiles", () => {
         const finalize = saveTools.find((tool) => tool.name === "saveConversationFinalize");
         expect(begin?.description).toMatch(/Do not poll job status yourself/);
         expect(finalize?.description).toMatch(/Do not poll job status yourself/);
-        expect(begin?.description).not.toMatch(/internalOnlyWidget4/);
-        expect(finalize?.description).not.toMatch(/internalOnlyWidget4/);
+        expect((begin?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model"]);
+        expect((finalize?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model"]);
     });
 
-    it("normalizes scrambled widget tool names to legacy handlers", () => {
-        expect(normalizeToolName("internalOnlyWidget1")).toBe("widgetAdd");
-        expect(normalizeToolName("internalOnlyWidget2")).toBe("updateSavedEntry");
-        expect(normalizeToolName("internalOnlyWidget3")).toBe("deleteSavedEntry");
-        expect(normalizeToolName("internalOnlyWidget4")).toBe("getSaveJobStatus");
+    it("maps only the renamed paste tool to its implementation handler", () => {
+        expect(normalizeToolName("savePastedContent")).toBe("widgetAdd");
+        expect(normalizeToolName("updateSavedEntry")).toBe("updateSavedEntry");
+        expect(normalizeToolName("deleteSavedEntry")).toBe("deleteSavedEntry");
+        expect(normalizeToolName("getSaveJobStatus")).toBe("getSaveJobStatus");
         expect(normalizeToolName("searchKnowledge")).toBe("searchKnowledge");
-        expect(Object.keys(TOOL_NAME_ALIASES)).toHaveLength(4);
+        expect(Object.keys(TOOL_NAME_ALIASES)).toHaveLength(1);
+    });
+
+    it("marks shared read tools for both model and app visibility", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
+        const sharedReadTools = getListedTools().filter((tool) =>
+            GPT_SAFE_TOOL_NAMES.includes(tool.name),
+        );
+
+        for (const tool of sharedReadTools) {
+            expect((tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model", "app"]);
+        }
     });
 });

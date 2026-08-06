@@ -10,6 +10,13 @@ jest.unstable_mockModule("../../src/utils/redis.js", () => ({
     pushChatSaveJob: mockPushChatSaveJob,
     getJobStatus: jest.fn(),
     isRedisConfigured: jest.fn().mockReturnValue(true),
+    getRedisConfigStatus: jest.fn().mockReturnValue({
+        configured: true,
+        hasUrl: true,
+        hasToken: true,
+        queueName: "queue:mcp:chat-save",
+        urlMasked: "https://example.test...",
+    }),
 }));
 
 describe("saveChat", () => {

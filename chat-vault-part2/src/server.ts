@@ -221,24 +221,20 @@ function getToolMetadataProfile(): ToolMetadataProfile {
     return "full";
 }
 
-/** Maps scrambled public tool names to legacy handler keys (widgetAdd, updateSavedEntry, etc.). */
+/** Maps public MCP tool names to the existing implementation handler keys. */
 const TOOL_NAME_ALIASES: Record<string, string> = {
-    internalOnlyWidget1: "widgetAdd",
-    internalOnlyWidget2: "updateSavedEntry",
-    internalOnlyWidget3: "deleteSavedEntry",
-    internalOnlyWidget4: "getSaveJobStatus",
+    savePastedContent: "widgetAdd",
 };
 
 function normalizeToolName(toolName: string): string {
     return TOOL_NAME_ALIASES[toolName] ?? toolName;
 }
 
-// internalOnlyWidget3 = deleteSavedEntry
-const internalOnlyWidget3Tool: Tool = {
-        name: "internalOnlyWidget3",
-        title: "Widget delete (internal)",
+const deleteSavedEntryTool: Tool = {
+        name: "deleteSavedEntry",
+        title: "Delete saved entry",
         description:
-            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Deletes a saved entry from Chat Vault.",
+            "Delete the selected saved entry from the user's private Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
@@ -252,15 +248,15 @@ const internalOnlyWidget3Tool: Tool = {
             openWorldHint: false,
             destructiveHint: true,
         },
+        _meta: { ui: { visibility: ["app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
 };
 
-// internalOnlyWidget2 = updateSavedEntry
-const internalOnlyWidget2Tool: Tool = {
-        name: "internalOnlyWidget2",
-        title: "Widget update (internal)",
+const updateSavedEntryTool: Tool = {
+        name: "updateSavedEntry",
+        title: "Update saved entry",
         description:
-            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Updates title and/or turns on a saved entry already stored in Chat Vault.",
+            "Update the title and/or conversation turns of an entry already stored in the user's private Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
@@ -296,6 +292,7 @@ const internalOnlyWidget2Tool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
 };
 
@@ -329,6 +326,7 @@ const llmSaveConversationTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model"] } },
         outputSchema: SAVE_CONVERSATION_OUTPUT_SCHEMA,
 };
 
@@ -353,6 +351,7 @@ const llmSaveConversationBeginTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model"] } },
         outputSchema: SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA,
 };
 
@@ -393,6 +392,7 @@ const llmSaveConversationTurnTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model"] } },
         outputSchema: SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA,
 };
 
@@ -420,6 +420,7 @@ const llmSaveConversationFinalizeTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model"] } },
         outputSchema: SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA,
 };
 
@@ -461,6 +462,7 @@ const loadSavedEntriesTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
 };
 
@@ -486,6 +488,7 @@ const loadFullTurnTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
 };
 
@@ -518,21 +521,21 @@ const searchKnowledgeTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: SEARCH_KNOWLEDGE_OUTPUT_SCHEMA,
 };
 
-// internalOnlyWidget4 = getSaveJobStatus
-const internalOnlyWidget4Tool: Tool = {
-        name: "internalOnlyWidget4",
-        title: "Save job status (internal)",
+const getSaveJobStatusTool: Tool = {
+        name: "getSaveJobStatus",
+        title: "Get save job status",
         description:
-            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Polls status of an async save job (pending, completed, failed, or expired).",
+            "Get the current status of an app-initiated asynchronous save job.",
         inputSchema: {
             type: "object",
             properties: {
                 jobId: {
                     type: "string",
-                    description: "Job ID from internalOnlyWidget1 or LLM save tools (required)",
+                    description: "Job ID returned by savePastedContent (required)",
                 },
             },
             required: ["jobId"],
@@ -542,15 +545,15 @@ const internalOnlyWidget4Tool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["app"] } },
         outputSchema: GET_SAVE_JOB_STATUS_OUTPUT_SCHEMA,
 };
 
-// internalOnlyWidget1 = widgetAdd
-const internalOnlyWidget1Tool: Tool = {
-        name: "internalOnlyWidget1",
-        title: "Widget save (internal)",
+const savePastedContentTool: Tool = {
+        name: "savePastedContent",
+        title: "Save pasted content",
         description:
-            "INTERNAL ONLY. Called by the Chat Vault widget UI. Do not call from assistant or model responses. Saves user-pasted HTML or text; content is sent to Chat Vault and stored after parsing.",
+            "Parse and save HTML or text that the user explicitly pasted into the Chat Vault app.",
         inputSchema: {
             type: "object",
             properties: {
@@ -575,6 +578,7 @@ const internalOnlyWidget1Tool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
 };
 
@@ -595,14 +599,15 @@ const explainHowToUseTool: Tool = {
             openWorldHint: false,
             destructiveHint: false,
         },
+        _meta: { ui: { visibility: ["model", "app"] } },
         outputSchema: EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA,
 };
 
 const internalWidgetTools: Tool[] = [
-    internalOnlyWidget1Tool,
-    internalOnlyWidget2Tool,
-    internalOnlyWidget3Tool,
-    internalOnlyWidget4Tool,
+    savePastedContentTool,
+    updateSavedEntryTool,
+    deleteSavedEntryTool,
+    getSaveJobStatusTool,
 ];
 
 const llmSaveTools: Tool[] = [
@@ -678,7 +683,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             const result = await saveChat(args as { userId: string; title: string; turns: Array<{ prompt: string; response: string }> });
             console.log("[MCP Handler] handleCallTool - saveConversation result:", JSON.stringify(result));
             const text = "jobId" in result
-                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getSaveJobStatus for completion.`
+                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}.`
                 : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
             return {
                 content: [{ type: "text", text }],
@@ -712,7 +717,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             const result = await saveChatTurnsFinalize(args as { userId: string; jobId: string });
             console.log("[MCP Handler] handleCallTool - saveConversationFinalize result:", JSON.stringify(result));
             const text = "jobId" in result
-                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}. Poll getSaveJobStatus for completion.`
+                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}.`
                 : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
             return {
                 content: [{ type: "text", text }],
