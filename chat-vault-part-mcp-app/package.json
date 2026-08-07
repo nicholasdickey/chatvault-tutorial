@@ -10,6 +10,7 @@
     "serve": "serve -s ./assets -p 4444 --cors",
     "serve:mcp-app": "tsx server.ts",
     "dev": "vite --config vite.config.mts",
+    "test": "node --import tsx --test mcp_server/src/*.test.ts",
     "tsc": "tsc -b",
     "tsc:app": "tsc -p tsconfig.app.json",
     "tsc:node": "tsc -p tsconfig.node.json"

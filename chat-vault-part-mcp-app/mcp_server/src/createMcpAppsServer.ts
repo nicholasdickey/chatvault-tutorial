@@ -62,7 +62,10 @@ export function createMcpAppsServer(): McpServer {
         destructiveHint: false,
       },
       _meta: {
-        ui: uiMeta,
+        ui: {
+          ...uiMeta,
+          visibility: ["model"],
+        },
         "ui/resourceUri": resourceUri,
         "ui/widgetVersion": WIDGET_VERSION,
       },
@@ -113,9 +116,13 @@ export function createMcpAppsServer(): McpServer {
       }
 
       const widgetDomain = "https://chatvault-part-mcp-app.vercel.app";
-      const widgetCSP = {
+      const legacyWidgetCSP = {
         connect_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
         resource_domains: [widgetDomain, "https://*.agentsyx.com"],
+      };
+      const widgetCSP = {
+        connectDomains: legacyWidgetCSP.connect_domains,
+        resourceDomains: legacyWidgetCSP.resource_domains,
       };
 
       return {
@@ -128,10 +135,12 @@ export function createMcpAppsServer(): McpServer {
               "openai/outputTemplate": resourceUri,
               "openai/widgetPrefersBorder": true,
               "openai/widgetDomain": widgetDomain,
-              "openai/widgetCSP": widgetCSP,
+              "openai/widgetCSP": legacyWidgetCSP,
               ui: {
                 resourceUri,
                 widgetVersion: WIDGET_VERSION,
+                domain: widgetDomain,
+                prefersBorder: true,
                 csp: widgetCSP,
               },
               "ui/widgetVersion": WIDGET_VERSION,
