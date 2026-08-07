@@ -13,8 +13,7 @@ const GPT_SAFE_TOOL_NAMES = [
     "explainHowToUse",
 ];
 
-const LLM_SAVE_TOOL_NAMES = [
-    "saveConversation",
+const MULTI_TURN_SAVE_TOOL_NAMES = [
     "saveConversationBegin",
     "saveConversationTurn",
     "saveConversationFinalize",
@@ -29,6 +28,8 @@ const WIDGET_TOOL_NAMES = [
 
 const GPT_PROFILE_TOOL_NAMES = [
     ...WIDGET_TOOL_NAMES,
+    "saveConversation",
+    ...MULTI_TURN_SAVE_TOOL_NAMES,
     ...GPT_SAFE_TOOL_NAMES,
 ];
 
@@ -80,8 +81,7 @@ describe("tool metadata profiles", () => {
         const names = tools.map((tool) => tool.name).sort();
 
         expect(names).toEqual([...GPT_PROFILE_TOOL_NAMES].sort());
-        expect(names.some((name) => LLM_SAVE_TOOL_NAMES.includes(name))).toBe(false);
-        expect(tools).toHaveLength(8);
+        expect(tools).toHaveLength(12);
     });
 
     it("uses the same app-only widget metadata in gpt and full profiles", () => {
@@ -101,13 +101,15 @@ describe("tool metadata profiles", () => {
         }
     });
 
-    it("does not expose LLM save/import tools in gpt profile", () => {
+    it("keeps every conversation save tool app-only in gpt profile", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
-        const saveToolNames = getListedTools()
-            .map((tool) => tool.name)
-            .filter((name) => name.startsWith("saveConversation"));
+        const tools = getListedTools();
 
-        expect(saveToolNames).toEqual([]);
+        for (const name of ["saveConversation", ...MULTI_TURN_SAVE_TOOL_NAMES]) {
+            const tool = tools.find((candidate) => candidate.name === name);
+            expect(tool).toBeDefined();
+            expect((tool?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["app"]);
+        }
     });
 
     it("gives every listed tool a human-readable title", () => {
@@ -137,7 +139,7 @@ describe("tool metadata profiles", () => {
     it("discloses Chat Vault storage in LLM save tool descriptions", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
         const saveTools = getListedTools().filter((tool) =>
-            LLM_SAVE_TOOL_NAMES.includes(tool.name),
+            ["saveConversation", ...MULTI_TURN_SAVE_TOOL_NAMES].includes(tool.name),
         );
 
         expect(saveTools).toHaveLength(4);
@@ -146,10 +148,12 @@ describe("tool metadata profiles", () => {
         }
         const begin = saveTools.find((tool) => tool.name === "saveConversationBegin");
         const finalize = saveTools.find((tool) => tool.name === "saveConversationFinalize");
+        const shortSave = saveTools.find((tool) => tool.name === "saveConversation");
         expect(begin?.description).toMatch(/Do not poll job status yourself/);
         expect(finalize?.description).toMatch(/Do not poll job status yourself/);
-        expect((begin?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model"]);
-        expect((finalize?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model"]);
+        expect((shortSave?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model", "app"]);
+        expect((begin?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model", "app"]);
+        expect((finalize?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model", "app"]);
     });
 
     it("maps only the renamed paste tool to its implementation handler", () => {
