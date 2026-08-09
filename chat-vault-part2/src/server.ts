@@ -290,7 +290,7 @@ const updateSavedEntryTool: Tool = {
         annotations: {
             readOnlyHint: false,
             openWorldHint: false,
-            destructiveHint: false,
+            destructiveHint: true,
         },
         _meta: { ui: { visibility: ["app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
@@ -858,7 +858,10 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 structuredContent: result ?? { status: "expired" as const },
             };
         } else if (toolName === "explainHowToUse") {
-            const result = explainHowToUse(args as { userId: string });
+            const result = explainHowToUse(
+                args as { userId: string },
+                getToolMetadataProfile(),
+            );
             console.log("[MCP Handler] handleCallTool - explainHowToUse result");
             return {
                 content: [

@@ -29,7 +29,8 @@ test("publishes standard and legacy widget resource metadata", async () => {
     ],
     resourceDomains: [
       "https://chatvault-part-mcp-app.vercel.app",
-      "https://*.agentsyx.com",
+      "https://www.agentsyx.com",
+      "https://agentsyx.com",
     ],
   });
   assert.deepEqual(metadata["openai/widgetCSP"], {

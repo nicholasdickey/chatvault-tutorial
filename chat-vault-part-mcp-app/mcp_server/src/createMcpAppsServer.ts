@@ -118,7 +118,7 @@ export function createMcpAppsServer(): McpServer {
       const widgetDomain = "https://chatvault-part-mcp-app.vercel.app";
       const legacyWidgetCSP = {
         connect_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
-        resource_domains: [widgetDomain, "https://*.agentsyx.com"],
+        resource_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
       };
       const widgetCSP = {
         connectDomains: legacyWidgetCSP.connect_domains,
