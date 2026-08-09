@@ -34,7 +34,17 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
    OPENAI_API_KEY=sk-proj-...
    PORT_BACKEND=8001
    NODE_ENV=development
+   # GPT deployments default to approval-safe behavior with product limits off.
+   CHATVAULT_TOOL_METADATA_PROFILE=gpt
+   CHATVAULT_LIMITS_ENABLED=false
    ```
+
+   `CHATVAULT_LIMITS_ENABLED` only affects the `gpt` profile. Set it to `true`
+   to restore the existing chat quota, anonymous expiry, 40,000-character
+   free-plan paste limit, remaining-slot UI, and account/upgrade copy without
+   rebuilding the widget. With GPT limits disabled, the free-plan paste cap is
+   1,000,000 characters. The `full` (Claude) profile always retains the existing
+   behavior.
 
 3. **Run database migrations:**
 

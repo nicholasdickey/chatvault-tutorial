@@ -79,11 +79,18 @@ export interface ContentMetadata {
   limits?: {
     maxChats?: number;
     counterTooltip?: string;
+    remainingSlotsMessage?: string;
+    lowRemainingSlotsMessage?: string;
     limitReachedMessageWithPortal?: string;
     limitReachedMessageWithoutPortal?: string;
     limitReachedTooltip?: string;
+    signInTooltip?: string;
+    portalActionPrefix?: string;
+    portalActionLabel?: string;
+    portalActionSuffix?: string;
   };
   config?: {
+    limitsEnabled?: boolean;
     replace?: string;
     chatExpirationDays?: number;
     freeChatLimit?: number;

@@ -34,6 +34,18 @@ import type {
 // Widget version from environment variable (injected at build time via vite.config.mts)
 const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.2";
 
+function getRemainingSlotsMessage(
+  remainingSlots: number,
+  limits: ContentMetadata["limits"],
+): string {
+  const template = remainingSlots <= 1
+    ? limits?.lowRemainingSlotsMessage
+    : limits?.remainingSlotsMessage;
+  return (template ?? `You have {remainingSlots} {chatLabel} to save remaining.`)
+    .replace(/{remainingSlots}/g, String(remainingSlots))
+    .replace(/{chatLabel}/g, remainingSlots === 1 ? "chat" : "chats");
+}
+
 // Debug logging
 const debugLogs: Array<{
   timestamp: string;
@@ -84,6 +96,8 @@ function App() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [contentMetadata, setContentMetadata] =
     useState<ContentMetadata | null>(null);
+  // Fail open until the server explicitly enables quota behavior.
+  const limitsEnabled = contentMetadata?.config?.limitsEnabled === true;
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [alertPortalLink, setAlertPortalLink] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] =
@@ -309,6 +323,7 @@ function App() {
     if (
       alertMessage &&
       !deleteConfirmation &&
+      limitsEnabled &&
       userInfo?.isAnonymousPlan &&
       userInfo.remainingSlots !== undefined
     ) {
@@ -317,11 +332,10 @@ function App() {
         alertMessage.includes("You have") &&
         alertMessage.includes("to save remaining")
       ) {
-        const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? "s" : ""} to save remaining.`;
-        const message =
-          userInfo.remainingSlots <= 1
-            ? `${baseMessage} Delete chats or`
-            : baseMessage;
+        const message = getRemainingSlotsMessage(
+          userInfo.remainingSlots,
+          contentMetadata?.limits,
+        );
         setAlertMessage(message);
         setAlertPortalLink(userInfo.portalLink || null);
       }
@@ -330,6 +344,8 @@ function App() {
     userInfo?.remainingSlots,
     userInfo?.portalLink,
     userInfo?.isAnonymousPlan,
+    limitsEnabled,
+    contentMetadata?.limits,
   ]);
 
   // Handle ESC key to close help
@@ -480,12 +496,15 @@ function App() {
   };
 
   const handleCounterClick = () => {
-    if (userInfo?.isAnonymousPlan && userInfo.remainingSlots !== undefined) {
-      const baseMessage = `You have ${userInfo.remainingSlots} chat${userInfo.remainingSlots !== 1 ? "s" : ""} to save remaining.`;
-      const message =
-        userInfo.remainingSlots <= 1
-          ? `${baseMessage} Delete chats or`
-          : baseMessage;
+    if (
+      limitsEnabled &&
+      userInfo?.isAnonymousPlan &&
+      userInfo.remainingSlots !== undefined
+    ) {
+      const message = getRemainingSlotsMessage(
+        userInfo.remainingSlots,
+        contentMetadata?.limits,
+      );
 
       addLog("Counter clicked - setting alert", {
         message,
@@ -562,7 +581,7 @@ function App() {
                   ...prev,
                   totalChats: Math.max(0, (prev.totalChats || 0) - 1),
                   remainingSlots:
-                    prev.remainingSlots !== undefined
+                    limitsEnabled && prev.remainingSlots !== undefined
                       ? (prev.remainingSlots || 0) + 1
                       : undefined,
                 }
@@ -1513,7 +1532,9 @@ function App() {
       if (result?.structuredContent) {
         if (result.structuredContent.error === "limit_reached") {
           const message =
-            result.structuredContent.message || "Chat limit reached";
+            typeof result.structuredContent.message === "string"
+              ? result.structuredContent.message
+              : "Chat limit reached";
           const portalLink = result.structuredContent.portalLink;
           addLog("❌ [WIDGET] Limit reached error", { message, portalLink });
           closeModalAndResetForm();
@@ -1956,13 +1977,14 @@ function App() {
                     ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
                     : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
                 }`}
-                title="Sign in for long-term persistence"
+                title={contentMetadata?.limits?.signInTooltip ?? "Sign in"}
               >
                 <MdLogin className="w-4 h-4" />
                 <span>Sign In</span>
               </button>
             ) : null}
             {userInfo?.isAnonymousPlan &&
+              limitsEnabled &&
               userInfo.remainingSlots !== undefined && (
                 <button
                   onClick={handleCounterClick}
@@ -1977,10 +1999,7 @@ function App() {
                         ? "text-yellow-500"
                         : "text-green-500"
                   }`}
-                  title={
-                    contentMetadata?.limits?.counterTooltip ??
-                    "Click to learn about chat limits"
-                  }
+                  title={contentMetadata?.limits?.counterTooltip}
                 >
                   {userInfo.remainingSlots}
                 </button>
@@ -2120,6 +2139,7 @@ function App() {
                     ? "bg-gray-800 border-gray-600"
                     : "bg-gray-50 border-gray-200"
                 } ${
+                  limitsEnabled &&
                   userInfo?.isAnonymousPlan &&
                   userInfo.remainingSlots !== undefined
                     ? userInfo.remainingSlots === 0
@@ -2136,10 +2156,10 @@ function App() {
                   }`}
                 >
                   {alertMessage}
-                  {alertPortalLink && (
+                  {alertPortalLink &&
+                    contentMetadata?.limits?.portalActionLabel && (
                     <>
-                      {" "}
-                      Click{" "}
+                      {" "}{contentMetadata.limits.portalActionPrefix}{" "}
                       <button
                         onClick={handleAlertPortalClick}
                         className={`underline font-medium ${
@@ -2148,9 +2168,9 @@ function App() {
                             : "text-blue-600 hover:text-blue-700"
                         }`}
                       >
-                        here
+                        {contentMetadata.limits.portalActionLabel}
                       </button>{" "}
-                      to manage your account settings.
+                      {contentMetadata.limits.portalActionSuffix}
                     </>
                   )}
                 </div>
@@ -2234,6 +2254,7 @@ function App() {
                 onClick={() => {
                   // Check if limit reached for users on anonymous plan
                   if (
+                    limitsEnabled &&
                     userInfo?.isAnonymousPlan &&
                     userInfo.remainingSlots === 0
                   ) {
@@ -2242,14 +2263,10 @@ function App() {
                       userInfo.remainingSlots !== undefined
                         ? userInfo.totalChats + userInfo.remainingSlots
                         : (contentMetadata?.config?.freeChatLimit ?? 10);
-                    const messageTemplate = userInfo.portalLink
-                      ? (contentMetadata?.limits
-                          ?.limitReachedMessageWithPortal ??
-                        "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.")
-                      : (contentMetadata?.limits
-                          ?.limitReachedMessageWithoutPortal ??
-                        "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.");
-                    const message = messageTemplate.replace(
+                    const serverMessageTemplate = userInfo.portalLink
+                      ? contentMetadata?.limits?.limitReachedMessageWithPortal
+                      : contentMetadata?.limits?.limitReachedMessageWithoutPortal;
+                    const message = (serverMessageTemplate ?? "Chat limit reached").replace(
                       /{maxChats}/g,
                       String(maxChats),
                     );
@@ -2270,6 +2287,7 @@ function App() {
                     ? "opacity-50 cursor-not-allowed"
                     : ""
                 } ${
+                  limitsEnabled &&
                   userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
                     ? "hover:bg-gray-100"
                     : isDarkMode
@@ -2277,14 +2295,16 @@ function App() {
                       : "bg-gray-100 text-black hover:bg-gray-200"
                 }`}
                 title={
+                  limitsEnabled &&
                   userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
                     ? (contentMetadata?.limits?.limitReachedTooltip ??
-                      "Chat limit reached - delete a chat or upgrade")
+                      "Chat limit reached")
                     : "Save chat manually"
                 }
               >
                 <MdAdd
                   className={`w-5 h-5 ${
+                    limitsEnabled &&
                     userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
                       ? "text-red-500"
                       : ""
