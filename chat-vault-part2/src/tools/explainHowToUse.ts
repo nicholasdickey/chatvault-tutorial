@@ -10,6 +10,9 @@ export interface ExplainHowToUseParams {
 export interface ExplainHowToUseResult {
     helpText: string;
 }
+
+export type ExplainHowToUseProfile = "full" | "gpt";
+
 export const helpText = `# How to Use Chat Vault
 
 Chat Vault is a personal knowledge base that helps you turn saved notes and conversations into distilled, accessible long-term knowledge using AI.
@@ -66,10 +69,51 @@ A simple way to begin is:
 
 You can also manually save content using the Chat Vault widget.`;
 
+export const gptHelpText = `# How to Use Chat Vault
+
+Chat Vault is a personal knowledge base that helps you turn saved notes and conversations into distilled, accessible long-term knowledge using AI.
+
+Use Chat Vault to save useful ideas, research, conversations, and insights so they can be searched and retrieved later using natural language.
+
+## Saving Knowledge
+
+### Manual Save Using the Widget
+Use the '+' button in the Chat Vault widget to manually save conversations or notes.
+
+1. Copy a conversation, note, or text
+2. Click the '+' button in the Chat Vault widget
+3. Paste the content
+4. Optionally add a title
+5. Click "Save"
+
+## Browsing Your Knowledge
+
+Open the Chat Vault widget to browse the conversations and notes already saved in your vault.
+
+## Searching Your Knowledge
+
+Ask the assistant to search Chat Vault using natural language.
+
+Examples:
+- "Search my knowledge about embeddings"
+- "Find saved conversations about MCP"
+- "What do I already know about RAG pipelines?"
+
+You can also ask the assistant to use Chat Vault as additional context during research, brainstorming, or other AI-assisted workflows.
+
+## Getting Started
+
+- Open Chat Vault to browse your saved knowledge
+- Use the '+' button in the widget to manually save content
+- Ask the assistant to search your saved knowledge`;
+
 /**
  * Generate help text explaining how to use ChatVault
  */
-export function explainHowToUse(params: ExplainHowToUseParams): ExplainHowToUseResult {
+export function explainHowToUse(
+    params: ExplainHowToUseParams,
+    profile: ExplainHowToUseProfile = "full",
+): ExplainHowToUseResult {
     const { userId } = params;
 
     if (!userId) {
@@ -80,7 +124,6 @@ export function explainHowToUse(params: ExplainHowToUseParams): ExplainHowToUseR
 
 
     return {
-        helpText,
+        helpText: profile === "gpt" ? gptHelpText : helpText,
     };
 }
-

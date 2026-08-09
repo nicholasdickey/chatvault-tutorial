@@ -5,6 +5,7 @@ import {
     normalizeToolName,
     TOOL_NAME_ALIASES,
 } from "../src/server.js";
+import { explainHowToUse } from "../src/tools/explainHowToUse.js";
 
 const GPT_SAFE_TOOL_NAMES = [
     "searchKnowledge",
@@ -57,6 +58,25 @@ describe("tool metadata profiles", () => {
         expect(getToolMetadataProfile()).toBe("gpt");
     });
 
+    it("omits assistant-driven save instructions from GPT help", () => {
+        const result = explainHowToUse({ userId: "reviewer" }, "gpt");
+
+        expect(result.helpText).toContain("Manual Save Using the Widget");
+        expect(result.helpText).toContain("Browsing Your Knowledge");
+        expect(result.helpText).toContain("Searching Your Knowledge");
+        expect(result.helpText).not.toContain("Ask the AI Assistant to Save");
+        expect(result.helpText).not.toContain("Paste Content Into the Chat");
+        expect(result.helpText).not.toContain("Save this conversation to Chat Vault");
+    });
+
+    it("preserves assistant-driven save instructions in full-profile help", () => {
+        const result = explainHowToUse({ userId: "reviewer" }, "full");
+
+        expect(result.helpText).toContain("Ask the AI Assistant to Save");
+        expect(result.helpText).toContain("Paste Content Into the Chat");
+        expect(result.helpText).toContain("Save this conversation to Chat Vault");
+    });
+
     it("lists functional widget tools and model save tools in full profile", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
         const tools = getListedTools();
@@ -98,6 +118,16 @@ describe("tool metadata profiles", () => {
         expect(gptWidgetTools).toEqual(fullWidgetTools);
         for (const tool of gptWidgetTools) {
             expect((tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["app"]);
+        }
+    });
+
+    it("marks entry replacement and deletion as destructive", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
+        const tools = getListedTools();
+
+        for (const name of ["updateSavedEntry", "deleteSavedEntry"]) {
+            const tool = tools.find((candidate) => candidate.name === name);
+            expect(tool?.annotations?.destructiveHint).toBe(true);
         }
     });
 
