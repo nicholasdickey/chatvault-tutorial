@@ -9,6 +9,7 @@ import { performVectorSearch } from "./vectorSearch.js";
 import type { UserContext } from "../server.js";
 import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
+import { areChatVaultLimitsEnabled } from "../utils/limitsEnabled.js";
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
  * This ensures pagination works correctly by removing duplicates before pagination calculations
@@ -91,11 +92,18 @@ export interface LoadChatsResult {
     subTitle?: string;
     limits: {
       counterTooltip: string;
+      remainingSlotsMessage: string;
+      lowRemainingSlotsMessage: string;
       limitReachedTooltip: string;
       limitReachedMessageWithPortal: string;
       limitReachedMessageWithoutPortal: string;
+      signInTooltip: string;
+      portalActionPrefix?: string;
+      portalActionLabel?: string;
+      portalActionSuffix?: string;
     };
     config: {
+      limitsEnabled: boolean;
       freeChatLimit: number;
       chatExpirationDays: number;
     };
@@ -123,9 +131,10 @@ function formatTurns(
  */
 function filterExpiredChats<T extends { timestamp: Date }>(
   chatList: T[],
-  isAnon: boolean
+  isAnon: boolean,
+  limitsEnabled: boolean
 ): T[] {
-  if (!isAnon) {
+  if (!isAnon || !limitsEnabled) {
     return chatList; // Normal users see all chats
   }
 
@@ -180,17 +189,35 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       throw new Error("userId is required");
     }
     const userIdScope = await getMergedUserIdScopeForReads(userId);
+    const limitsEnabled = areChatVaultLimitsEnabled();
     const contentMetadata = {
 
       subTitle: `If your AI chatbot is having trouble saving a chat into the vault, you can copy the chat manually and either paste it into your chatbot, asking it to parse and save the chat turn-by-turn into the vault, or use the manual chat save to the right.`,
 
       limits: {
         counterTooltip: "Click to learn about chat limits",
-        limitReachedTooltip: "Chat limit reached - delete a chat or upgrade",
-        limitReachedMessageWithPortal: "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats.",
-        limitReachedMessageWithoutPortal: "You've reached the limit of {maxChats} free chats. Please delete a chat to add more.",
+        remainingSlotsMessage: "You have {remainingSlots} {chatLabel} to save remaining.",
+        lowRemainingSlotsMessage: limitsEnabled
+          ? "You have {remainingSlots} {chatLabel} to save remaining. Delete chats or"
+          : "You have {remainingSlots} {chatLabel} to save remaining.",
+        limitReachedTooltip: limitsEnabled
+          ? "Chat limit reached - delete a chat or upgrade"
+          : "Unable to save this chat",
+        limitReachedMessageWithPortal: limitsEnabled
+          ? "You've reached the limit of {maxChats} free chats. Delete a chat to add more, or upgrade your account to save unlimited chats."
+          : "This chat could not be saved.",
+        limitReachedMessageWithoutPortal: limitsEnabled
+          ? "You've reached the limit of {maxChats} free chats. Please delete a chat to add more."
+          : "This chat could not be saved.",
+        signInTooltip: limitsEnabled ? "Sign in for long-term persistence" : "Sign in",
+        ...(limitsEnabled && {
+          portalActionPrefix: "Click",
+          portalActionLabel: "here",
+          portalActionSuffix: "to manage your account settings.",
+        }),
       },
       config: {
+        limitsEnabled,
         freeChatLimit: 10,
         chatExpirationDays: 7,
       },
@@ -221,9 +248,9 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const totalChats = allChatsForUser.length;
 
       // Filter expired chats for anonymous users
-      const filteredChats = filterExpiredChats(searchResult.chats, isAnon);
-      const filteredTotal = isAnon
-        ? filterExpiredChats(allChatsForUser, isAnon).length
+      const filteredChats = filterExpiredChats(searchResult.chats, isAnon, limitsEnabled);
+      const filteredTotal = isAnon && limitsEnabled
+        ? filterExpiredChats(allChatsForUser, isAnon, limitsEnabled).length
         : searchResult.total;
 
       // Recalculate pagination after filtering
@@ -231,7 +258,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const filteredHasMore = pageNum + 1 < filteredTotalPages;
       const filteredOffset = pageNum * sizeNum;
       const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
-      if (shouldShowFreeLimitMetadata) {
+      if (limitsEnabled && shouldShowFreeLimitMetadata) {
         console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
       }
 
@@ -259,9 +286,9 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
           totalChats,
           userName,
-          ...(shouldShowFreeLimitMetadata && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+          ...(limitsEnabled && shouldShowFreeLimitMetadata && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         },
-        //content: contentMetadata,
+        content: contentMetadata,
 
       };
 
@@ -285,14 +312,14 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     console.log("[loadMyChats] After deduplication:", deduplicatedChats.length, "unique chats");
 
     // Filter expired chats for anonymous users
-    const nonExpiredChats = filterExpiredChats(deduplicatedChats, isAnon);
+    const nonExpiredChats = filterExpiredChats(deduplicatedChats, isAnon, limitsEnabled);
     const totalBeforeFilter = deduplicatedChats.length;
-    const total = isAnon ? nonExpiredChats.length : totalBeforeFilter;
+    const total = isAnon && limitsEnabled ? nonExpiredChats.length : totalBeforeFilter;
     console.log(
       "[loadMyChats] After expiration filter:",
       total,
       "chats",
-      isAnon ? `(filtered from ${totalBeforeFilter})` : ""
+      isAnon && limitsEnabled ? `(filtered from ${totalBeforeFilter})` : ""
     );
 
     // Apply pagination to filtered results
@@ -327,11 +354,11 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         ...(isAnonymousPlan !== undefined && { isAnonymousPlan }),
         totalChats,
         userName,
-        ...(shouldShowFreeLimitMetadata && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
+        ...(limitsEnabled && shouldShowFreeLimitMetadata && { remainingSlots: Math.max(0, ANON_MAX_CHATS - totalChats) }),
         //message: "This is a **test message** with markdown. Check out [OpenAI](https://openai.com) and [ChatGPT](https://chat.openai.com) for more info.", // TODO: Replace with dynamic message logic
         //messageType: widgetVersion === "1.0.0" ? "normal" : "success",
       },
-      ...(shouldShowFreeLimitMetadata && { content: contentMetadata }),
+      content: contentMetadata,
     };
 
     console.log(
@@ -350,4 +377,3 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     throw error;
   }
 }
-

@@ -15,6 +15,7 @@ import { saveChatCore } from "../utils/saveChatCore.js";
 import { parseAndVerifyPastedChat } from "../utils/parseAndVerifyPastedChat.js";
 import type { UserContext } from "../server.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
+import { areChatVaultLimitsEnabled } from "../utils/limitsEnabled.js";
 
 export interface WidgetAddParams {
     userId: string;
@@ -78,6 +79,7 @@ export async function widgetAdd(
     const isAnon = userContext?.isAnon ?? false;
     const isAnonymousPlan = userContext?.isAnonymousPlan;
     const portalLink = userContext?.portalLink ?? null;
+    const limitsEnabled = areChatVaultLimitsEnabled();
 
     console.log("[widgetAdd] ===== ENTRY =====");
     console.log("[widgetAdd] Received params:", {
@@ -100,13 +102,18 @@ export async function widgetAdd(
             throw new Error("htmlContent is required");
         }
 
-        // Content size check: anonymous/free plan 40k, authenticated paid 2M
+        // Content size check: legacy limits use 40k for free plans; GPT approval
+        // mode keeps a neutral 1M free-plan cap. Paid plans remain at 2M.
         const contentLength = htmlContent.length;
         const isFreePlan = isAnon || isAnonymousPlan === true;
-        const maxLength = isFreePlan ? 40_000 : 2_000_000;
+        const maxLength = isFreePlan
+            ? limitsEnabled
+                ? 40_000
+                : 1_000_000
+            : 2_000_000;
         if (contentLength > maxLength) {
-            const limitType = isFreePlan ? "40,000 characters" : "2,000,000 characters";
-            const message = isFreePlan
+            const limitType = `${maxLength.toLocaleString("en-US")} characters`;
+            const message = limitsEnabled && isFreePlan
                 ? `Content exceeds the ${limitType} limit for users on the free plan. Please shorten your content or sign in to save longer chats and notes (up to 2,000,000 characters).`
                 : `Content exceeds the ${limitType} limit. Please shorten your content.`;
             console.log("[widgetAdd] ❌ Content size limit exceeded:", { contentLength, maxLength });
@@ -114,12 +121,12 @@ export async function widgetAdd(
                 turnsCount: 0,
                 error: "limit_reached" as const,
                 message,
-                portalLink: isAnon ? portalLink : null,
+                portalLink: limitsEnabled && isAnon ? portalLink : null,
             };
         }
 
         // Check chat limit for anonymous users only
-        if (isAnon) {
+        if (limitsEnabled && isAnon) {
             const nonExpiredCount = await countNonExpiredChats(userId);
             console.log("[widgetAdd] Anonymous user - non-expired chats:", nonExpiredCount, "limit:", ANON_MAX_CHATS);
             if (nonExpiredCount >= ANON_MAX_CHATS) {
