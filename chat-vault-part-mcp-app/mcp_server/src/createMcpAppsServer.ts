@@ -54,8 +54,10 @@ export function createMcpAppsServer(): McpServer {
       description:
         "Open the Chat Vault widget to browse, search, and manage saved knowledge.",
       inputSchema: browseMyChatVaultInputSchema,
-      // Intentionally omit outputSchema for this widget-launcher tool.
-      // Some MCP runtimes validate that tools with outputSchema must return structured content.
+      outputSchema: {
+        opened: z.boolean(),
+        message: z.string(),
+      },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -76,6 +78,10 @@ export function createMcpAppsServer(): McpServer {
         "Opened Chat Vault. Use the widget to browse, search, and manage your saved knowledge.";
       return {
         content: [{ type: "text" as const, text }],
+        structuredContent: {
+          opened: true,
+          message: text,
+        },
         _meta: {
           ui: uiMeta,
           "ui/resourceUri": resourceUri,
