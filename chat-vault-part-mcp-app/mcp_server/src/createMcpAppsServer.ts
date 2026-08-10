@@ -17,7 +17,7 @@ const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 const WIDGET_VERSION =
   process.env.WIDGET_VERSION?.trim() ||
   process.env.ACTIVE_WIDGET_VERSION?.trim() ||
-  "1.0.2";
+  "1.0.3";
 
 /**
  * Create and configure the MCP Apps server for ChatVault Part MCP App.
@@ -120,11 +120,6 @@ export function createMcpAppsServer(): McpServer {
         connect_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
         resource_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
       };
-      const widgetCSP = {
-        connectDomains: legacyWidgetCSP.connect_domains,
-        resourceDomains: legacyWidgetCSP.resource_domains,
-      };
-
       return {
         contents: [
           {
@@ -136,13 +131,6 @@ export function createMcpAppsServer(): McpServer {
               "openai/widgetPrefersBorder": true,
               "openai/widgetDomain": widgetDomain,
               "openai/widgetCSP": legacyWidgetCSP,
-              ui: {
-                resourceUri,
-                widgetVersion: WIDGET_VERSION,
-                domain: widgetDomain,
-                prefersBorder: true,
-                csp: widgetCSP,
-              },
               "ui/widgetVersion": WIDGET_VERSION,
             },
           },
