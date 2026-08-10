@@ -11,6 +11,18 @@ test("exposes the widget launcher to the model only", () => {
 
   assert.deepEqual(tool._meta.ui.visibility, ["model"]);
   assert.equal(tool._meta.ui.resourceUri, resourceUri);
+  assert.ok(tool.outputSchema);
+});
+
+test("widget launcher returns structured content matching its output schema", async () => {
+  const server = createMcpAppsServer() as any;
+  const tool = server._registeredTools.browseMyChatVault;
+  const result = await tool.handler({});
+
+  assert.deepEqual(result.structuredContent, {
+    opened: true,
+    message: "Opened Chat Vault. Use the widget to browse, search, and manage your saved knowledge.",
+  });
 });
 
 test("publishes the Claude-compatible legacy widget resource metadata", async () => {
