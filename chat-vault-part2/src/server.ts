@@ -738,13 +738,21 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 portalLink: userContext?.portalLink ?? (args as any).portalLink ?? null,
                 loginLink: userContext?.loginLink ?? (args as any).loginLink ?? null,
             };
-            console.log("[MCP Handler] Final userContext (headers + args fallback):", finalUserContext);
+            console.log("[MCP Handler] Final user context:", {
+                isAnon: finalUserContext.isAnon,
+                isAnonymousPlan: finalUserContext.isAnonymousPlan,
+                hasPortalLink: Boolean(finalUserContext.portalLink),
+                hasLoginLink: Boolean(finalUserContext.loginLink),
+            });
             const result = await loadMyChats({
                 ...(args as { userId: string; page?: number; size?: number; query?: string; aboveTheFoldOnly?: boolean }),
                 userContext: finalUserContext,
                 headers: headers, // Pass all headers for logging
             });
-            console.log("[MCP Handler] handleCallTool - loadSavedEntries result:", result.chats.length, "entries", "userInfo:", result.userInfo);
+            console.log("[MCP Handler] handleCallTool - loadSavedEntries result:", {
+                entries: result.chats.length,
+                hasUserInfo: Boolean(result.userInfo),
+            });
             // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
             return {
                 content: [
@@ -1037,24 +1045,23 @@ export async function handleMcpRequest(
         const isAnonymousPlanHeader = req.headers["x-a6-anonymous-subscription"];
         const portalLinkHeader = req.headers["x-a6-portal-link"];
         const loginLinkHeader = req.headers["x-a6-login-link"];
-        // Log all A6 headers for debugging
-        const a6Headers = Object.keys(req.headers)
-            .filter(key => key.toLowerCase().startsWith("x-a6"))
-            .reduce((acc, key) => {
-                acc[key] = req.headers[key];
-                return acc;
-            }, {} as Record<string, string | string[] | undefined>);
-        console.log("[MCP] All A6 headers:", JSON.stringify(a6Headers));
+        const a6HeaderKeys = Object.keys(req.headers)
+            .filter(key => key.toLowerCase().startsWith("x-a6"));
+        console.log("[MCP] A6 header summary:", { keys: a6HeaderKeys });
         const userContext: UserContext = {
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
             isAnonymousPlan: isAnonymousPlanHeader === "true" || isAnonymousPlanHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
             loginLink: loginLinkHeader ? String(loginLinkHeader) : null,
         };
-        console.log("[MCP] User context extracted from headers:", userContext);
+        console.log("[MCP] User context extracted from headers:", {
+            isAnon: userContext.isAnon,
+            isAnonymousPlan: userContext.isAnonymousPlan,
+            hasPortalLink: Boolean(userContext.portalLink),
+            hasLoginLink: Boolean(userContext.loginLink),
+        });
 
         const body = await readRequestBody(req);
-        console.log("[MCP] Incoming request body:", body);
         const requestData = JSON.parse(body);
 
         const { jsonrpc, id, method, params } = requestData;
@@ -1063,8 +1070,8 @@ export async function handleMcpRequest(
             id,
             "method:",
             method,
-            "params:",
-            JSON.stringify(params)
+            "paramKeys:",
+            Object.keys(params ?? {})
         );
 
         // Validate JSON-RPC version
@@ -1169,8 +1176,8 @@ export async function handleMcpRequest(
                 console.log(
                     "[MCP] tools/list - id:",
                     id,
-                    "params:",
-                    JSON.stringify(params)
+                    "paramKeys:",
+                    Object.keys(params ?? {})
                 );
                 result = await handleListTools(request);
                 console.log("[MCP] tools/list response:", JSON.stringify(result));
@@ -1184,11 +1191,15 @@ export async function handleMcpRequest(
                 console.log(
                     "[MCP] tools/call - id:",
                     id,
-                    "params:",
-                    JSON.stringify(params)
+                    "paramKeys:",
+                    Object.keys(params ?? {})
                 );
                 result = await handleCallTool(request, userContext, req.headers);
-                console.log("[MCP] tools/call response:", JSON.stringify(result));
+                console.log("[MCP] tools/call response summary:", {
+                    hasResult: result != null,
+                    contentItems: Array.isArray((result as any)?.content) ? (result as any).content.length : 0,
+                    hasStructuredContent: Boolean((result as any)?.structuredContent),
+                });
             } else if (method === "resources/list") {
                 // MCP protocol: resources/list - return empty list since we don't provide resources
                 console.log("[MCP] resources/list - id:", id);
