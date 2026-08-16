@@ -165,8 +165,10 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     if (userNameHeader) {
       userName = Array.isArray(userNameHeader) ? userNameHeader[0] : userNameHeader;
     }
-    // Dump all headers to log
-    console.log("[loadMyChats] All request headers:", JSON.stringify(headers, null, 2));
+    console.log("[loadMyChats] Request context present:", {
+      hasUserName: Boolean(userName),
+      headerCount: Object.keys(headers).length,
+    });
   }
   if (!widgetVersion) {
     widgetVersion = "1.0.0";
