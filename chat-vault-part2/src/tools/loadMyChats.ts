@@ -7,7 +7,11 @@ import { chats } from "../db/schema.js";
 import { desc } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
 import type { UserContext } from "../server.js";
-import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
+import {
+  getMergedUserIdScopeForReads,
+  chatsUserIdInScope,
+  chatsUserIdInCanonicalScope,
+} from "../user/userMerge.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 import { areChatVaultLimitsEnabled } from "../utils/limitsEnabled.js";
 /**
@@ -191,10 +195,6 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     if (!userId) {
       throw new Error("userId is required");
     }
-    const databaseContext = observeDatabaseOperation();
-    const scopeStartedAt = Date.now();
-    const userIdScope = await getMergedUserIdScopeForReads(userId);
-    const scopeQueryMs = Date.now() - scopeStartedAt;
     const limitsEnabled = areChatVaultLimitsEnabled();
     const contentMetadata = {
 
@@ -238,6 +238,10 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     // If query is provided, use vector search (same as searchMyChats)
     const searchQuery = query?.trim();
     if (searchQuery) {
+      const databaseContext = observeDatabaseOperation();
+      const scopeStartedAt = Date.now();
+      const userIdScope = await getMergedUserIdScopeForReads(userId);
+      const scopeQueryMs = Date.now() - scopeStartedAt;
       console.log("[loadMyChats] Using vector search for query");
       const searchStartedAt = Date.now();
       const searchResult = await performVectorSearch({
@@ -325,11 +329,18 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     // No query - load chats by timestamp (original behavior)
     // Fetch all chats for the user (we need to deduplicate before pagination)
     console.log("[loadMyChats] Fetching all chats for user:", userId);
+    const databaseContext = observeDatabaseOperation();
     const chatsQueryStartedAt = Date.now();
     const allChatResults = await db
-      .select()
+      .select({
+        id: chats.id,
+        userId: chats.userId,
+        title: chats.title,
+        timestamp: chats.timestamp,
+        turns: chats.turns,
+      })
       .from(chats)
-      .where(chatsUserIdInScope(userIdScope))
+      .where(chatsUserIdInCanonicalScope(userId))
       .orderBy(desc(chats.timestamp));
     const chatsQueryMs = Date.now() - chatsQueryStartedAt;
 
@@ -407,12 +418,11 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       mode: "list",
       totalMs: Date.now() - loadStartedAt,
       phasesMs: {
-        mergedUserScopeQuery: scopeQueryMs,
         chatsQuery: chatsQueryMs,
         transform: transformMs,
       },
       database: databaseContext,
-      scopeSize: userIdScope.length,
+      scopeResolution: "sql_subquery",
       rowsRead: allChatResults.length,
       rowsReturned: result.chats.length,
       responseBytesApprox: Buffer.byteLength(JSON.stringify(result)),
