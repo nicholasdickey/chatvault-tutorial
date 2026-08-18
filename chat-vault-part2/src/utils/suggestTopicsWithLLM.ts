@@ -8,6 +8,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as dotenv from "dotenv";
 import { combineChatText } from "./embeddings.js";
+import { applyTopicSuggestionGuardrails } from "./topicSuggestionGuardrails.js";
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ Rules:
   - Use exact spelling from the list when reusing
   - Only propose a new label when nothing on the list reasonably fits
   - Do not invent synonyms (e.g. do not return "baking" if "bread making" already exists)
+  - NEVER reuse "home improvement" or "kitchen design" for food, cooking, baking, or bread conversations — even if those labels are on the list
 - Classify by the user's primary ACTIVITY or subject, not incidental setting, hardware, or aesthetics
   - Kitchen/stove/oven tweaks done to improve cooking or baking → food labels, NOT home improvement or kitchen design
   - Use "home improvement" or "kitchen design" only for renovation, decor, or construction — not food prep
@@ -138,10 +140,14 @@ export async function suggestTopicsWithLLM(
             return [];
         }
 
-        return parsed.topics
-            .map((t) => t.trim())
-            .filter(Boolean)
-            .slice(0, 2);
+        return applyTopicSuggestionGuardrails(
+            title,
+            turns,
+            parsed.topics
+                .map((t) => t.trim())
+                .filter(Boolean)
+                .slice(0, 2),
+        );
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn("[suggestTopicsWithLLM] Failed to suggest topics:", message);
