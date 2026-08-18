@@ -2,7 +2,12 @@
  * loadMyChats tool implementation
  */
 
-import { db, observeDatabaseOperation } from "../db/index.js";
+import {
+  db,
+  chatListDb,
+  chatListDbTransport,
+  observeDatabaseOperation,
+} from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { desc } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
@@ -331,7 +336,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     console.log("[loadMyChats] Fetching all chats for user:", userId);
     const databaseContext = observeDatabaseOperation();
     const chatsQueryStartedAt = Date.now();
-    const allChatResults = await db
+    const allChatResults = await chatListDb
       .select({
         id: chats.id,
         userId: chats.userId,
@@ -422,6 +427,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         transform: transformMs,
       },
       database: databaseContext,
+      databaseTransport: chatListDbTransport,
       scopeResolution: "sql_subquery",
       rowsRead: allChatResults.length,
       rowsReturned: result.chats.length,

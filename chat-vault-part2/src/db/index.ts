@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle as drizzleNeonHttp } from "drizzle-orm/neon-http";
 import postgres from "postgres";
 import * as dotenv from "dotenv";
 import { sql } from "drizzle-orm";
@@ -15,6 +16,15 @@ if (!process.env.DATABASE_URL) {
 // Create the connection
 const connectionString = process.env.DATABASE_URL;
 const client = postgres(connectionString, { max: 1 });
+
+function isNeonConnectionString(value: string): boolean {
+    try {
+        const hostname = new URL(value).hostname.toLowerCase();
+        return hostname === "neon.tech" || hostname.endsWith(".neon.tech");
+    } catch {
+        return false;
+    }
+}
 
 const databaseClientCreatedAt = Date.now();
 let databaseOperationObserved = false;
@@ -39,6 +49,19 @@ export function observeDatabaseOperation(): {
 // Create the Drizzle instance
 export const db = drizzle(client);
 
+/**
+ * Stateless HTTP reads avoid a TCP connection handshake in Vercel functions.
+ * Local/test Postgres keeps using postgres.js because Neon HTTP only supports
+ * Neon-hosted databases.
+ */
+export const chatListDb: typeof db = isNeonConnectionString(connectionString)
+    ? drizzleNeonHttp(connectionString) as unknown as typeof db
+    : db;
+
+export const chatListDbTransport = isNeonConnectionString(connectionString)
+    ? "neon_http"
+    : "postgres_js";
+
 // Test connection function
 export async function testConnection(): Promise<boolean> {
     try {
@@ -49,4 +72,3 @@ export async function testConnection(): Promise<boolean> {
         return false;
     }
 }
-
