@@ -29,10 +29,18 @@ import type {
   ContentMetadata,
   EditingTurn,
   ChatVaultToolResult,
+  Topic,
+  AvailableTopic,
 } from "./types.js";
+import { TopicCombobox } from "./TopicCombobox.js";
+import {
+  buildLoadSavedEntriesArgs,
+  parseLoadSavedEntriesResponse,
+  type ParsedLoadSavedEntries,
+} from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.2";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.4";
 
 function getRemainingSlotsMessage(
   remainingSlots: number,
@@ -78,6 +86,8 @@ function App() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [pageInputValue, setPageInputValue] = useState("1");
   const [paginationLoading, setPaginationLoading] = useState(false);
+  const [filterTopics, setFilterTopics] = useState<Topic[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<AvailableTopic[]>([]);
   const [expandedTurns, setExpandedTurns] = useState<Set<string | number>>(
     new Set(),
   );
@@ -261,30 +271,31 @@ function App() {
         try {
           const result = (await app.callServerTool({
             name: "loadSavedEntries",
-            arguments: {
+            arguments: buildLoadSavedEntriesArgs({
               page: 0,
-              size: 10,
-              aboveTheFoldOnly: true,
               widgetVersion: WIDGET_VERSION,
-            },
+            }),
           })) as ChatVaultToolResult | null;
           addLog("loadSavedEntries result", result);
 
-          const rawChats = result?.structuredContent?.chats;
-          const chatList = Array.isArray(rawChats) ? rawChats : [];
-          const sc = result?.structuredContent;
-          if (chatList.length > 0 || sc) {
-            setChats(deduplicateChats(chatList as Chat[]));
-            setPagination((sc?.pagination as Pagination) ?? null);
+          const parsed = parseLoadSavedEntriesResponse(
+            result?.structuredContent as Record<string, unknown> | undefined,
+          );
+          if (parsed && (parsed.chats.length > 0 || parsed.pagination)) {
+            setChats(deduplicateChats(parsed.chats));
+            setPagination(parsed.pagination);
             setCurrentPage(0);
             setPageInputValue("1");
-            if (sc?.userInfo) {
-              setUserInfo(sc.userInfo);
-              addLog("User info extracted", sc.userInfo);
+            if (parsed.availableTopics.length > 0) {
+              setAvailableTopics(parsed.availableTopics);
             }
-            if (sc?.content) {
-              setContentMetadata(sc.content as ContentMetadata);
-              addLog("Content metadata extracted", sc.content);
+            if (parsed.userInfo) {
+              setUserInfo(parsed.userInfo);
+              addLog("User info extracted", parsed.userInfo);
+            }
+            if (parsed.content) {
+              setContentMetadata(parsed.content);
+              addLog("Content metadata extracted", parsed.content);
             }
           } else if (result?.content?.[0] && "text" in result.content[0]) {
             addLog("Unexpected result format", result);
@@ -383,6 +394,101 @@ function App() {
     return Array.from(seen.values());
   };
 
+  const getActiveTopicIds = (topics: Topic[] = filterTopics) =>
+    topics.map((t) => t.id).filter((id) => id && !id.startsWith("new:"));
+
+  const applyParsedLoad = (
+    parsed: ParsedLoadSavedEntries | null,
+    opts?: { append?: boolean; page?: number },
+  ) => {
+    if (!parsed) return false;
+    setChats((prev) =>
+      opts?.append
+        ? deduplicateChats([...prev, ...parsed.chats])
+        : deduplicateChats(parsed.chats),
+    );
+    setPagination(parsed.pagination);
+    if (opts?.page != null) {
+      setCurrentPage(opts.page);
+      setPageInputValue(String(opts.page + 1));
+    }
+    if (parsed.availableTopics.length > 0) {
+      setAvailableTopics(parsed.availableTopics);
+    }
+    if (parsed.userInfo) {
+      setUserInfo(parsed.userInfo);
+    }
+    if (parsed.content) {
+      setContentMetadata(parsed.content);
+    }
+    return true;
+  };
+
+  const loadChatsAtPage = async (
+    page: number,
+    opts?: {
+      query?: string;
+      topicIds?: string[];
+      append?: boolean;
+    },
+  ) => {
+    const result = (await app.callServerTool({
+      name: "loadSavedEntries",
+      arguments: buildLoadSavedEntriesArgs({
+        page,
+        widgetVersion: WIDGET_VERSION,
+        query: opts?.query,
+        topicIds: opts?.topicIds ?? getActiveTopicIds(),
+      }),
+    })) as ChatVaultToolResult | null;
+    return applyParsedLoad(
+      parseLoadSavedEntriesResponse(
+        result?.structuredContent as Record<string, unknown> | undefined,
+      ),
+      { append: opts?.append, page },
+    );
+  };
+
+  const handleTopicFilterChange = async (topics: Topic[]) => {
+    const validTopics = topics.filter((t) => t.id && !t.id.startsWith("new:"));
+    setFilterTopics(validTopics);
+    setCurrentPage(0);
+    setPaginationLoading(true);
+    addLog("Topic filter changed", {
+      topicIds: validTopics.map((t) => t.id),
+    });
+    try {
+      await loadChatsAtPage(0, {
+        query: isSearching ? searchQuery : undefined,
+        topicIds: validTopics.map((t) => t.id),
+      });
+    } catch (err) {
+      addLog("Topic filter load failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setPaginationLoading(false);
+    }
+  };
+
+  const handleClearTopicFilter = async () => {
+    setFilterTopics([]);
+    setCurrentPage(0);
+    setPaginationLoading(true);
+    try {
+      await loadChatsAtPage(0, {
+        query: isSearching ? searchQuery : undefined,
+        topicIds: [],
+      });
+    } catch (err) {
+      addLog("Clear topic filter failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setPaginationLoading(false);
+    }
+  };
+
   const handleChatClick = (chat: Chat) => {
     addLog("Chat clicked", { title: chat.title });
     setExpandedTurns(new Set());
@@ -445,24 +551,18 @@ function App() {
       });
       const result = (await app.callServerTool({
         name: "loadSavedEntries",
-        arguments: {
+        arguments: buildLoadSavedEntriesArgs({
           page: 0,
-          size: 10,
-          aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
-        },
+          topicIds: getActiveTopicIds(),
+        }),
       })) as ChatVaultToolResult | null;
       addLog("loadSavedEntries result", result);
-      if (result?.structuredContent?.chats) {
-        setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-        setPagination(
-          (result.structuredContent.pagination as Pagination) ?? null,
-        );
-        setCurrentPage(0);
-        setPageInputValue("1");
-        if (result.structuredContent.userInfo) {
-          setUserInfo(result.structuredContent.userInfo);
-        }
+      const parsed = parseLoadSavedEntriesResponse(
+        result?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (parsed) {
+        applyParsedLoad(parsed, { page: 0 });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -1366,33 +1466,19 @@ function App() {
     try {
       const loadResult = (await app.callServerTool({
         name: "loadSavedEntries",
-        arguments: {
+        arguments: buildLoadSavedEntriesArgs({
           page: 0,
-          size: 10,
-          aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
-        },
+          topicIds: getActiveTopicIds(),
+        }),
       })) as ChatVaultToolResult | null;
-      if (loadResult?.structuredContent?.chats) {
-        setChats(
-          deduplicateChats(loadResult.structuredContent.chats as Chat[]),
-        );
-        setPagination(
-          (loadResult.structuredContent.pagination as Pagination) ?? null,
-        );
-        setCurrentPage(0);
-        setPageInputValue("1");
-        if (loadResult.structuredContent.userInfo) {
-          setUserInfo(loadResult.structuredContent.userInfo as UserInfo);
-          addLog(
-            "UserInfo updated after save",
-            loadResult.structuredContent.userInfo,
-          );
-        }
-        if (loadResult.structuredContent.content) {
-          setContentMetadata(
-            loadResult.structuredContent.content as ContentMetadata,
-          );
+      const parsed = parseLoadSavedEntriesResponse(
+        loadResult?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (parsed) {
+        applyParsedLoad(parsed, { page: 0 });
+        if (parsed.userInfo) {
+          addLog("UserInfo updated after save", parsed.userInfo);
         }
       }
     } catch (err) {
@@ -1738,24 +1824,21 @@ function App() {
     try {
       const result = (await app.callServerTool({
         name: "loadSavedEntries",
-        arguments: {
-          query: query.trim(),
+        arguments: buildLoadSavedEntriesArgs({
           page,
-          size: 10,
-          aboveTheFoldOnly: true,
           widgetVersion: WIDGET_VERSION,
-        },
+          query: query.trim(),
+          topicIds: getActiveTopicIds(),
+        }),
       })) as ChatVaultToolResult | null;
 
       addLog("Search result", result);
-      if (result?.structuredContent?.chats) {
-        setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-        setPagination(
-          (result.structuredContent.pagination as Pagination) ?? null,
-        );
-        setCurrentPage(page);
-        setPageInputValue(String(page + 1));
-      }
+      applyParsedLoad(
+        parseLoadSavedEntriesResponse(
+          result?.structuredContent as Record<string, unknown> | undefined,
+        ),
+        { page },
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       addLog("Search failed", { error: errorMessage });
@@ -1778,23 +1861,9 @@ function App() {
     addLog("Clearing search, reloading chats");
 
     try {
-      const result = (await app.callServerTool({
-        name: "loadSavedEntries",
-        arguments: {
-          page: 0,
-          size: 10,
-          aboveTheFoldOnly: true,
-          widgetVersion: WIDGET_VERSION,
-        },
-      })) as ChatVaultToolResult | null;
-      if (result?.structuredContent?.chats) {
-        setChats(deduplicateChats(result.structuredContent.chats as Chat[]));
-        setPagination(
-          (result.structuredContent.pagination as Pagination) ?? null,
-        );
-        setCurrentPage(0);
-        setPageInputValue("1");
-      }
+      await loadChatsAtPage(0, {
+        topicIds: getActiveTopicIds(),
+      });
     } catch (err) {
       addLog("Error reloading chats", {
         error: err instanceof Error ? err.message : String(err),
@@ -1813,44 +1882,12 @@ function App() {
 
     try {
       if (isSearching && searchQuery) {
-        const result = (await app.callServerTool({
-          name: "loadSavedEntries",
-          arguments: {
-            query: searchQuery.trim(),
-            page: nextPage,
-            size: 10,
-            aboveTheFoldOnly: true,
-            widgetVersion: WIDGET_VERSION,
-          },
-        })) as ChatVaultToolResult | null;
-        if (result?.structuredContent?.chats) {
-          const newChats = result.structuredContent.chats as Chat[];
-          setChats((prev) => deduplicateChats([...prev, ...newChats]));
-          setPagination(
-            (result.structuredContent.pagination as Pagination) ?? null,
-          );
-          setCurrentPage(nextPage);
-          setPageInputValue(String(nextPage + 1));
-        }
+        await loadChatsAtPage(nextPage, {
+          query: searchQuery,
+          append: true,
+        });
       } else {
-        const result = (await app.callServerTool({
-          name: "loadSavedEntries",
-          arguments: {
-            page: nextPage,
-            size: 10,
-            aboveTheFoldOnly: true,
-            widgetVersion: WIDGET_VERSION,
-          },
-        })) as ChatVaultToolResult | null;
-        if (result?.structuredContent?.chats) {
-          const newChats = result.structuredContent.chats as Chat[];
-          setChats((prev) => deduplicateChats([...prev, ...newChats]));
-          setPagination(
-            (result.structuredContent.pagination as Pagination) ?? null,
-          );
-          setCurrentPage(nextPage);
-          setPageInputValue(String(nextPage + 1));
-        }
+        await loadChatsAtPage(nextPage, { append: true });
       }
     } catch (err) {
       addLog("Error loading more chats", {
@@ -2410,6 +2447,42 @@ function App() {
                   <MdSearch className="w-5 h-5" />
                 )}
               </button>
+            </div>
+            <div className="mt-2 flex items-start gap-2">
+              <span
+                className={`text-xs font-medium pt-2 shrink-0 ${
+                  isDarkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
+                Topics
+              </span>
+              <div className="flex-1 min-w-0">
+                <TopicCombobox
+                  selected={filterTopics}
+                  options={availableTopics}
+                  onChange={handleTopicFilterChange}
+                  allowCreate={false}
+                  disabled={paginationLoading || searchLoading}
+                  placeholder="Filter by topic…"
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+              {filterTopics.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearTopicFilter}
+                  disabled={paginationLoading || searchLoading}
+                  className={`shrink-0 px-2 py-1.5 rounded text-xs font-medium ${
+                    paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : isDarkMode
+                        ? "text-gray-300 hover:bg-gray-700"
+                        : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Clear
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -3359,27 +3432,9 @@ function App() {
                               } else {
                                 setPaginationLoading(true);
                                 try {
-                                  const res = (await app.callServerTool({
-                                    name: "loadSavedEntries",
-                                    arguments: {
-                                      page: targetPage,
-                                      size: 10,
-                                      aboveTheFoldOnly: true,
-                                    },
-                                  })) as ChatVaultToolResult | null;
-                                  if (res?.structuredContent?.chats) {
-                                    setChats(
-                                      deduplicateChats(
-                                        res.structuredContent.chats as Chat[],
-                                      ),
-                                    );
-                                    setPagination(
-                                      (res.structuredContent
-                                        .pagination as Pagination) ?? null,
-                                    );
-                                    setCurrentPage(targetPage);
-                                    setPageInputValue(String(targetPage + 1));
-                                  }
+                                  await loadChatsAtPage(targetPage, {
+                                    query: isSearching ? searchQuery : undefined,
+                                  });
                                 } catch (err) {
                                   addLog("Error loading previous page", {
                                     error:
@@ -3443,34 +3498,9 @@ function App() {
                                     handleSearch(searchQuery, page);
                                   } else {
                                     setPaginationLoading(true);
-                                    app
-                                      .callServerTool({
-                                        name: "loadSavedEntries",
-                                        arguments: {
-                                          page,
-                                          size: 10,
-                                          aboveTheFoldOnly: true,
-                                        },
-                                      })
-                                      .then((res: unknown) => {
-                                        const r =
-                                          res as ChatVaultToolResult | null;
-                                        if (r?.structuredContent?.chats) {
-                                          setChats(
-                                            deduplicateChats(
-                                              r.structuredContent
-                                                .chats as Chat[],
-                                            ),
-                                          );
-                                          setPagination(
-                                            (r.structuredContent
-                                              .pagination as Pagination) ??
-                                              null,
-                                          );
-                                          setCurrentPage(page);
-                                          setPageInputValue(String(page + 1));
-                                        }
-                                      })
+                                    loadChatsAtPage(page, {
+                                      query: isSearching ? searchQuery : undefined,
+                                    })
                                       .catch((err: unknown) => {
                                         addLog("Error loading page", {
                                           error:
@@ -3527,29 +3557,11 @@ function App() {
                                     } else {
                                       setPaginationLoading(true);
                                       try {
-                                        const res = (await app.callServerTool({
-                                          name: "loadSavedEntries",
-                                          arguments: {
-                                            page,
-                                            size: 10,
-                                            aboveTheFoldOnly: true,
-                                          },
-                                        })) as ChatVaultToolResult | null;
-                                        if (res?.structuredContent?.chats) {
-                                          setChats(
-                                            deduplicateChats(
-                                              res.structuredContent
-                                                .chats as Chat[],
-                                            ),
-                                          );
-                                          setPagination(
-                                            (res.structuredContent
-                                              .pagination as Pagination) ??
-                                              null,
-                                          );
-                                          setCurrentPage(page);
-                                          setPageInputValue(String(page + 1));
-                                        }
+                                        await loadChatsAtPage(page, {
+                                          query: isSearching
+                                            ? searchQuery
+                                            : undefined,
+                                        });
                                       } catch (err) {
                                         addLog("Error loading page", {
                                           error:
@@ -3589,27 +3601,9 @@ function App() {
                               } else {
                                 setPaginationLoading(true);
                                 try {
-                                  const res = (await app.callServerTool({
-                                    name: "loadSavedEntries",
-                                    arguments: {
-                                      page: targetPage,
-                                      size: 10,
-                                      aboveTheFoldOnly: true,
-                                    },
-                                  })) as ChatVaultToolResult | null;
-                                  if (res?.structuredContent?.chats) {
-                                    setChats(
-                                      deduplicateChats(
-                                        res.structuredContent.chats as Chat[],
-                                      ),
-                                    );
-                                    setPagination(
-                                      (res.structuredContent
-                                        .pagination as Pagination) ?? null,
-                                    );
-                                    setCurrentPage(targetPage);
-                                    setPageInputValue(String(targetPage + 1));
-                                  }
+                                  await loadChatsAtPage(targetPage, {
+                                    query: isSearching ? searchQuery : undefined,
+                                  });
                                 } catch (err) {
                                   addLog("Error loading next page", {
                                     error:
