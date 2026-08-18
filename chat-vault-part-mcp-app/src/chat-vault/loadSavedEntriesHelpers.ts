@@ -97,6 +97,26 @@ export interface ParsedLoadSavedEntries {
   content?: ContentMetadata;
 }
 
+export function parseListTopicsResponse(
+  structuredContent: Record<string, unknown> | undefined,
+): AvailableTopic[] {
+  const raw = structuredContent?.topics;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (item): item is { id: string; name: string; chatCount?: number } =>
+        !!item &&
+        typeof item === "object" &&
+        typeof (item as { id?: unknown }).id === "string" &&
+        typeof (item as { name?: unknown }).name === "string",
+    )
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      ...(item.chatCount != null ? { chatCount: Number(item.chatCount) } : {}),
+    }));
+}
+
 export function parseLoadSavedEntriesResponse(
   structuredContent: Record<string, unknown> | undefined,
 ): ParsedLoadSavedEntries | null {

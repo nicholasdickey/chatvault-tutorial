@@ -38,12 +38,13 @@ import {
   buildLoadSavedEntriesArgs,
   mergeAvailableTopics,
   mergeTopicOptionLists,
+  parseListTopicsResponse,
   parseLoadSavedEntriesResponse,
   type ParsedLoadSavedEntries,
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.5";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.6";
 
 function getRemainingSlotsMessage(
   remainingSlots: number,
@@ -262,32 +263,7 @@ function App() {
             });
             setChats(deduplicateChats(initialChats));
             setLoading(false);
-            try {
-              const result = (await app.callServerTool({
-                name: "loadSavedEntries",
-                arguments: buildLoadSavedEntriesArgs({
-                  page: 0,
-                  widgetVersion: WIDGET_VERSION,
-                  size: 1,
-                }),
-              })) as ChatVaultToolResult | null;
-              const parsed = parseLoadSavedEntriesResponse(
-                result?.structuredContent as Record<string, unknown> | undefined,
-              );
-              if (parsed) {
-                const topics = mergeAvailableTopics(
-                  parsed.availableTopics,
-                  [...initialChats, ...parsed.chats],
-                );
-                if (topics.length > 0) {
-                  setAvailableTopics(topics);
-                }
-              }
-            } catch (err) {
-              addLog("Failed to load topic options after embedded init", {
-                error: err instanceof Error ? err.message : String(err),
-              });
-            }
+            void fetchTopicOptions(initialChats);
             return;
           } catch (e) {
             addLog("Failed to parse embedded data", {
@@ -431,6 +407,64 @@ function App() {
 
   const getActiveTopicIds = (topics: Topic[] = filterTopics) =>
     topics.map((t) => t.id).filter((id) => id && !id.startsWith("new:"));
+
+  const topicOptionsFetchStarted = useRef(false);
+
+  const fetchTopicOptions = async (chatsForMerge: Chat[] = chats) => {
+    if (topicOptionsFetchStarted.current) return;
+    topicOptionsFetchStarted.current = true;
+    addLog("Fetching topic options");
+    try {
+      const listResult = (await app.callServerTool({
+        name: "listTopics",
+        arguments: {},
+      })) as ChatVaultToolResult | null;
+      const fromList = parseListTopicsResponse(
+        listResult?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (fromList.length > 0) {
+        setAvailableTopics((prev) => mergeTopicOptionLists(prev, fromList));
+        addLog("Topic options loaded from listTopics", { count: fromList.length });
+        return;
+      }
+
+      const loadResult = (await app.callServerTool({
+        name: "loadSavedEntries",
+        arguments: buildLoadSavedEntriesArgs({
+          page: 0,
+          widgetVersion: WIDGET_VERSION,
+          size: 1,
+        }),
+      })) as ChatVaultToolResult | null;
+      const parsed = parseLoadSavedEntriesResponse(
+        loadResult?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (parsed) {
+        const topics = mergeAvailableTopics(
+          parsed.availableTopics,
+          [...chatsForMerge, ...parsed.chats],
+        );
+        if (topics.length > 0) {
+          setAvailableTopics((prev) => mergeTopicOptionLists(prev, topics));
+          addLog("Topic options loaded from loadSavedEntries", {
+            count: topics.length,
+          });
+        }
+      }
+    } catch (err) {
+      addLog("Failed to load topic options", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      topicOptionsFetchStarted.current = false;
+    }
+  };
+
+  const handleTopicFilterOpen = () => {
+    if (availableTopics.length === 0) {
+      void fetchTopicOptions();
+    }
+  };
 
   const applyParsedLoad = (
     parsed: ParsedLoadSavedEntries | null,
@@ -2499,6 +2533,7 @@ function App() {
                   isDarkMode={isDarkMode}
                   matchSearchInput
                   leadingIcon={<MdLabel className="w-4 h-4" />}
+                  onOpen={handleTopicFilterOpen}
                 />
               </div>
               <button

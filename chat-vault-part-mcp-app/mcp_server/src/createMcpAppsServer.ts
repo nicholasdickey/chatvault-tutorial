@@ -17,7 +17,7 @@ const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 const WIDGET_VERSION =
   process.env.WIDGET_VERSION?.trim() ||
   process.env.ACTIVE_WIDGET_VERSION?.trim() ||
-  "1.0.5";
+  "1.0.6";
 
 /**
  * Create and configure the MCP Apps server for ChatVault Part MCP App.
