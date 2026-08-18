@@ -286,6 +286,12 @@ const updateSavedEntryTool: Tool = {
                                 required: ["prompt", "response"],
                             },
                         },
+                        topics: {
+                            type: "array",
+                            description:
+                                "Full replacement topic list (max 5). Each item is a topic UUID or a display name to resolve/create.",
+                            items: { type: "string" },
+                        },
                     },
                 },
             },
@@ -942,7 +948,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
             const result = await updateChat({
                 userId: String((args as { userId?: unknown }).userId ?? ""),
                 chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
-                chat: (args as { entry?: { title?: string; turns?: Array<{ prompt: string; response: string }> }; chat?: { title?: string; turns?: Array<{ prompt: string; response: string }> } }).entry ?? (args as { chat?: { title?: string; turns?: Array<{ prompt: string; response: string }> } }).chat ?? {},
+                chat: (args as { entry?: { title?: string; turns?: Array<{ prompt: string; response: string }>; topics?: string[] }; chat?: { title?: string; turns?: Array<{ prompt: string; response: string }>; topics?: string[] } }).entry ?? (args as { chat?: { title?: string; turns?: Array<{ prompt: string; response: string }>; topics?: string[] } }).chat ?? {},
             });
             console.log("[MCP Handler] handleCallTool - updateSavedEntry result:", JSON.stringify(result));
             return {
