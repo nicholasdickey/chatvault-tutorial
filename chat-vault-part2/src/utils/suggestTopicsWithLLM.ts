@@ -12,7 +12,7 @@ import { combineChatText } from "./embeddings.js";
 dotenv.config();
 
 const TopicsSchema = z.object({
-    topics: z.array(z.string()).max(1),
+    topics: z.array(z.string()).max(2),
 });
 
 export const SUGGEST_TOPICS_MODEL =
@@ -21,38 +21,40 @@ export const SUGGEST_TOPICS_MODEL =
 const MAX_CONTEXT_CHARS = 2000;
 const MAX_EXISTING_TOPICS_IN_PROMPT = 150;
 
-const SUGGEST_TOPICS_INSTRUCTIONS = `You assign one broad subject-area topic label to saved AI chat conversations.
+const SUGGEST_TOPICS_INSTRUCTIONS = `You assign broad subject-area topic labels to saved AI chat conversations.
 
-The goal is filtering: users pick a topic to see chats about that activity or domain (e.g. bread making, cooking, programming).
+The goal is filtering: users pick topics to see chats in that domain (e.g. filter "cooking" OR "bread making" to find food chats).
 
-Given a chat title, excerpt, and the user's existing topic list, return exactly 1 broad label (1–3 words).
+Given a chat title, excerpt, and the user's existing topic list, return 1–2 broad labels (1–3 words each).
 
 Rules:
-- REUSE FIRST: when existing topics are provided, pick the best-fitting label from that list
+- REUSE FIRST: when existing topics are provided, pick labels from that list when they fit
   - Use exact spelling from the list when reusing
   - Only propose a new label when nothing on the list reasonably fits
-  - Do not invent synonyms (e.g. do not return "baking" if "bread making" already exists and fits)
+  - Do not invent synonyms (e.g. do not return "baking" if "bread making" already exists)
 - Classify by the user's primary ACTIVITY or subject, not incidental setting, hardware, or aesthetics
-  - Ask: "What is this conversation mainly about doing or learning?"
-  - Food, recipes, baking, dough, ovens used for cooking → prefer "bread making" or "cooking"
-  - Kitchen/stove/oven tweaks done to improve cooking or baking → same food labels, NOT home improvement or kitchen design
-  - Use "home improvement" or "kitchen design" only when the chat is mainly about renovation, decor, or construction — not food prep
-- Food-domain preference (pick the most specific that fits):
-  - Bread, dough, ciabatta, sourdough, fermentation, oven/stone for crust → "bread making" (prefer over generic "baking" or "cooking")
-  - General meals, recipes, spices, cuisines without a bread focus → "cooking"
-- Labels must be general subject areas, NOT specific recipes, dishes, or narrow subtopics
-  Good: "bread making", "cooking", "programming", "music"
-  Bad: "chicken korma", "ciabatta", "cast iron griddle", "react hooks"
-- Return exactly 1 label unless the conversation has two equally primary unrelated subjects (rare); default to 1
+  - Kitchen/stove/oven tweaks done to improve cooking or baking → food labels, NOT home improvement or kitchen design
+  - Use "home improvement" or "kitchen design" only for renovation, decor, or construction — not food prep
+- When to return 1 vs 2 labels:
+  - Return 1 when a single domain clearly dominates (e.g. a curry recipe → cooking only)
+  - Return 2 when the chat genuinely spans both a specific sub-domain AND a broader one that users might filter on separately
+    - Bread/dough/baking chats (ciabatta, sourdough, oven stone for crust) → ["bread making", "cooking"] so they appear under either filter
+    - Do NOT add a second label unless it helps filtering (related pair like bread making + cooking, not cooking + music)
+- Food-domain preference:
+  - Bread-focused → always include "bread making"; also include "cooking" when the chat is about making food (most bread chats)
+  - General meals/recipes without bread focus → "cooking" only
+- Labels must be general subject areas, NOT specific recipes or narrow subtopics
+  Good: "bread making", "cooking"
+  Bad: "chicken korma", "ciabatta", "home improvement" (for a bread oven hack)
 
 Examples:
-- "Baking ciabatta at home" → bread making
-- "Same-day ciabatta bread" → bread making
-- "Adding stone effect to the stove" (stone slab in oven for baking) → bread making or cooking — NOT home improvement, NOT kitchen design
+- "Baking ciabatta at home" → bread making, cooking
+- "Same-day ciabatta bread" → bread making, cooking
+- "Adding stone effect to the stove" (stone slab for baking) → bread making, cooking
 - "Chicken korma recipe" → cooking
-- "Remodeling kitchen cabinets and countertops" → home improvement
+- "Remodeling kitchen cabinets" → home improvement
 
-Output a JSON object with one key "topics": an array of exactly 1 topic label string.`;
+Output a JSON object with one key "topics": an array of 1–2 topic label strings.`;
 
 function formatExistingTopicsForPrompt(existingTopicNames: string[]): string {
     const unique = [...new Set(existingTopicNames.map((n) => n.trim()).filter(Boolean))].sort(
@@ -104,7 +106,7 @@ function getOpenAI(): OpenAI {
     return _openai;
 }
 
-/** Ask OpenAI for 1 topic label, biasing toward existingTopicNames when provided. */
+/** Ask OpenAI for 1–2 topic labels, biasing toward existingTopicNames when provided. */
 export async function suggestTopicsWithLLM(
     title: string,
     turns: Array<{ prompt: string; response: string }>,
@@ -139,7 +141,7 @@ export async function suggestTopicsWithLLM(
         return parsed.topics
             .map((t) => t.trim())
             .filter(Boolean)
-            .slice(0, 1);
+            .slice(0, 2);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn("[suggestTopicsWithLLM] Failed to suggest topics:", message);
