@@ -13,7 +13,7 @@ import { findBestTopicMatch } from "./topicMatch.js";
 import { suggestTopicsWithLLM } from "./suggestTopicsWithLLM.js";
 
 export const TOPIC_MATCH_THRESHOLD = 0.78;
-export const MAX_AUTO_TOPICS_PER_CHAT = 1;
+export const MAX_AUTO_TOPICS_PER_CHAT = 2;
 export const MAX_TOPICS_PER_USER = 200;
 
 export interface AssignTopicsParams {
