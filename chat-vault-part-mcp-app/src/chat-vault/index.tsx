@@ -19,6 +19,7 @@ import {
   MdLogin,
   MdMessage,
   MdEdit,
+  MdLabel,
 } from "react-icons/md";
 import { app } from "../app-instance.js";
 import type {
@@ -35,12 +36,14 @@ import type {
 import { TopicCombobox } from "./TopicCombobox.js";
 import {
   buildLoadSavedEntriesArgs,
+  mergeAvailableTopics,
+  mergeTopicOptionLists,
   parseLoadSavedEntriesResponse,
   type ParsedLoadSavedEntries,
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.4";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.5";
 
 function getRemainingSlotsMessage(
   remainingSlots: number,
@@ -259,6 +262,32 @@ function App() {
             });
             setChats(deduplicateChats(initialChats));
             setLoading(false);
+            try {
+              const result = (await app.callServerTool({
+                name: "loadSavedEntries",
+                arguments: buildLoadSavedEntriesArgs({
+                  page: 0,
+                  widgetVersion: WIDGET_VERSION,
+                  size: 1,
+                }),
+              })) as ChatVaultToolResult | null;
+              const parsed = parseLoadSavedEntriesResponse(
+                result?.structuredContent as Record<string, unknown> | undefined,
+              );
+              if (parsed) {
+                const topics = mergeAvailableTopics(
+                  parsed.availableTopics,
+                  [...initialChats, ...parsed.chats],
+                );
+                if (topics.length > 0) {
+                  setAvailableTopics(topics);
+                }
+              }
+            } catch (err) {
+              addLog("Failed to load topic options after embedded init", {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
             return;
           } catch (e) {
             addLog("Failed to parse embedded data", {
@@ -288,6 +317,12 @@ function App() {
             setPageInputValue("1");
             if (parsed.availableTopics.length > 0) {
               setAvailableTopics(parsed.availableTopics);
+            }
+            const topicsFromChats = mergeAvailableTopics([], parsed.chats);
+            if (topicsFromChats.length > 0) {
+              setAvailableTopics((prev) =>
+                mergeTopicOptionLists(prev, topicsFromChats),
+              );
             }
             if (parsed.userInfo) {
               setUserInfo(parsed.userInfo);
@@ -412,8 +447,12 @@ function App() {
       setCurrentPage(opts.page);
       setPageInputValue(String(opts.page + 1));
     }
-    if (parsed.availableTopics.length > 0) {
-      setAvailableTopics(parsed.availableTopics);
+    const topicsFromResponse = mergeAvailableTopics(
+      parsed.availableTopics,
+      parsed.chats,
+    );
+    if (topicsFromResponse.length > 0) {
+      setAvailableTopics((prev) => mergeTopicOptionLists(prev, topicsFromResponse));
     }
     if (parsed.userInfo) {
       setUserInfo(parsed.userInfo);
@@ -1944,7 +1983,7 @@ function App() {
 
   return (
     <div
-      className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-hidden ${
+      className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-x-hidden ${
         isDarkMode
           ? "bg-gray-900 border-gray-700 text-white"
           : "bg-white border-black/10 text-black"
@@ -2448,15 +2487,8 @@ function App() {
                 )}
               </button>
             </div>
-            <div className="mt-2 flex items-start gap-2">
-              <span
-                className={`text-xs font-medium pt-2 shrink-0 ${
-                  isDarkMode ? "text-gray-400" : "text-gray-600"
-                }`}
-              >
-                Topics
-              </span>
-              <div className="flex-1 min-w-0">
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 relative">
                 <TopicCombobox
                   selected={filterTopics}
                   options={availableTopics}
@@ -2465,24 +2497,31 @@ function App() {
                   disabled={paginationLoading || searchLoading}
                   placeholder="Filter by topic…"
                   isDarkMode={isDarkMode}
+                  matchSearchInput
+                  leadingIcon={<MdLabel className="w-4 h-4" />}
                 />
               </div>
-              {filterTopics.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearTopicFilter}
-                  disabled={paginationLoading || searchLoading}
-                  className={`shrink-0 px-2 py-1.5 rounded text-xs font-medium ${
-                    paginationLoading || searchLoading
+              <button
+                type="button"
+                onClick={handleClearTopicFilter}
+                disabled={
+                  filterTopics.length === 0 ||
+                  paginationLoading ||
+                  searchLoading
+                }
+                className={`p-2 rounded-lg shrink-0 ${
+                  filterTopics.length === 0
+                    ? "invisible pointer-events-none"
+                    : paginationLoading || searchLoading
                       ? "opacity-50 cursor-not-allowed"
                       : isDarkMode
-                        ? "text-gray-300 hover:bg-gray-700"
-                        : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  Clear
-                </button>
-              )}
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+                title="Clear topic filter"
+              >
+                <MdClose className="w-5 h-5" />
+              </button>
             </div>
           </div>
         )}
