@@ -6,6 +6,17 @@ export interface ChatTurn {
   truncated?: boolean;
 }
 
+/** Topic label for organizing saved chats */
+export interface Topic {
+  id: string;
+  name: string;
+}
+
+/** Topic with usage count for filter dropdowns */
+export interface AvailableTopic extends Topic {
+  chatCount?: number;
+}
+
 /** Chat preview (above-the-fold only; no turns) */
 export interface ChatPreview {
   id: string;
@@ -14,6 +25,7 @@ export interface ChatPreview {
   userId?: string;
   turnsCount: number;
   isNote: boolean;
+  topics?: Topic[];
 }
 
 /** Chat item from loadSavedEntries/searchKnowledge - preview or full */
@@ -29,6 +41,7 @@ export interface Chat {
   turnsCount?: number;
   /** Present when aboveTheFoldOnly - use instead of checking first turn */
   isNote?: boolean;
+  topics?: Topic[];
 }
 
 /** User info from widget/user context */
