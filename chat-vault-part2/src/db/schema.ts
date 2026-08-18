@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid, index, integer, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index, integer, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
 // Define vector type for pgvector
@@ -81,3 +81,46 @@ export const userIdMerges = pgTable(
 
 export type UserIdMerge = typeof userIdMerges.$inferSelect;
 export type NewUserIdMerge = typeof userIdMerges.$inferInsert;
+
+/** User-scoped topic label for organizing saved chats. */
+export const topics = pgTable(
+    "topics",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id").notNull(),
+        name: text("name").notNull(),
+        nameNorm: text("name_norm").notNull(),
+        embedding: vector("embedding"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdIdx: index("topics_user_id_idx").on(table.userId),
+        userNameNormIdx: uniqueIndex("topics_user_name_norm_idx").on(table.userId, table.nameNorm),
+    })
+);
+
+export type Topic = typeof topics.$inferSelect;
+export type NewTopic = typeof topics.$inferInsert;
+
+/** Many-to-many link between chats and topics. */
+export const chatTopics = pgTable(
+    "chat_topics",
+    {
+        chatId: uuid("chat_id")
+            .notNull()
+            .references(() => chats.id, { onDelete: "cascade" }),
+        topicId: uuid("topic_id")
+            .notNull()
+            .references(() => topics.id, { onDelete: "cascade" }),
+        source: text("source").notNull().default("auto"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [
+        primaryKey({ columns: [table.chatId, table.topicId] }),
+        index("chat_topics_topic_id_idx").on(table.topicId),
+        index("chat_topics_chat_id_idx").on(table.chatId),
+    ]
+);
+
+export type ChatTopic = typeof chatTopics.$inferSelect;
+export type NewChatTopic = typeof chatTopics.$inferInsert;

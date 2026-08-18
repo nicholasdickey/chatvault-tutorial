@@ -19,6 +19,15 @@ import {
 } from "../user/userMerge.js";
 import { ANON_CHAT_EXPIRY_DAYS, ANON_MAX_CHATS } from "../server.js";
 import { areChatVaultLimitsEnabled } from "../utils/limitsEnabled.js";
+import { chatListSelection } from "./chatListSelection.js";
+import {
+    attachTopicsToChats,
+    getAvailableTopicsForUserScope,
+    getChatIdsMatchingAnyTopics,
+    getTopicsForChatIds,
+    type AvailableTopic,
+    type TopicSummary,
+} from "./topicQueries.js";
 /**
  * Deduplicate chats by keeping only the most recent one for each unique (userId, title, turns) combination
  * This ensures pagination works correctly by removing duplicates before pagination calculations
@@ -63,6 +72,7 @@ export interface FullChat {
   title: string;
   timestamp: Date;
   turns: Array<{ prompt: string; response: string; truncated?: boolean }>;
+  topics?: TopicSummary[];
 }
 
 export interface LoadChatsParams {
@@ -70,6 +80,7 @@ export interface LoadChatsParams {
   page?: number; // 0-indexed, default 0
   size?: number; // default 10
   query?: string; // Optional search query - when provided, uses vector similarity search (same as searchMyChats)
+  topicIds?: string[]; // Optional topic filter — ANY semantics
   widgetVersion?: string; // Widget version (optional, for tracking which widget version is calling)
   userContext?: UserContext; // User context from Findexar headers
   headers?: Record<string, string | string[] | undefined>; // All request headers for logging
@@ -85,6 +96,7 @@ export interface LoadChatsResult {
     totalPages: number;
     hasMore: boolean;
   };
+  availableTopics?: AvailableTopic[];
   userInfo: {
     portalLink: string | null;
     loginLink: string | null;
@@ -156,12 +168,37 @@ function filterExpiredChats<T extends { timestamp: Date }>(
   });
 }
 
+async function filterChatsByAnyTopic<T extends { id: string }>(
+  chatList: T[],
+  userIdScope: string[],
+  topicIds?: string[]
+): Promise<T[]> {
+  if (!topicIds?.length) {
+    return chatList;
+  }
+  const matchingChatIds = await getChatIdsMatchingAnyTopics(userIdScope, topicIds, true);
+  if (!matchingChatIds || matchingChatIds.size === 0) {
+    return [];
+  }
+  return chatList.filter((chat) => matchingChatIds.has(chat.id));
+}
+
+async function attachTopicsToFormattedChats<T extends { id: string }>(
+  chatRows: T[]
+): Promise<Array<T & { topics: TopicSummary[] }>> {
+  const topicsByChatId = await getTopicsForChatIds(
+    chatRows.map((chat) => chat.id),
+    true
+  );
+  return attachTopicsToChats(chatRows, topicsByChatId);
+}
+
 /**
  * Load paginated chats for a user
  */
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
   const loadStartedAt = Date.now();
-  let { userId, page = 0, size = 10, query, widgetVersion, userContext, headers, aboveTheFoldOnly = false } = params;
+  let { userId, page = 0, size = 10, query, topicIds, widgetVersion, userContext, headers, aboveTheFoldOnly = false } = params;
   const isAnon = userContext?.isAnon ?? false;
   const isAnonymousPlan = userContext?.isAnonymousPlan;
   const portalLink = userContext?.portalLink ?? null;
@@ -192,7 +229,9 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     "size:",
     size,
     "query:",
-    query || "none"
+    query || "none",
+    "topicIds:",
+    topicIds?.length ? topicIds.join(",") : "none"
   );
 
   try {
@@ -240,20 +279,24 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     // Calculate offset (0-indexed page to SQL offset)
     const offset = pageNum * sizeNum;
 
+    const scopeStartedAt = Date.now();
+    const userIdScope = await getMergedUserIdScopeForReads(userId);
+    const scopeQueryMs = Date.now() - scopeStartedAt;
+    const topicAggregationStartedAt = Date.now();
+    const availableTopics = await getAvailableTopicsForUserScope(userIdScope, true);
+    const topicAggregationMs = Date.now() - topicAggregationStartedAt;
+
     // If query is provided, use vector search (same as searchMyChats)
     const searchQuery = query?.trim();
     if (searchQuery) {
       const databaseContext = observeDatabaseOperation();
-      const scopeStartedAt = Date.now();
-      const userIdScope = await getMergedUserIdScopeForReads(userId);
-      const scopeQueryMs = Date.now() - scopeStartedAt;
       console.log("[loadMyChats] Using vector search for query");
       const searchStartedAt = Date.now();
       const searchResult = await performVectorSearch({
         userId,
         query: searchQuery,
-        page: pageNum,
-        size: sizeNum,
+        page: topicIds?.length ? 0 : pageNum,
+        size: topicIds?.length ? 100 : sizeNum,
       });
       const searchQueryMs = Date.now() - searchStartedAt;
 
@@ -266,38 +309,36 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       const countQueryMs = Date.now() - countStartedAt;
       const totalChats = allChatsForUser.length;
 
-      // Filter expired chats for anonymous users
-      const filteredChats = filterExpiredChats(searchResult.chats, isAnon, limitsEnabled);
-      const filteredTotal = isAnon && limitsEnabled
-        ? filterExpiredChats(allChatsForUser, isAnon, limitsEnabled).length
-        : searchResult.total;
-
-      // Recalculate pagination after filtering
+      let filteredChats = filterExpiredChats(searchResult.chats, isAnon, limitsEnabled);
+      filteredChats = await filterChatsByAnyTopic(filteredChats, userIdScope, topicIds);
+      const filteredTotal = filteredChats.length;
       const filteredTotalPages = Math.ceil(filteredTotal / sizeNum);
       const filteredHasMore = pageNum + 1 < filteredTotalPages;
-      const filteredOffset = pageNum * sizeNum;
-      const paginatedFilteredChats = filteredChats.slice(filteredOffset, filteredOffset + sizeNum);
+      const paginatedFilteredChats = filteredChats.slice(offset, offset + sizeNum);
       if (limitsEnabled && shouldShowFreeLimitMetadata) {
         console.log("[loadMyChats] remaining slots:", Math.max(0, ANON_MAX_CHATS - totalChats));
       }
 
-      const chatsToReturn = paginatedFilteredChats.map((chat) => ({
-        id: chat.id,
-        userId: chat.userId,
-        title: chat.title,
-        timestamp: chat.timestamp,
-        turns: formatTurns(chat, aboveTheFoldOnly),
-      }));
+      const chatsToReturn = await attachTopicsToFormattedChats(
+        paginatedFilteredChats.map((chat) => ({
+          id: chat.id,
+          userId: chat.userId,
+          title: chat.title,
+          timestamp: chat.timestamp,
+          turns: formatTurns(chat, aboveTheFoldOnly),
+        }))
+      );
 
       const result: LoadChatsResult = {
         chats: chatsToReturn,
         pagination: {
-          page: searchResult.page,
-          limit: searchResult.size,
+          page: pageNum,
+          limit: sizeNum,
           total: filteredTotal,
           totalPages: filteredTotalPages,
           hasMore: filteredHasMore,
         },
+        availableTopics,
         userInfo: {
           portalLink,
           loginLink,
@@ -320,6 +361,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
           mergedUserScopeQuery: scopeQueryMs,
           vectorSearchQuery: searchQueryMs,
           totalChatsQuery: countQueryMs,
+          topicAggregation: topicAggregationMs,
         },
         database: databaseContext,
         scopeSize: userIdScope.length,
@@ -337,13 +379,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     const databaseContext = observeDatabaseOperation();
     const chatsQueryStartedAt = Date.now();
     const allChatResults = await chatListDb
-      .select({
-        id: chats.id,
-        userId: chats.userId,
-        title: chats.title,
-        timestamp: chats.timestamp,
-        turns: chats.turns,
-      })
+      .select(chatListSelection)
       .from(chats)
       .where(chatsUserIdInCanonicalScope(userId))
       .orderBy(desc(chats.timestamp));
@@ -359,30 +395,35 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
 
     // Filter expired chats for anonymous users
     const nonExpiredChats = filterExpiredChats(deduplicatedChats, isAnon, limitsEnabled);
+    const chatsForPagination = topicIds?.length
+      ? await filterChatsByAnyTopic(nonExpiredChats, userIdScope, topicIds)
+      : nonExpiredChats;
     const totalBeforeFilter = deduplicatedChats.length;
-    const total = isAnon && limitsEnabled ? nonExpiredChats.length : totalBeforeFilter;
+    const total = chatsForPagination.length;
     console.log(
-      "[loadMyChats] After expiration filter:",
+      "[loadMyChats] After expiration/topic filter:",
       total,
       "chats",
       isAnon && limitsEnabled ? `(filtered from ${totalBeforeFilter})` : ""
     );
 
     // Apply pagination to filtered results
-    const paginatedChats = nonExpiredChats.slice(offset, offset + sizeNum);
+    const paginatedChats = chatsForPagination.slice(offset, offset + sizeNum);
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / sizeNum);
     const hasMore = pageNum + 1 < totalPages;
 
     // Format response (exclude embedding from response)
-    const formattedChats = paginatedChats.map((chat) => ({
-      id: chat.id,
-      userId: chat.userId,
-      title: chat.title,
-      timestamp: chat.timestamp,
-      turns: formatTurns(chat, aboveTheFoldOnly),
-    }));
+    const formattedChats = await attachTopicsToFormattedChats(
+      paginatedChats.map((chat) => ({
+        id: chat.id,
+        userId: chat.userId,
+        title: chat.title,
+        timestamp: chat.timestamp,
+        turns: formatTurns(chat, aboveTheFoldOnly),
+      }))
+    );
 
     const result: LoadChatsResult = {
       chats: formattedChats,
@@ -393,6 +434,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         totalPages,
         hasMore,
       },
+      availableTopics,
       userInfo: {
         portalLink,
         loginLink,
@@ -425,6 +467,8 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       phasesMs: {
         chatsQuery: chatsQueryMs,
         transform: transformMs,
+        mergedUserScopeQuery: scopeQueryMs,
+        topicAggregation: topicAggregationMs,
       },
       database: databaseContext,
       databaseTransport: chatListDbTransport,

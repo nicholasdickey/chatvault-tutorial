@@ -29,6 +29,13 @@
       "when": 1771700000000,
       "tag": "0003_user_id_merges",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787077386527,
+      "tag": "0004_public_maddog",
+      "breakpoints": true
     }
   ]
 }

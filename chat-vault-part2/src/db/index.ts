@@ -3,6 +3,7 @@ import { drizzle as drizzleNeonHttp } from "drizzle-orm/neon-http";
 import postgres from "postgres";
 import * as dotenv from "dotenv";
 import { sql } from "drizzle-orm";
+import { isNeonConnectionString } from "./connectionType.js";
 
 // Only load .env if DATABASE_URL is not already set (allows tests to override)
 if (!process.env.DATABASE_URL) {
@@ -16,15 +17,6 @@ if (!process.env.DATABASE_URL) {
 // Create the connection
 const connectionString = process.env.DATABASE_URL;
 const client = postgres(connectionString, { max: 1 });
-
-function isNeonConnectionString(value: string): boolean {
-    try {
-        const hostname = new URL(value).hostname.toLowerCase();
-        return hostname === "neon.tech" || hostname.endsWith(".neon.tech");
-    } catch {
-        return false;
-    }
-}
 
 const databaseClientCreatedAt = Date.now();
 let databaseOperationObserved = false;
