@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MdClose } from "react-icons/md";
 import type { AvailableTopic, Topic } from "./types.js";
 
@@ -11,10 +12,19 @@ export interface TopicComboboxProps {
   disabled?: boolean;
   placeholder?: string;
   isDarkMode?: boolean;
+  /** Match search input padding, height, and focus ring in the list filter bar */
+  matchSearchInput?: boolean;
+  leadingIcon?: ReactNode;
 }
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+interface DropdownPosition {
+  top: number;
+  left: number;
+  width: number;
 }
 
 export function TopicCombobox({
@@ -26,6 +36,8 @@ export function TopicCombobox({
   disabled = false,
   placeholder = "Filter by topic…",
   isDarkMode = false,
+  matchSearchInput = false,
+  leadingIcon,
 }: TopicComboboxProps) {
   const listboxId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -33,6 +45,9 @@ export function TopicCombobox({
   const [inputValue, setInputValue] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition | null>(
+    null,
+  );
 
   const selectedIds = useMemo(() => new Set(selected.map((t) => t.id)), [selected]);
 
@@ -67,16 +82,41 @@ export function TopicCombobox({
     return items;
   }, [filteredOptions, showCreateRow, inputValue]);
 
+  const updateDropdownPosition = () => {
+    const anchor = rootRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    setDropdownPosition({
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateDropdownPosition();
+    const onLayoutChange = () => updateDropdownPosition();
+    window.addEventListener("resize", onLayoutChange);
+    window.addEventListener("scroll", onLayoutChange, true);
+    return () => {
+      window.removeEventListener("resize", onLayoutChange);
+      window.removeEventListener("scroll", onLayoutChange, true);
+    };
+  }, [open, inputValue, selected.length, options.length]);
+
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      const portal = document.getElementById(`${listboxId}-portal`);
+      if (portal?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
+  }, [open, listboxId]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -115,16 +155,126 @@ export function TopicCombobox({
   const containerClass = isDarkMode
     ? "bg-gray-800 border-gray-600"
     : "bg-white border-gray-300";
+  const containerPadding = matchSearchInput ? "px-3 py-2" : "px-2 py-1.5";
+  const containerMinHeight = matchSearchInput ? "min-h-[40px]" : "min-h-[38px]";
+  const containerFocus = matchSearchInput
+    ? "focus-within:ring-2 focus-within:ring-blue-500 focus-within:outline-none"
+    : "";
   const dropdownClass = isDarkMode
     ? "bg-gray-800 border-gray-600 text-white"
     : "bg-white border-gray-200 text-black shadow-lg";
 
+  const dropdown =
+    open && !disabled ? (
+      <ul
+        id={listboxId}
+        role="listbox"
+        className={`max-h-48 overflow-y-auto rounded-lg border ${dropdownClass}`}
+        style={
+          dropdownPosition
+            ? {
+                position: "fixed",
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                width: dropdownPosition.width,
+                zIndex: 10000,
+              }
+            : { display: "none" }
+        }
+      >
+        {dropdownItems.length === 0 ? (
+          <li
+            className={`px-3 py-2 text-sm ${
+              isDarkMode ? "text-gray-400" : "text-gray-500"
+            }`}
+          >
+            {options.length === 0
+              ? "No topics yet"
+              : "No matching topics"}
+          </li>
+        ) : (
+          dropdownItems.map((item, index) => {
+            const isActive = index === activeIndex;
+            if (item.type === "create") {
+              return (
+                <li key={`create-${item.label}`}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    className={`w-full text-left px-3 py-2 text-sm ${
+                      isActive
+                        ? isDarkMode
+                          ? "bg-gray-700"
+                          : "bg-blue-50"
+                        : ""
+                    }`}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() =>
+                      addTopic({ id: `new:${normalize(item.label)}`, name: item.label })
+                    }
+                  >
+                    Create &quot;{item.label}&quot;
+                  </button>
+                </li>
+              );
+            }
+
+            const highlightExact =
+              inputValue.trim().length > 0 &&
+              normalize(item.topic.name) === normalize(inputValue);
+
+            return (
+              <li key={item.topic.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 ${
+                    isActive
+                      ? isDarkMode
+                        ? "bg-gray-700"
+                        : "bg-blue-50"
+                      : ""
+                  } ${highlightExact ? "font-medium" : ""}`}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() =>
+                    addTopic({ id: item.topic.id, name: item.topic.name })
+                  }
+                >
+                  <span className="truncate">{item.topic.name}</span>
+                  {item.topic.chatCount != null && (
+                    <span
+                      className={`text-xs shrink-0 ${
+                        isDarkMode ? "text-gray-400" : "text-gray-500"
+                      }`}
+                    >
+                      {item.topic.chatCount}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    ) : null;
+
   return (
     <div ref={rootRef} className="relative w-full">
+      {leadingIcon ? (
+        <div
+          className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 z-10 ${
+            isDarkMode ? "text-gray-400" : "text-gray-500"
+          }`}
+        >
+          {leadingIcon}
+        </div>
+      ) : null}
       <div
-        className={`flex flex-wrap items-center gap-1.5 min-h-[38px] px-2 py-1.5 rounded-lg border text-sm ${containerClass} ${
-          disabled ? "opacity-50 cursor-not-allowed" : ""
-        }`}
+        className={`flex flex-wrap items-center gap-1.5 ${containerMinHeight} ${containerPadding} rounded-lg border text-sm ${containerClass} ${containerFocus} ${
+          leadingIcon ? "pl-10" : ""
+        } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
         onClick={() => {
           if (!disabled) inputRef.current?.focus();
         }}
@@ -177,12 +327,16 @@ export function TopicCombobox({
             if (e.key === "ArrowDown") {
               e.preventDefault();
               setOpen(true);
-              setActiveIndex((i) => Math.min(i + 1, dropdownItems.length - 1));
+              if (dropdownItems.length > 0) {
+                setActiveIndex((i) => Math.min(i + 1, dropdownItems.length - 1));
+              }
               return;
             }
             if (e.key === "ArrowUp") {
               e.preventDefault();
-              setActiveIndex((i) => Math.max(i - 1, 0));
+              if (dropdownItems.length > 0) {
+                setActiveIndex((i) => Math.max(i - 1, 0));
+              }
               return;
             }
             if (e.key === "Enter") {
@@ -202,75 +356,12 @@ export function TopicCombobox({
         />
       </div>
 
-      {open && !disabled && dropdownItems.length > 0 && (
-        <ul
-          id={listboxId}
-          role="listbox"
-          className={`absolute z-20 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border ${dropdownClass}`}
-        >
-          {dropdownItems.map((item, index) => {
-            const isActive = index === activeIndex;
-            if (item.type === "create") {
-              return (
-                <li key={`create-${item.label}`}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={isActive}
-                    className={`w-full text-left px-3 py-2 text-sm ${
-                      isActive
-                        ? isDarkMode
-                          ? "bg-gray-700"
-                          : "bg-blue-50"
-                        : ""
-                    }`}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onClick={() => addTopic({ id: `new:${normalize(item.label)}`, name: item.label })}
-                  >
-                    Create &quot;{item.label}&quot;
-                  </button>
-                </li>
-              );
-            }
-
-            const highlightExact =
-              inputValue.trim().length > 0 &&
-              normalize(item.topic.name) === normalize(inputValue);
-
-            return (
-              <li key={item.topic.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={isActive}
-                  className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 ${
-                    isActive
-                      ? isDarkMode
-                        ? "bg-gray-700"
-                        : "bg-blue-50"
-                      : ""
-                  } ${highlightExact ? "font-medium" : ""}`}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() =>
-                    addTopic({ id: item.topic.id, name: item.topic.name })
-                  }
-                >
-                  <span className="truncate">{item.topic.name}</span>
-                  {item.topic.chatCount != null && (
-                    <span
-                      className={`text-xs shrink-0 ${
-                        isDarkMode ? "text-gray-400" : "text-gray-500"
-                      }`}
-                    >
-                      {item.topic.chatCount}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {dropdown
+        ? createPortal(
+            <div id={`${listboxId}-portal`}>{dropdown}</div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

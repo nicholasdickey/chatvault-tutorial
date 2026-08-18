@@ -34,6 +34,41 @@ export function buildLoadSavedEntriesArgs(params: {
   return args;
 }
 
+export function mergeAvailableTopics(
+  fromApi: AvailableTopic[],
+  chats: Chat[],
+): AvailableTopic[] {
+  const byId = new Map<string, AvailableTopic>();
+  for (const topic of fromApi) {
+    byId.set(topic.id, topic);
+  }
+  for (const chat of chats) {
+    for (const topic of chat.topics ?? []) {
+      if (byId.has(topic.id)) continue;
+      byId.set(topic.id, { id: topic.id, name: topic.name, chatCount: 1 });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function mergeTopicOptionLists(
+  existing: AvailableTopic[],
+  incoming: AvailableTopic[],
+): AvailableTopic[] {
+  const byId = new Map<string, AvailableTopic>();
+  for (const topic of existing) {
+    byId.set(topic.id, topic);
+  }
+  for (const topic of incoming) {
+    const prev = byId.get(topic.id);
+    byId.set(topic.id, {
+      ...topic,
+      chatCount: topic.chatCount ?? prev?.chatCount,
+    });
+  }
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function parseAvailableTopics(
   structuredContent: Record<string, unknown> | undefined,
 ): AvailableTopic[] {
