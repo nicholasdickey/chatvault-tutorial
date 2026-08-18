@@ -8,6 +8,7 @@ import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { generateEmbedding, combineChatText, splitTurnsForEmbedding } from "./embeddings.js";
+import { assignTopicsForChat } from "./assignTopics.js";
 
 export interface SaveChatCoreParams {
     userId: string;
@@ -98,6 +99,11 @@ export async function saveChatCore(params: SaveChatCoreParams): Promise<SaveChat
 
         const chatIds: string[] = [];
         let anyNewlySaved = false;
+        const newlySavedParts: Array<{
+            chatId: string;
+            title: string;
+            turns: Array<{ prompt: string; response: string }>;
+        }> = [];
 
         for (let i = 0; i < chunks.length; i++) {
             const partTurns = chunks[i] as Array<{ prompt: string; response: string }>;
@@ -133,7 +139,31 @@ export async function saveChatCore(params: SaveChatCoreParams): Promise<SaveChat
             }
             chatIds.push(savedChat.id);
             anyNewlySaved = true;
+            newlySavedParts.push({
+                chatId: savedChat.id,
+                title: partTitle,
+                turns: partTurns,
+            });
             console.log("[saveChatCore] Part", i + 1, "saved - id:", savedChat.id);
+        }
+
+        for (const part of newlySavedParts) {
+            try {
+                await assignTopicsForChat({
+                    userId,
+                    chatId: part.chatId,
+                    title: part.title,
+                    turns: part.turns,
+                });
+            } catch (topicError) {
+                const topicMessage =
+                    topicError instanceof Error ? topicError.message : String(topicError);
+                console.warn(
+                    "[saveChatCore] Auto-topic assignment failed for chat",
+                    part.chatId,
+                    topicMessage
+                );
+            }
         }
 
         return {
