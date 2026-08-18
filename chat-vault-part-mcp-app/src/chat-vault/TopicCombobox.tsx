@@ -135,7 +135,7 @@ export function TopicCombobox({
     onChange([...selected, topic]);
     setInputValue("");
     setOpen(false);
-    inputRef.current?.focus();
+    inputRef.current?.blur();
   };
 
   const removeTopic = (topicId: string) => {
@@ -216,6 +216,7 @@ export function TopicCombobox({
                         : ""
                     }`}
                     onMouseEnter={() => setActiveIndex(index)}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() =>
                       addTopic({ id: `new:${normalize(item.label)}`, name: item.label })
                     }
@@ -244,6 +245,7 @@ export function TopicCombobox({
                       : ""
                   } ${highlightExact ? "font-medium" : ""}`}
                   onMouseEnter={() => setActiveIndex(index)}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() =>
                     addTopic({ id: item.topic.id, name: item.topic.name })
                   }
