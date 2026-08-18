@@ -15,6 +15,7 @@ export interface TopicComboboxProps {
   /** Match search input padding, height, and focus ring in the list filter bar */
   matchSearchInput?: boolean;
   leadingIcon?: ReactNode;
+  onOpen?: () => void;
 }
 
 function normalize(value: string): string {
@@ -38,6 +39,7 @@ export function TopicCombobox({
   isDarkMode = false,
   matchSearchInput = false,
   leadingIcon,
+  onOpen,
 }: TopicComboboxProps) {
   const listboxId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -121,6 +123,10 @@ export function TopicCombobox({
   useEffect(() => {
     setActiveIndex(0);
   }, [inputValue, open]);
+
+  useEffect(() => {
+    if (open) onOpen?.();
+  }, [open, onOpen]);
 
   const canAddMore = selected.length < maxItems;
 
