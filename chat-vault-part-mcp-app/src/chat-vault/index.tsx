@@ -34,6 +34,7 @@ import type {
   AvailableTopic,
 } from "./types.js";
 import { TopicCombobox } from "./TopicCombobox.js";
+import { ChatTopicEditor } from "./ChatTopicEditor.js";
 import {
   buildLoadSavedEntriesArgs,
   mergeAvailableTopics,
@@ -44,7 +45,7 @@ import {
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.8";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.9";
 
 function getRemainingSlotsMessage(
   remainingSlots: number,
@@ -548,6 +549,73 @@ function App() {
       });
     } finally {
       setPaginationLoading(false);
+    }
+  };
+
+  const handleChatTopicsSave = async (chatId: string, nextTopics: Topic[]) => {
+    const previousChats = chats;
+    const previousSelectedTopics =
+      selectedChat?.id === chatId ? selectedChat.topics : undefined;
+
+    const topicRefs = nextTopics.map((topic) =>
+      topic.id.startsWith("new:") ? topic.name : topic.id,
+    );
+
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === chatId ? { ...chat, topics: nextTopics } : chat,
+      ),
+    );
+    setSelectedChat((prev) =>
+      prev && prev.id === chatId ? { ...prev, topics: nextTopics } : prev,
+    );
+
+    try {
+      addLog("Updating chat topics", { chatId, topicRefs });
+      const result = (await app.callServerTool({
+        name: "updateSavedEntry",
+        arguments: {
+          entryId: chatId,
+          entry: { topics: topicRefs },
+        },
+      })) as ChatVaultToolResult | null;
+
+      const savedTopics = result?.structuredContent?.topics;
+      if (!result?.structuredContent?.updated || !Array.isArray(savedTopics)) {
+        throw new Error(
+          String(result?.structuredContent?.message || "Failed to update topics"),
+        );
+      }
+
+      const normalized = savedTopics as Topic[];
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === chatId ? { ...chat, topics: normalized } : chat,
+        ),
+      );
+      setSelectedChat((prev) =>
+        prev && prev.id === chatId ? { ...prev, topics: normalized } : prev,
+      );
+      setAvailableTopics((prev) =>
+        mergeTopicOptionLists(
+          prev,
+          normalized.map((topic) => ({ ...topic, chatCount: 0 })),
+        ),
+      );
+    } catch (err) {
+      setChats(previousChats);
+      if (previousSelectedTopics !== undefined) {
+        setSelectedChat((prev) =>
+          prev && prev.id === chatId
+            ? { ...prev, topics: previousSelectedTopics }
+            : prev,
+        );
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      addLog("Update chat topics failed", { chatId, error: message });
+      setAlertMessage(`Failed to update topics: ${message}`);
+      setAlertPortalLink(null);
+      throw err;
     }
   };
 
@@ -2730,6 +2798,17 @@ function App() {
                                 return currentTurns.length !== 1 ? "s" : "";
                               })()}`}
                         </div>
+                        {selectedChat.id ? (
+                          <ChatTopicEditor
+                            chatId={selectedChat.id}
+                            topics={selectedChat.topics ?? []}
+                            options={availableTopics}
+                            onSave={handleChatTopicsSave}
+                            disabled={isSavingChat}
+                            isDarkMode={isDarkMode}
+                            onOpenOptions={handleTopicFilterOpen}
+                          />
+                        ) : null}
                       </div>
                     </div>
                     <button
@@ -3459,6 +3538,17 @@ function App() {
                                 ? " • Note"
                                 : ` • ${chat.turnsCount ?? chat.turns?.length ?? 0} turn${(chat.turnsCount ?? chat.turns?.length ?? 0) !== 1 ? "s" : ""}`}
                             </div>
+                            {chat.id ? (
+                              <ChatTopicEditor
+                                chatId={chat.id}
+                                topics={chat.topics ?? []}
+                                options={availableTopics}
+                                onSave={handleChatTopicsSave}
+                                disabled={paginationLoading || searchLoading}
+                                isDarkMode={isDarkMode}
+                                onOpenOptions={handleTopicFilterOpen}
+                              />
+                            ) : null}
                           </button>
                           <button
                             onClick={(e) => {

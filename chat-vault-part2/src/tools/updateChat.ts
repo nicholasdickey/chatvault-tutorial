@@ -7,6 +7,8 @@ import { chats } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getMergedUserIdScopeForReads, chatsUserIdInScope } from "../user/userMerge.js";
 import { generateEmbedding, combineChatText } from "../utils/embeddings.js";
+import { setChatTopicsManual } from "../utils/setChatTopicsManual.js";
+import type { TopicSummary } from "../tools/topicQueries.js";
 
 export interface UpdateChatParams {
     chatId: string;
@@ -14,6 +16,8 @@ export interface UpdateChatParams {
     chat: {
         title?: string;
         turns?: Array<{ prompt: string; response: string }>;
+        /** Full replacement list: topic UUIDs and/or display names */
+        topics?: string[];
     };
 }
 
@@ -22,18 +26,31 @@ export interface UpdateChatResult {
     chatId: string;
     title?: string;
     turns?: Array<{ prompt: string; response: string }>;
+    topics?: TopicSummary[];
     message: string;
 }
 
 /**
  * Update a chat by ID, verifying it belongs to the user
  * Supports updating title and/or turns
- * When turns are updated, embeddings are regenerated
+ * Supports updating title, turns, and/or topics (full topic set replacement).
+ * When turns are updated, embeddings are regenerated.
  */
 export async function updateChat(params: UpdateChatParams): Promise<UpdateChatResult> {
     const { chatId, userId, chat } = params;
 
-    console.log("[updateChat] Updating chat - chatId:", chatId, "userId:", userId, "hasTitle:", !!chat.title, "hasTurns:", !!chat.turns);
+    console.log(
+        "[updateChat] Updating chat - chatId:",
+        chatId,
+        "userId:",
+        userId,
+        "hasTitle:",
+        !!chat.title,
+        "hasTurns:",
+        !!chat.turns,
+        "hasTopics:",
+        chat.topics !== undefined,
+    );
 
     try {
         // Validate required parameters
@@ -46,8 +63,10 @@ export async function updateChat(params: UpdateChatParams): Promise<UpdateChatRe
         if (!chat || typeof chat !== "object") {
             throw new Error("chat object is required");
         }
-        if (!chat.title && !chat.turns) {
-            throw new Error("At least one of chat.title or chat.turns must be provided");
+        if (!chat.title && !chat.turns && chat.topics === undefined) {
+            throw new Error(
+                "At least one of chat.title, chat.turns, or chat.topics must be provided",
+            );
         }
 
         const userIdScope = await getMergedUserIdScopeForReads(userId);
@@ -63,7 +82,13 @@ export async function updateChat(params: UpdateChatParams): Promise<UpdateChatRe
         }
 
         const currentChat = existingChat[0];
-        const updateData: { title?: string; turns?: Array<{ prompt: string; response: string }>; embedding?: number[] } = {};
+        const updateData: {
+            title?: string;
+            turns?: Array<{ prompt: string; response: string }>;
+            embedding?: number[];
+        } = {};
+
+        let updatedTopics: TopicSummary[] | undefined;
 
         // Validate and prepare title update
         if (chat.title !== undefined) {
@@ -108,18 +133,35 @@ export async function updateChat(params: UpdateChatParams): Promise<UpdateChatRe
             updateData.embedding = embedding;
         }
 
-        // Update the chat
-        const updatedChats = await db
-            .update(chats)
-            .set(updateData)
-            .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
-            .returning({ id: chats.id, title: chats.title, turns: chats.turns });
+        if (chat.topics !== undefined) {
+            if (!Array.isArray(chat.topics)) {
+                throw new Error("topics must be an array");
+            }
+            updatedTopics = await setChatTopicsManual({
+                userId,
+                chatId,
+                topicRefs: chat.topics.map(String),
+            });
+        }
 
-        if (updatedChats.length === 0) {
+        let updatedChat = currentChat;
+
+        if (Object.keys(updateData).length > 0) {
+            const updatedRows = await db
+                .update(chats)
+                .set(updateData)
+                .where(and(eq(chats.id, chatId), chatsUserIdInScope(userIdScope)))
+                .returning({ id: chats.id, title: chats.title, turns: chats.turns });
+
+            if (updatedRows.length === 0) {
+                throw new Error("Failed to update chat");
+            }
+
+            updatedChat = updatedRows[0]!;
+        } else if (updatedTopics === undefined) {
             throw new Error("Failed to update chat");
         }
 
-        const updatedChat = updatedChats[0];
         console.log("[updateChat] Chat updated successfully - id:", chatId);
 
         return {
@@ -127,6 +169,7 @@ export async function updateChat(params: UpdateChatParams): Promise<UpdateChatRe
             chatId,
             title: updatedChat.title,
             turns: updatedChat.turns,
+            topics: updatedTopics,
             message: "Chat updated successfully",
         };
     } catch (error) {
