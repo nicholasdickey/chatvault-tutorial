@@ -3,7 +3,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { eq, inArray, or } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { chats, chatSaveJobs, userIdMerges } from "../db/schema.js";
 import {
@@ -169,10 +169,11 @@ export function chatsUserIdInScope(scope: string[]) {
  * read compatibility while avoiding a separate scope lookup round trip.
  */
 export function chatsUserIdInCanonicalScope(canonicalUserId: string) {
-    const mergedUserIds = db
-        .select({ userId: userIdMerges.fromUserId })
-        .from(userIdMerges)
-        .where(eq(userIdMerges.toUserId, canonicalUserId));
+    // Build a dialect-neutral SQL subquery so the caller can execute the
+    // outer query through either postgres.js or Neon HTTP.
+    const mergedUserIds = sql`(select ${userIdMerges.fromUserId}
+        from ${userIdMerges}
+        where ${userIdMerges.toUserId} = ${canonicalUserId})`;
 
     return or(
         eq(chats.userId, canonicalUserId),
