@@ -17,6 +17,7 @@ async function ensureInitialized(): Promise<void> {
  * - Also supports /mcp via vercel.json rewrite
  */
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  const apiStartedAt = Date.now();
   // CORS for external callers (ChatGPT, Findexar, etc.)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -37,7 +38,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const initializeStartedAt = Date.now();
   await ensureInitialized();
+  const initializeMs = Date.now() - initializeStartedAt;
   const mod = await import("../src/server.js");
   await mod.handleMcpRequest(req, res);
+  console.log(JSON.stringify({
+    level: "info",
+    event: "chatvault.performance.api_request",
+    totalMs: Date.now() - apiStartedAt,
+    phasesMs: { ensureInitialized: initializeMs },
+  }));
 }

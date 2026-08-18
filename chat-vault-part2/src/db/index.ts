@@ -16,6 +16,26 @@ if (!process.env.DATABASE_URL) {
 const connectionString = process.env.DATABASE_URL;
 const client = postgres(connectionString, { max: 1 });
 
+const databaseClientCreatedAt = Date.now();
+let databaseOperationObserved = false;
+
+/**
+ * Report whether this is the first observed database operation in this
+ * serverless instance. postgres.js connects lazily, so the first operation is
+ * the one that can include connection establishment and database wake-up.
+ */
+export function observeDatabaseOperation(): {
+    firstInInstance: boolean;
+    clientAgeMs: number;
+} {
+    const firstInInstance = !databaseOperationObserved;
+    databaseOperationObserved = true;
+    return {
+        firstInInstance,
+        clientAgeMs: Date.now() - databaseClientCreatedAt,
+    };
+}
+
 // Create the Drizzle instance
 export const db = drizzle(client);
 
@@ -29,5 +49,4 @@ export async function testConnection(): Promise<boolean> {
         return false;
     }
 }
-
 

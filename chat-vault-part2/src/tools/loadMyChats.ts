@@ -2,7 +2,7 @@
  * loadMyChats tool implementation
  */
 
-import { db } from "../db/index.js";
+import { db, observeDatabaseOperation } from "../db/index.js";
 import { chats } from "../db/schema.js";
 import { desc } from "drizzle-orm";
 import { performVectorSearch } from "./vectorSearch.js";
@@ -151,6 +151,7 @@ function filterExpiredChats<T extends { timestamp: Date }>(
  * Load paginated chats for a user
  */
 export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsResult> {
+  const loadStartedAt = Date.now();
   let { userId, page = 0, size = 10, query, widgetVersion, userContext, headers, aboveTheFoldOnly = false } = params;
   const isAnon = userContext?.isAnon ?? false;
   const isAnonymousPlan = userContext?.isAnonymousPlan;
@@ -190,7 +191,10 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     if (!userId) {
       throw new Error("userId is required");
     }
+    const databaseContext = observeDatabaseOperation();
+    const scopeStartedAt = Date.now();
     const userIdScope = await getMergedUserIdScopeForReads(userId);
+    const scopeQueryMs = Date.now() - scopeStartedAt;
     const limitsEnabled = areChatVaultLimitsEnabled();
     const contentMetadata = {
 
@@ -235,18 +239,22 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     const searchQuery = query?.trim();
     if (searchQuery) {
       console.log("[loadMyChats] Using vector search for query");
+      const searchStartedAt = Date.now();
       const searchResult = await performVectorSearch({
         userId,
         query: searchQuery,
         page: pageNum,
         size: sizeNum,
       });
+      const searchQueryMs = Date.now() - searchStartedAt;
 
       // Get total chat count for user (before filtering) for userInfo
+      const countStartedAt = Date.now();
       const allChatsForUser = await db
         .select()
         .from(chats)
         .where(chatsUserIdInScope(userIdScope));
+      const countQueryMs = Date.now() - countStartedAt;
       const totalChats = allChatsForUser.length;
 
       // Filter expired chats for anonymous users
@@ -294,22 +302,42 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
 
       };
 
+      console.log(JSON.stringify({
+        level: "info",
+        event: "chatvault.performance.load_saved_entries",
+        mode: "search",
+        totalMs: Date.now() - loadStartedAt,
+        phasesMs: {
+          mergedUserScopeQuery: scopeQueryMs,
+          vectorSearchQuery: searchQueryMs,
+          totalChatsQuery: countQueryMs,
+        },
+        database: databaseContext,
+        scopeSize: userIdScope.length,
+        rowsRead: allChatsForUser.length,
+        rowsReturned: result.chats.length,
+        responseBytesApprox: Buffer.byteLength(JSON.stringify(result)),
+      }));
+
       return result;
     }
 
     // No query - load chats by timestamp (original behavior)
     // Fetch all chats for the user (we need to deduplicate before pagination)
     console.log("[loadMyChats] Fetching all chats for user:", userId);
+    const chatsQueryStartedAt = Date.now();
     const allChatResults = await db
       .select()
       .from(chats)
       .where(chatsUserIdInScope(userIdScope))
       .orderBy(desc(chats.timestamp));
+    const chatsQueryMs = Date.now() - chatsQueryStartedAt;
 
     console.log("[loadMyChats] Retrieved", allChatResults.length, "chats before deduplication");
     const totalChats = allChatResults.length;
 
     // Deduplicate chats (keep most recent for each unique title+turns combination)
+    const transformStartedAt = Date.now();
     const deduplicatedChats = deduplicateChats(allChatResults);
     console.log("[loadMyChats] After deduplication:", deduplicatedChats.length, "unique chats");
 
@@ -363,6 +391,8 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       content: contentMetadata,
     };
 
+    const transformMs = Date.now() - transformStartedAt;
+
     console.log(
       "[loadMyChats] Returning",
       formattedChats.length,
@@ -371,6 +401,22 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
       "of",
       totalPages
     );
+    console.log(JSON.stringify({
+      level: "info",
+      event: "chatvault.performance.load_saved_entries",
+      mode: "list",
+      totalMs: Date.now() - loadStartedAt,
+      phasesMs: {
+        mergedUserScopeQuery: scopeQueryMs,
+        chatsQuery: chatsQueryMs,
+        transform: transformMs,
+      },
+      database: databaseContext,
+      scopeSize: userIdScope.length,
+      rowsRead: allChatResults.length,
+      rowsReturned: result.chats.length,
+      responseBytesApprox: Buffer.byteLength(JSON.stringify(result)),
+    }));
 
     return result;
   } catch (error) {
