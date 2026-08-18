@@ -138,6 +138,11 @@ describe("assignTopicsForChat", () => {
         expect(result.assignedTopicIds).toEqual([existing!.id]);
         expect(result.matchedExistingCount).toBe(1);
         expect(result.createdCount).toBe(0);
+        expect(mockSuggestTopicsWithLLM).toHaveBeenCalledWith(
+            "React chat",
+            [{ prompt: "Q", response: "A" }],
+            ["React hooks"],
+        );
 
         const allTopics = await db.select().from(topics).where(eq(topics.userId, userId));
         expect(allTopics).toHaveLength(1);

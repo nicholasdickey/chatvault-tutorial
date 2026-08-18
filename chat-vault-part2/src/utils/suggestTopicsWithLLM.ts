@@ -12,29 +12,57 @@ import { combineChatText } from "./embeddings.js";
 dotenv.config();
 
 const TopicsSchema = z.object({
-    topics: z.array(z.string()).max(3),
+    topics: z.array(z.string()).max(2),
 });
 
 export const SUGGEST_TOPICS_MODEL =
     process.env.CHATVAULT_SUGGEST_TOPICS_MODEL?.trim() || "gpt-4o-mini";
 
 const MAX_CONTEXT_CHARS = 2000;
+const MAX_EXISTING_TOPICS_IN_PROMPT = 150;
 
-const SUGGEST_TOPICS_INSTRUCTIONS = `You assign short topic labels to saved AI chat conversations.
+const SUGGEST_TOPICS_INSTRUCTIONS = `You assign broad subject-area topic labels to saved AI chat conversations.
 
-Given a chat title and excerpt, return 1–3 concise topic labels (2–4 words each) that describe what the conversation is about.
+The goal is filtering: users pick topics to see only chats in that domain (e.g. recipes and cooking, not programming or music).
+
+Given a chat title, excerpt, and the user's existing topic list, return 1–2 broad topic labels (1–3 words each).
 
 Rules:
-- Use lowercase-friendly short phrases (e.g. "react hooks", "python debugging")
+- REUSE FIRST: when existing topics are provided, strongly prefer picking labels from that list
+  - Use the exact spelling from the existing list when reusing
+  - Only propose a new label when no existing topic reasonably fits the chat's primary domain
+  - Do not invent synonyms (e.g. do not return "home cooking" if "cooking" already exists)
+- New labels (only when necessary) must be general subject areas, NOT specific recipes, dishes, tools, or narrow subtopics
+  Good: "cooking", "bread making", "programming", "music", "home improvement"
+  Bad: "chicken korma", "ciabatta", "react hooks", "python asyncio", "kantian ethics"
+- Identify the primary domain of the conversation; ignore minor tangents
+- When multiple domains apply equally, return at most 2 labels; otherwise return 1
 - No duplicates in the response
-- Prefer specific topics over generic ones
-- Return fewer labels when the chat has a narrow focus
 
-Output a JSON object with one key "topics": an array of 1–3 topic label strings.`;
+Output a JSON object with one key "topics": an array of 1–2 topic label strings.`;
+
+function formatExistingTopicsForPrompt(existingTopicNames: string[]): string {
+    const unique = [...new Set(existingTopicNames.map((n) => n.trim()).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b),
+    );
+    if (unique.length === 0) {
+        return "Existing topics for this user: (none yet — you may propose new broad labels)";
+    }
+
+    const listed = unique.slice(0, MAX_EXISTING_TOPICS_IN_PROMPT);
+    const lines = listed.map((name) => `- ${name}`).join("\n");
+    const truncated =
+        unique.length > listed.length
+            ? `\n… and ${unique.length - listed.length} more (still prefer reusing any listed label when it fits)`
+            : "";
+
+    return `Existing topics for this user (reuse when possible — exact spelling):\n${lines}${truncated}`;
+}
 
 function buildSuggestTopicsInput(
     title: string,
-    turns: Array<{ prompt: string; response: string }>
+    turns: Array<{ prompt: string; response: string }>,
+    existingTopicNames: string[],
 ): string {
     const combined = combineChatText(turns);
     const excerpt =
@@ -42,7 +70,12 @@ function buildSuggestTopicsInput(
             ? combined.slice(0, MAX_CONTEXT_CHARS) + "…"
             : combined;
 
-    return `Title: ${title}\n\nExcerpt:\n${excerpt}`;
+    return `${formatExistingTopicsForPrompt(existingTopicNames)}
+
+Title: ${title}
+
+Excerpt:
+${excerpt}`;
 }
 
 let _openai: OpenAI | null = null;
@@ -58,17 +91,18 @@ function getOpenAI(): OpenAI {
     return _openai;
 }
 
-/** Ask OpenAI for 1–3 topic labels. Returns empty array on failure. */
+/** Ask OpenAI for 1–2 topic labels, biasing toward existingTopicNames when provided. */
 export async function suggestTopicsWithLLM(
     title: string,
-    turns: Array<{ prompt: string; response: string }>
+    turns: Array<{ prompt: string; response: string }>,
+    existingTopicNames: string[] = [],
 ): Promise<string[]> {
     try {
         const openai = getOpenAI();
         const response = await openai.responses.parse({
             model: SUGGEST_TOPICS_MODEL,
             instructions: SUGGEST_TOPICS_INSTRUCTIONS,
-            input: buildSuggestTopicsInput(title, turns),
+            input: buildSuggestTopicsInput(title, turns, existingTopicNames),
             text: {
                 format: zodTextFormat(TopicsSchema, "topic_suggestions"),
             },
@@ -78,7 +112,7 @@ export async function suggestTopicsWithLLM(
             console.warn(
                 "[suggestTopicsWithLLM] Response not completed:",
                 response.status,
-                response.error
+                response.error,
             );
             return [];
         }
@@ -92,7 +126,7 @@ export async function suggestTopicsWithLLM(
         return parsed.topics
             .map((t) => t.trim())
             .filter(Boolean)
-            .slice(0, 3);
+            .slice(0, 2);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn("[suggestTopicsWithLLM] Failed to suggest topics:", message);
