@@ -1,9 +1,10 @@
 /**
  * LLM topic suggestion for auto-tagging on save.
- * Uses structured JSON output; prompts/responses are not logged.
+ * Uses structured output via responses.parse; prompts/responses are not logged.
  */
 
 import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as dotenv from "dotenv";
 import { combineChatText } from "./embeddings.js";
@@ -27,7 +28,9 @@ Rules:
 - Use lowercase-friendly short phrases (e.g. "react hooks", "python debugging")
 - No duplicates in the response
 - Prefer specific topics over generic ones
-- Return fewer labels when the chat has a narrow focus`;
+- Return fewer labels when the chat has a narrow focus
+
+Output a JSON object with one key "topics": an array of 1–3 topic label strings.`;
 
 function buildSuggestTopicsInput(
     title: string,
@@ -62,29 +65,31 @@ export async function suggestTopicsWithLLM(
 ): Promise<string[]> {
     try {
         const openai = getOpenAI();
-        const response = await openai.chat.completions.create({
+        const response = await openai.responses.parse({
             model: SUGGEST_TOPICS_MODEL,
-            messages: [
-                { role: "system", content: SUGGEST_TOPICS_INSTRUCTIONS },
-                { role: "user", content: buildSuggestTopicsInput(title, turns) },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.2,
+            instructions: SUGGEST_TOPICS_INSTRUCTIONS,
+            input: buildSuggestTopicsInput(title, turns),
+            text: {
+                format: zodTextFormat(TopicsSchema, "topic_suggestions"),
+            },
         });
 
-        const content = response.choices[0]?.message?.content;
-        if (!content) {
-            console.warn("[suggestTopicsWithLLM] Empty response from model");
+        if (response.status !== "completed") {
+            console.warn(
+                "[suggestTopicsWithLLM] Response not completed:",
+                response.status,
+                response.error
+            );
             return [];
         }
 
-        const parsed = TopicsSchema.safeParse(JSON.parse(content));
-        if (!parsed.success) {
+        const parsed = response.output_parsed;
+        if (!parsed) {
             console.warn("[suggestTopicsWithLLM] Invalid response shape");
             return [];
         }
 
-        return parsed.data.topics
+        return parsed.topics
             .map((t) => t.trim())
             .filter(Boolean)
             .slice(0, 3);
