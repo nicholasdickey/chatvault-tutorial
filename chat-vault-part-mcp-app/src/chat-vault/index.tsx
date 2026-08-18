@@ -44,7 +44,7 @@ import {
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.6";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.7";
 
 function getRemainingSlotsMessage(
   remainingSlots: number,
@@ -307,6 +307,13 @@ function App() {
             if (parsed.content) {
               setContentMetadata(parsed.content);
               addLog("Content metadata extracted", parsed.content);
+            }
+            const mergedTopics = mergeAvailableTopics(
+              parsed.availableTopics,
+              parsed.chats,
+            );
+            if (mergedTopics.length === 0) {
+              void fetchTopicOptions(parsed.chats);
             }
           } else if (result?.content?.[0] && "text" in result.content[0]) {
             addLog("Unexpected result format", result);

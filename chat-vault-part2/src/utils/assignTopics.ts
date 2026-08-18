@@ -12,8 +12,8 @@ import { normalizeTopicName, sanitizeTopicDisplayName } from "./topicNames.js";
 import { findBestTopicMatch } from "./topicMatch.js";
 import { suggestTopicsWithLLM } from "./suggestTopicsWithLLM.js";
 
-export const TOPIC_MATCH_THRESHOLD = 0.82;
-export const MAX_AUTO_TOPICS_PER_CHAT = 3;
+export const TOPIC_MATCH_THRESHOLD = 0.78;
+export const MAX_AUTO_TOPICS_PER_CHAT = 2;
 export const MAX_TOPICS_PER_USER = 200;
 
 export interface AssignTopicsParams {
@@ -55,12 +55,6 @@ export async function assignTopicsForChat(
     const startedAt = Date.now();
 
     try {
-        const suggestedLabels = await suggestTopicsWithLLM(title, turns);
-        if (suggestedLabels.length === 0) {
-            console.log("[assignTopics] No topic suggestions for chat", chatId);
-            return { ...empty, skipped: false };
-        }
-
         const existingTopics = await db
             .select({
                 id: topics.id,
@@ -74,6 +68,16 @@ export async function assignTopicsForChat(
         const byNorm = new Map<string, ExistingTopic>();
         for (const topic of existingTopics) {
             byNorm.set(topic.nameNorm, topic);
+        }
+
+        const suggestedLabels = await suggestTopicsWithLLM(
+            title,
+            turns,
+            existingTopics.map((t) => t.name),
+        );
+        if (suggestedLabels.length === 0) {
+            console.log("[assignTopics] No topic suggestions for chat", chatId);
+            return { ...empty, skipped: false };
         }
 
         const [{ value: userTopicCount }] = await db
@@ -110,7 +114,7 @@ export async function assignTopicsForChat(
             const semanticMatchId = findBestTopicMatch(
                 labelEmbedding,
                 existingTopics.map((t) => ({ id: t.id, embedding: t.embedding })),
-                TOPIC_MATCH_THRESHOLD
+                TOPIC_MATCH_THRESHOLD,
             );
 
             if (semanticMatchId) {
@@ -122,7 +126,7 @@ export async function assignTopicsForChat(
             if (Number(userTopicCount) + createdCount >= MAX_TOPICS_PER_USER) {
                 console.warn(
                     "[assignTopics] User topic cap reached, skipping new topic:",
-                    userId
+                    userId,
                 );
                 continue;
             }
