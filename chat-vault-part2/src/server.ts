@@ -15,7 +15,7 @@ import {
     type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as dotenv from "dotenv";
-import { testConnection, db } from "./db/index.js";
+import { testConnection, db, observeDatabaseOperation } from "./db/index.js";
 import { sql } from "drizzle-orm";
 import { saveChat } from "./tools/saveChat.js";
 import { saveChatTurnsBegin } from "./tools/saveChatTurnsBegin.js";
@@ -32,6 +32,9 @@ import { getJobStatus } from "./utils/redis.js";
 import { resolveDeclaredUserIdWithMerge } from "./user/userMerge.js";
 
 dotenv.config();
+
+const serverInstanceStartedAt = Date.now();
+let requestCountInInstance = 0;
 
 // Anonymous user limits (for tutorial purposes)
 export const ANON_CHAT_EXPIRY_DAYS = 30; // Chats older than 30 days are considered expired
@@ -1016,6 +1019,9 @@ export async function handleMcpRequest(
     req: IncomingMessage,
     res: ServerResponse
 ): Promise<void> {
+    const requestStartedAt = Date.now();
+    requestCountInInstance += 1;
+    const requestNumberInInstance = requestCountInInstance;
     // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
@@ -1031,7 +1037,9 @@ export async function handleMcpRequest(
             hasAuthHeader: Boolean(req.headers.authorization),
             hasSessionHeader: Boolean(req.headers["mcp-session-id"]),
         });
+        const authStartedAt = Date.now();
         const auth = isAuthorized(req);
+        const authMs = Date.now() - authStartedAt;
         if (auth.ok === false) {
             console.log("[MCP] Auth failed:", { status: auth.status, message: auth.message });
             res.setHeader("WWW-Authenticate", "Bearer");
@@ -1061,8 +1069,12 @@ export async function handleMcpRequest(
             hasLoginLink: Boolean(userContext.loginLink),
         });
 
+        const bodyStartedAt = Date.now();
         const body = await readRequestBody(req);
+        const bodyReadMs = Date.now() - bodyStartedAt;
+        const parseStartedAt = Date.now();
         const requestData = JSON.parse(body);
+        const parseMs = Date.now() - parseStartedAt;
 
         const { jsonrpc, id, method, params } = requestData;
         console.log(
@@ -1119,6 +1131,7 @@ export async function handleMcpRequest(
 
         // Handle initialize request
         if (method === "initialize") {
+            const initializeStartedAt = Date.now();
             console.log(
                 "[MCP] initialize - id:",
                 id,
@@ -1152,6 +1165,19 @@ export async function handleMcpRequest(
             }
             writeJsonRpcResponse(res, id, response);
             res.end();
+            console.log(JSON.stringify({
+                level: "info",
+                event: "chatvault.performance.mcp_request",
+                method,
+                totalMs: Date.now() - requestStartedAt,
+                phasesMs: { auth: authMs, bodyRead: bodyReadMs, jsonParse: parseMs, initialize: Date.now() - initializeStartedAt },
+                instance: {
+                    requestNumber: requestNumberInInstance,
+                    ageMs: Date.now() - serverInstanceStartedAt,
+                    firstRequest: requestNumberInInstance === 1,
+                },
+                requestBytes: Buffer.byteLength(body),
+            }));
             return;
         }
 
@@ -1167,6 +1193,7 @@ export async function handleMcpRequest(
         // Dispatch to handler functions
         try {
             let result: unknown;
+            let toolCallMs: number | undefined;
 
             if (method === "tools/list") {
                 const request = {
@@ -1194,7 +1221,9 @@ export async function handleMcpRequest(
                     "paramKeys:",
                     Object.keys(params ?? {})
                 );
+                const toolCallStartedAt = Date.now();
                 result = await handleCallTool(request, userContext, req.headers);
+                toolCallMs = Date.now() - toolCallStartedAt;
                 console.log("[MCP] tools/call response summary:", {
                     hasResult: result != null,
                     contentItems: Array.isArray((result as any)?.content) ? (result as any).content.length : 0,
@@ -1225,6 +1254,25 @@ export async function handleMcpRequest(
             }
             writeJsonRpcResponse(res, id, result);
             res.end();
+            console.log(JSON.stringify({
+                level: "info",
+                event: "chatvault.performance.mcp_request",
+                method,
+                tool: method === "tools/call" ? String(params?.name ?? "unknown") : undefined,
+                totalMs: Date.now() - requestStartedAt,
+                phasesMs: {
+                    auth: authMs,
+                    bodyRead: bodyReadMs,
+                    jsonParse: parseMs,
+                    ...(toolCallMs !== undefined ? { toolCall: toolCallMs } : {}),
+                },
+                instance: {
+                    requestNumber: requestNumberInInstance,
+                    ageMs: Date.now() - serverInstanceStartedAt,
+                    firstRequest: requestNumberInInstance === 1,
+                },
+                requestBytes: Buffer.byteLength(body),
+            }));
         } catch (error) {
             const errorMessage =
                 error instanceof Error ? error.message : String(error);
@@ -1302,24 +1350,40 @@ const server = createServer((req, res) => {
 
 // Test database connection and verify pgvector on startup
 export async function initializeDatabase() {
+    const initializeStartedAt = Date.now();
+    const databaseContext = observeDatabaseOperation();
     try {
         console.log("[DB] Testing database connection...");
+        const connectionTestStartedAt = Date.now();
         const isConnected = await testConnection();
+        const connectionTestMs = Date.now() - connectionTestStartedAt;
         if (!isConnected) {
             throw new Error("Database connection test failed");
         }
         console.log("[DB] Database connection successful");
 
         // Verify pgvector extension is available
+        const extensionCheckStartedAt = Date.now();
         const result = await db.execute(
             sql`SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') as vector_available`
         );
+        const extensionCheckMs = Date.now() - extensionCheckStartedAt;
         const vectorAvailable = (result[0] as { vector_available: boolean })?.vector_available;
         if (!vectorAvailable) {
             console.warn("[DB] Warning: pgvector extension not found. Run migrations to enable it.");
         } else {
             console.log("[DB] pgvector extension is available");
         }
+        console.log(JSON.stringify({
+            level: "info",
+            event: "chatvault.performance.database_initialize",
+            totalMs: Date.now() - initializeStartedAt,
+            phasesMs: {
+                connectionTest: connectionTestMs,
+                extensionCheck: extensionCheckMs,
+            },
+            database: databaseContext,
+        }));
     } catch (error) {
         console.error("[DB] Database initialization failed:", error);
         throw error;
