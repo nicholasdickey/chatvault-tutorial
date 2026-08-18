@@ -28,6 +28,7 @@ import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
 import { updateChat } from "./tools/updateChat.js";
+import { listTopics } from "./tools/listTopics.js";
 import { getJobStatus } from "./utils/redis.js";
 import { resolveDeclaredUserIdWithMerge } from "./user/userMerge.js";
 
@@ -448,6 +449,11 @@ const loadSavedEntriesTool: Tool = {
                     type: "string",
                     description: "Optional text query to filter saved entries by title or content.",
                 },
+                topicIds: {
+                    type: "array",
+                    description: "Optional topic ids — return entries matching ANY selected topic.",
+                    items: { type: "string" },
+                },
                 aboveTheFoldOnly: {
                     type: "boolean",
                     description:
@@ -466,6 +472,27 @@ const loadSavedEntriesTool: Tool = {
             destructiveHint: false,
         },
         _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
+
+const listTopicsTool: Tool = {
+        name: "listTopics",
+        title: "List topics",
+        description:
+            "List the user's topics for filtering and organizing saved Chat Vault entries in the widget.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+            },
+            required: ["userId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["app"] } },
         outputSchema: GENERIC_OUTPUT_SCHEMA,
 };
 
@@ -611,6 +638,7 @@ const internalWidgetTools: Tool[] = [
     updateSavedEntryTool,
     deleteSavedEntryTool,
     getSaveJobStatusTool,
+    listTopicsTool,
 ];
 
 const conversationSaveTools: Tool[] = [
@@ -748,7 +776,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 hasLoginLink: Boolean(finalUserContext.loginLink),
             });
             const result = await loadMyChats({
-                ...(args as { userId: string; page?: number; size?: number; query?: string; aboveTheFoldOnly?: boolean }),
+                ...(args as { userId: string; page?: number; size?: number; query?: string; topicIds?: string[]; aboveTheFoldOnly?: boolean }),
                 userContext: finalUserContext,
                 headers: headers, // Pass all headers for logging
             });
@@ -867,6 +895,18 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                     },
                 ],
                 structuredContent: result ?? { status: "expired" as const },
+            };
+        } else if (toolName === "listTopics") {
+            const result = await listTopics(args as { userId: string });
+            console.log("[MCP Handler] handleCallTool - listTopics result:", result.topics.length, "topics");
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Listed ${result.topics.length} topics`,
+                    },
+                ],
+                structuredContent: result,
             };
         } else if (toolName === "explainHowToUse") {
             const result = explainHowToUse(
