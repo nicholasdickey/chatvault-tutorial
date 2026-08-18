@@ -3,7 +3,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { chats, chatSaveJobs, userIdMerges } from "../db/schema.js";
 import {
@@ -162,6 +162,22 @@ export function chatsUserIdInScope(scope: string[]) {
     if (scope.length === 0) return eq(chats.userId, "__no_user_scope__");
     if (scope.length === 1) return eq(chats.userId, scope[0]!);
     return inArray(chats.userId, scope);
+}
+
+/**
+ * Match canonical and legacy merged user IDs in one SQL statement. This keeps
+ * read compatibility while avoiding a separate scope lookup round trip.
+ */
+export function chatsUserIdInCanonicalScope(canonicalUserId: string) {
+    const mergedUserIds = db
+        .select({ userId: userIdMerges.fromUserId })
+        .from(userIdMerges)
+        .where(eq(userIdMerges.toUserId, canonicalUserId));
+
+    return or(
+        eq(chats.userId, canonicalUserId),
+        inArray(chats.userId, mergedUserIds)
+    )!;
 }
 
 /** chat_save_jobs.userId IN scope. */

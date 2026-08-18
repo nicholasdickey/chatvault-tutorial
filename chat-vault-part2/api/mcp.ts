@@ -1,17 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-let initPromise: Promise<void> | null = null;
-
-async function ensureInitialized(): Promise<void> {
-  if (!initPromise) {
-    initPromise = (async () => {
-      const mod = await import("../src/server.js");
-      await mod.initializeDatabase();
-    })();
-  }
-  await initPromise;
-}
-
 /**
  * Vercel Serverless Function: /api/mcp
  * - Also supports /mcp via vercel.json rewrite
@@ -38,15 +26,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  const initializeStartedAt = Date.now();
-  await ensureInitialized();
-  const initializeMs = Date.now() - initializeStartedAt;
+  const moduleImportStartedAt = Date.now();
   const mod = await import("../src/server.js");
+  const moduleImportMs = Date.now() - moduleImportStartedAt;
   await mod.handleMcpRequest(req, res);
   console.log(JSON.stringify({
     level: "info",
     event: "chatvault.performance.api_request",
     totalMs: Date.now() - apiStartedAt,
-    phasesMs: { ensureInitialized: initializeMs },
+    phasesMs: { moduleImport: moduleImportMs },
   }));
 }
