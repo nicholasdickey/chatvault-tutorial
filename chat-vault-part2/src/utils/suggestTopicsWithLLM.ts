@@ -8,7 +8,6 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import * as dotenv from "dotenv";
 import { combineChatText } from "./embeddings.js";
-import { applyTopicSuggestionGuardrails } from "./topicSuggestionGuardrails.js";
 
 dotenv.config();
 
@@ -22,48 +21,33 @@ export const SUGGEST_TOPICS_MODEL =
 const MAX_CONTEXT_CHARS = 2000;
 const MAX_EXISTING_TOPICS_IN_PROMPT = 150;
 
-const SUGGEST_TOPICS_INSTRUCTIONS = `You assign broad subject-area topic labels to saved AI chat conversations.
+const SUGGEST_TOPICS_INSTRUCTIONS = `You assign broad knowledge category labels to saved conversations in a personal knowledge base.
 
-The goal is filtering: users pick topics to see chats in that domain (e.g. filter "cooking" OR "bread making" to find food chats).
+ChatVault stores conversations as retrievable knowledge. Categories help users browse and filter what they have saved by field of knowledge — not by one chat's specific details.
 
-Given a chat title, excerpt, and the user's existing topic list, return 1–2 broad labels (1–3 words each).
+Given a title, excerpt, and the user's existing category list, return 1–2 broad category names (1–3 words each).
 
 Rules:
-- REUSE FIRST: when existing topics are provided, pick labels from that list when they fit
+- REUSE FIRST: when existing categories are listed, prefer picking from that list
   - Use exact spelling from the list when reusing
-  - Only propose a new label when nothing on the list reasonably fits
-  - Do not invent synonyms (e.g. do not return "baking" if "bread making" already exists)
-  - NEVER reuse "home improvement" or "kitchen design" for food, cooking, baking, or bread conversations — even if those labels are on the list
-- Classify by the user's primary ACTIVITY or subject, not incidental setting, hardware, or aesthetics
-  - Kitchen/stove/oven tweaks done to improve cooking or baking → food labels, NOT home improvement or kitchen design
-  - Use "home improvement" or "kitchen design" only for renovation, decor, or construction — not food prep
-- When to return 1 vs 2 labels:
-  - Return 1 when a single domain clearly dominates (e.g. a curry recipe → cooking only)
-  - Return 2 when the chat genuinely spans both a specific sub-domain AND a broader one that users might filter on separately
-    - Bread/dough/baking chats (ciabatta, sourdough, oven stone for crust) → ["bread making", "cooking"] so they appear under either filter
-    - Do NOT add a second label unless it helps filtering (related pair like bread making + cooking, not cooking + music)
-- Food-domain preference:
-  - Bread-focused → always include "bread making"; also include "cooking" when the chat is about making food (most bread chats)
-  - General meals/recipes without bread focus → "cooking" only
-- Labels must be general subject areas, NOT specific recipes or narrow subtopics
-  Good: "bread making", "cooking"
-  Bad: "chicken korma", "ciabatta", "home improvement" (for a bread oven hack)
+  - Propose a new category only when nothing on the list reasonably covers the knowledge domain of this conversation
+  - Do not invent near-synonyms when an existing category already fits
+- Knowledge domain, not surface details: classify by what field of knowledge the conversation belongs to
+  - Ignore incidental tools, settings, or examples unless they define the domain
+  - Do not use a single named thing (recipe, API, error, product) as a category
+- Breadth: each category should be a general knowledge area someone would use to organize a personal knowledge base
+  Good: "programming", "cooking", "history", "finance", "machine learning", "parenting"
+  Bad: "react hooks", "chicken korma", "403 error", "ciabatta", "kubernetes ingress"
+- Count: return 1 category when one knowledge domain clearly dominates; return 2 only when the conversation genuinely spans two distinct knowledge domains worth browsing separately — not a broad category plus its subfield (avoid "programming" + "python")
 
-Examples:
-- "Baking ciabatta at home" → bread making, cooking
-- "Same-day ciabatta bread" → bread making, cooking
-- "Adding stone effect to the stove" (stone slab for baking) → bread making, cooking
-- "Chicken korma recipe" → cooking
-- "Remodeling kitchen cabinets" → home improvement
-
-Output a JSON object with one key "topics": an array of 1–2 topic label strings.`;
+Output a JSON object with one key "topics": an array of 1–2 category name strings.`;
 
 function formatExistingTopicsForPrompt(existingTopicNames: string[]): string {
     const unique = [...new Set(existingTopicNames.map((n) => n.trim()).filter(Boolean))].sort(
         (a, b) => a.localeCompare(b),
     );
     if (unique.length === 0) {
-        return "Existing topics for this user: (none yet — you may propose new broad labels)";
+        return "Existing knowledge categories for this user: (none yet — you may propose new broad categories)";
     }
 
     const listed = unique.slice(0, MAX_EXISTING_TOPICS_IN_PROMPT);
@@ -73,7 +57,7 @@ function formatExistingTopicsForPrompt(existingTopicNames: string[]): string {
             ? `\n… and ${unique.length - listed.length} more (still prefer reusing any listed label when it fits)`
             : "";
 
-    return `Existing topics for this user (reuse when possible — exact spelling):\n${lines}${truncated}`;
+    return `Existing knowledge categories for this user (reuse when possible — exact spelling):\n${lines}${truncated}`;
 }
 
 function buildSuggestTopicsInput(
@@ -108,7 +92,7 @@ function getOpenAI(): OpenAI {
     return _openai;
 }
 
-/** Ask OpenAI for 1–2 topic labels, biasing toward existingTopicNames when provided. */
+/** Ask OpenAI for 1–2 knowledge category names, biasing toward existingTopicNames when provided. */
 export async function suggestTopicsWithLLM(
     title: string,
     turns: Array<{ prompt: string; response: string }>,
@@ -140,14 +124,10 @@ export async function suggestTopicsWithLLM(
             return [];
         }
 
-        return applyTopicSuggestionGuardrails(
-            title,
-            turns,
-            parsed.topics
-                .map((t) => t.trim())
-                .filter(Boolean)
-                .slice(0, 2),
-        );
+        return parsed.topics
+            .map((t) => t.trim())
+            .filter(Boolean)
+            .slice(0, 2);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn("[suggestTopicsWithLLM] Failed to suggest topics:", message);
