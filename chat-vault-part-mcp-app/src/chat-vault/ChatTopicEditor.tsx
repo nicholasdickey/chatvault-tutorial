@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MdAdd, MdClose, MdLabel } from "react-icons/md";
+import { MdAdd, MdClose } from "react-icons/md";
 import { TopicCombobox } from "./TopicCombobox.js";
 import type { AvailableTopic, Topic } from "./types.js";
 
@@ -177,14 +177,7 @@ export function ChatTopicEditor({
         title="Edit topics"
         aria-label="Edit topics"
       >
-        {topics.length === 0 ? (
-          <>
-            <MdLabel className="w-3 h-3" />
-            <span>Topic</span>
-          </>
-        ) : (
-          <MdAdd className="w-3 h-3" />
-        )}
+        <MdAdd className="w-3 h-3" />
       </button>
 
       {popover

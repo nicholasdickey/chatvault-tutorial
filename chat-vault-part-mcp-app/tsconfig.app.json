@@ -14,8 +14,6 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "types": ["vite/client"],
-    "baseUrl": ".",
-    "paths": {},
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
