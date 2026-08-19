@@ -45,7 +45,7 @@ import {
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.10";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.11";
 
 function getRemainingSlotsMessage(
   remainingSlots: number,

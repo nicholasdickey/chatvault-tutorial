@@ -86,6 +86,17 @@ export function ChatTopicEditor({
   const visibleTopics = topics.slice(0, MAX_VISIBLE_CHIPS);
   const hiddenCount = Math.max(0, topics.length - MAX_VISIBLE_CHIPS);
 
+  const handleRemoveTopic = async (topicId: string) => {
+    if (disabled || saving) return;
+    const next = topics.filter((topic) => topic.id !== topicId);
+    setSaving(true);
+    try {
+      await onSave(chatId, next);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDraftChange = async (next: Topic[]) => {
     setDraftTopics(next);
     if (saving) return;
@@ -151,9 +162,23 @@ export function ChatTopicEditor({
       {visibleTopics.map((topic) => (
         <span
           key={topic.id}
-          className={`inline-flex max-w-[120px] items-center px-2 py-0.5 rounded-full border text-[11px] ${chipClass}`}
+          className={`inline-flex max-w-[140px] items-center gap-0.5 px-2 py-0.5 rounded-full border text-[11px] ${chipClass}`}
         >
           <span className="truncate">{topic.name}</span>
+          {!disabled && (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleRemoveTopic(topic.id);
+              }}
+              className="shrink-0 rounded hover:opacity-80 disabled:opacity-50"
+              aria-label={`Remove topic ${topic.name}`}
+            >
+              <MdClose className="w-3 h-3" />
+            </button>
+          )}
         </span>
       ))}
       {hiddenCount > 0 ? (
