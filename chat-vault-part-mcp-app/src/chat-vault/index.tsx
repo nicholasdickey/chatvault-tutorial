@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   MdArrowBack,
@@ -45,7 +45,26 @@ import {
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.11";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.12";
+
+function measureWidgetHeight(): number {
+  const root = document.getElementById("chat-vault-root");
+  if (root) {
+    return Math.ceil(root.getBoundingClientRect().bottom);
+  }
+  return Math.ceil(
+    Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+  );
+}
+
+/** Report content height to agentsyx host (MCP Apps size-changed + remeasure trigger). */
+function notifyHostSizeChange() {
+  const height = measureWidgetHeight();
+  void app.sendSizeChanged({ height }).catch(() => {
+    /* host may not be ready yet */
+  });
+  (window as Window & { mcpWidgetResize?: () => void }).mcpWidgetResize?.();
+}
 
 function getRemainingSlotsMessage(
   remainingSlots: number,
@@ -140,6 +159,24 @@ function App() {
   const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
   const [pendingAddJobId, setPendingAddJobId] = useState<string | null>(null);
   const [addSuccessAlert, setAddSuccessAlert] = useState<string | null>(null);
+
+  // Tell agentsyx host to resize iframe when layout-affecting state changes
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => notifyHostSizeChange());
+  }, [
+    showHelp,
+    helpText,
+    helpTextLoading,
+    chats,
+    pagination,
+    selectedChat,
+    expandedTurns,
+    showManualSaveModal,
+    loading,
+    searchLoading,
+    paginationLoading,
+    filterTopics,
+  ]);
 
   // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
@@ -4144,13 +4181,14 @@ function App() {
       {/* Help Area - Fixed bottom */}
       {showHelp && (
         <div
-          className={` h-fullfixed top-0 left-4 right-4  rounded-t-lg z-40 flex flex-col ${
-            isDarkMode ? "bg-gray-900  text-white " : "bg-gray-200  text-black"
+          className={`absolute inset-0 z-40 flex flex-col rounded-lg ${
+            isDarkMode ? "bg-gray-900 text-white" : "bg-gray-200 text-black"
           }`}
-          style={{ maxHeight: "calc(100vh)" }}
         >
           <div
-            className={`flex items-center justify-between px-6 py-3 border-b dark:border-gray-800 border-gray-300 flex-shrink-0            }`}
+            className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${
+              isDarkMode ? "border-gray-800" : "border-gray-300"
+            }`}
             style={{ minHeight: "40px", height: "40px" }}
           >
             <h3
@@ -4174,7 +4212,7 @@ function App() {
           </div>
           <div
             className="flex-1 min-h-0 px-6 pt-6 relative"
-            style={{ paddingRight: "calc(1.5rem + 8px)", maxHeight: "100%" }}
+            style={{ paddingRight: "calc(1.5rem + 8px)" }}
           >
             {helpTextLoading && (
               <div
