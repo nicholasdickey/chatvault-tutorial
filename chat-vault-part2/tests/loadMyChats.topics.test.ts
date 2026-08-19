@@ -22,6 +22,7 @@ describe("loadMyChats topics", () => {
     let chats: typeof import("../src/db/schema.js").chats;
     let chatTopics: typeof import("../src/db/schema.js").chatTopics;
     let topics: typeof import("../src/db/schema.js").topics;
+    let userIdMerges: typeof import("../src/db/schema.js").userIdMerges;
     let normalizeTopicName: typeof import("../src/utils/topicNames.js").normalizeTopicName;
 
     beforeAll(async () => {
@@ -32,7 +33,7 @@ describe("loadMyChats topics", () => {
 
         ({ loadMyChats } = await import("../src/tools/loadMyChats.js"));
         ({ listTopics } = await import("../src/tools/listTopics.js"));
-        ({ chats, chatTopics, topics } = await import("../src/db/schema.js"));
+        ({ chats, chatTopics, topics, userIdMerges } = await import("../src/db/schema.js"));
         ({ normalizeTopicName } = await import("../src/utils/topicNames.js"));
     }, 180000);
 
@@ -173,6 +174,42 @@ describe("loadMyChats topics", () => {
             size: 10,
         });
         expect(eitherTopic.pagination.total).toBe(2);
+    });
+
+    test("includes chats and topics from a legacy user merged into the canonical user", async () => {
+        const db = getTestDrizzle();
+        await truncateAllTables();
+        const canonicalUserId = "canonical-topics-user";
+        const legacyUserId = "legacy-topics-user";
+
+        await db.insert(userIdMerges).values({
+            fromUserId: legacyUserId,
+            toUserId: canonicalUserId,
+        });
+        const [legacyChat] = await db.insert(chats).values({
+            userId: legacyUserId,
+            title: "Legacy chat",
+            turns: [{ prompt: "Q", response: "A" }],
+        }).returning({ id: chats.id });
+        const [legacyTopic] = await db.insert(topics).values({
+            userId: legacyUserId,
+            name: "Legacy topic",
+            nameNorm: normalizeTopicName("Legacy topic"),
+        }).returning({ id: topics.id });
+        await db.insert(chatTopics).values({
+            chatId: legacyChat!.id,
+            topicId: legacyTopic!.id,
+            source: "manual",
+        });
+
+        const result = await loadMyChats({ userId: canonicalUserId });
+
+        expect(result.chats.map((chat) => chat.id)).toContain(legacyChat!.id);
+        expect(result.availableTopics).toContainEqual({
+            id: legacyTopic!.id,
+            name: "Legacy topic",
+            chatCount: 1,
+        });
     });
 
     test("listTopics returns scoped topics with chat counts", async () => {

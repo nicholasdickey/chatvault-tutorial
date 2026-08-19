@@ -4,8 +4,8 @@
  */
 
 import { db, chatListDb } from "../db/index.js";
-import { chatTopics, chats, topics } from "../db/schema.js";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { chatTopics, chats, topics, userIdMerges } from "../db/schema.js";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chatsUserIdInScope } from "../user/userMerge.js";
 
 export interface TopicSummary {
@@ -29,6 +29,18 @@ function topicsUserIdInScope(userIdScope: string[]) {
         return eq(topics.userId, userIdScope[0]!);
     }
     return inArray(topics.userId, userIdScope);
+}
+
+/** Match topics owned by the canonical user or any legacy user merged into it. */
+function topicsUserIdInCanonicalScope(canonicalUserId: string) {
+    const mergedUserIds = sql`(select ${userIdMerges.fromUserId}
+        from ${userIdMerges}
+        where ${userIdMerges.toUserId} = ${canonicalUserId})`;
+
+    return or(
+        eq(topics.userId, canonicalUserId),
+        inArray(topics.userId, mergedUserIds)
+    )!;
 }
 
 /** Topics linked to each chat id (id + name only). */
@@ -80,6 +92,31 @@ export async function getAvailableTopicsForUserScope(
         .from(topics)
         .leftJoin(chatTopics, eq(chatTopics.topicId, topics.id))
         .where(topicsUserIdInScope(userIdScope))
+        .groupBy(topics.id, topics.name)
+        .orderBy(topics.name);
+
+    return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        chatCount: Number(row.chatCount ?? 0),
+    }));
+}
+
+/** All topics for a canonical user, including legacy merged IDs, in one query. */
+export async function getAvailableTopicsForCanonicalUser(
+    canonicalUserId: string,
+    useListDb = true
+): Promise<AvailableTopic[]> {
+    const queryDb = useListDb ? chatListDb : db;
+    const rows = await queryDb
+        .select({
+            id: topics.id,
+            name: topics.name,
+            chatCount: sql<number>`count(${chatTopics.chatId})::int`,
+        })
+        .from(topics)
+        .leftJoin(chatTopics, eq(chatTopics.topicId, topics.id))
+        .where(topicsUserIdInCanonicalScope(canonicalUserId))
         .groupBy(topics.id, topics.name)
         .orderBy(topics.name);
 
