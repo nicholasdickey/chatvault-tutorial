@@ -45,15 +45,22 @@ import {
 } from "./loadSavedEntriesHelpers.js";
 
 // Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.12";
+const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.13";
 
 function measureWidgetHeight(): number {
   const root = document.getElementById("chat-vault-root");
-  if (root) {
-    return Math.ceil(root.getBoundingClientRect().bottom);
-  }
+  const rootHeight = root
+    ? Math.max(
+        root.scrollHeight,
+        Math.ceil(root.getBoundingClientRect().height),
+      )
+    : 0;
   return Math.ceil(
-    Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+    Math.max(
+      rootHeight,
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight,
+    ),
   );
 }
 
