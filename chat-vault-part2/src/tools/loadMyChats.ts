@@ -22,7 +22,7 @@ import { areChatVaultLimitsEnabled } from "../utils/limitsEnabled.js";
 import { chatListSelection } from "./chatListSelection.js";
 import {
     attachTopicsToChats,
-    getAvailableTopicsForUserScope,
+    getAvailableTopicsForCanonicalUser,
     getChatIdsMatchingAnyTopics,
     getTopicsForChatIds,
     type AvailableTopic,
@@ -279,16 +279,22 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     // Calculate offset (0-indexed page to SQL offset)
     const offset = pageNum * sizeNum;
 
-    const scopeStartedAt = Date.now();
-    const userIdScope = await getMergedUserIdScopeForReads(userId);
-    const scopeQueryMs = Date.now() - scopeStartedAt;
     const topicAggregationStartedAt = Date.now();
-    const availableTopics = await getAvailableTopicsForUserScope(userIdScope, true);
-    const topicAggregationMs = Date.now() - topicAggregationStartedAt;
+    const availableTopicsPromise = getAvailableTopicsForCanonicalUser(userId, true)
+      .then((availableTopics) => ({
+        availableTopics,
+        topicAggregationMs: Date.now() - topicAggregationStartedAt,
+      }));
 
     // If query is provided, use vector search (same as searchMyChats)
     const searchQuery = query?.trim();
     if (searchQuery) {
+      const scopeStartedAt = Date.now();
+      const userIdScopePromise = getMergedUserIdScopeForReads(userId)
+        .then((userIdScope) => ({
+          userIdScope,
+          scopeQueryMs: Date.now() - scopeStartedAt,
+        }));
       const databaseContext = observeDatabaseOperation();
       console.log("[loadMyChats] Using vector search for query");
       const searchStartedAt = Date.now();
@@ -299,6 +305,12 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
         size: topicIds?.length ? 100 : sizeNum,
       });
       const searchQueryMs = Date.now() - searchStartedAt;
+      const [scopeResult, topicResult] = await Promise.all([
+        userIdScopePromise,
+        availableTopicsPromise,
+      ]);
+      const { userIdScope, scopeQueryMs } = scopeResult;
+      const { availableTopics, topicAggregationMs } = topicResult;
 
       // Get total chat count for user (before filtering) for userInfo
       const countStartedAt = Date.now();
@@ -378,12 +390,29 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     console.log("[loadMyChats] Fetching all chats for user:", userId);
     const databaseContext = observeDatabaseOperation();
     const chatsQueryStartedAt = Date.now();
-    const allChatResults = await chatListDb
-      .select(chatListSelection)
-      .from(chats)
-      .where(chatsUserIdInCanonicalScope(userId))
-      .orderBy(desc(chats.timestamp));
-    const chatsQueryMs = Date.now() - chatsQueryStartedAt;
+    const allChatResultsPromise = (async () => {
+      const rows = await chatListDb
+        .select(chatListSelection)
+        .from(chats)
+        .where(chatsUserIdInCanonicalScope(userId))
+        .orderBy(desc(chats.timestamp));
+      return { rows, chatsQueryMs: Date.now() - chatsQueryStartedAt };
+    })();
+    const scopeStartedAt = Date.now();
+    const userIdScopePromise = topicIds?.length
+      ? getMergedUserIdScopeForReads(userId).then((userIdScope) => ({
+          userIdScope,
+          scopeQueryMs: Date.now() - scopeStartedAt,
+        }))
+      : Promise.resolve({ userIdScope: [userId], scopeQueryMs: 0 });
+    const [chatResult, topicResult, scopeResult] = await Promise.all([
+      allChatResultsPromise,
+      availableTopicsPromise,
+      userIdScopePromise,
+    ]);
+    const { rows: allChatResults, chatsQueryMs } = chatResult;
+    const { availableTopics, topicAggregationMs } = topicResult;
+    const { userIdScope, scopeQueryMs } = scopeResult;
 
     console.log("[loadMyChats] Retrieved", allChatResults.length, "chats before deduplication");
     const totalChats = allChatResults.length;
