@@ -5,27 +5,32 @@
  *   pnpm tsx scripts/backfill-topics.ts --dry-run
  *   pnpm tsx scripts/backfill-topics.ts --userId=<id> --limit=50
  *   pnpm tsx scripts/backfill-topics.ts --batch-size=20
+ *   pnpm tsx scripts/backfill-topics.ts --retag
+ *   pnpm tsx scripts/backfill-topics.ts --retag --userId=<id>
+ *
+ * --retag clears existing topic links (and topic catalog for affected users) before re-assigning.
  *
  * Requires DATABASE_URL and OPENAI_API_KEY. Sets CHATVAULT_AUTO_TOPICS=true for the run.
  */
 
 import * as dotenv from "dotenv";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../src/db/index.js";
-import { chatTopics, chats } from "../src/db/schema.js";
+import { chatTopics, chats, topics } from "../src/db/schema.js";
 import { assignTopicsForChat } from "../src/utils/assignTopics.js";
 
 dotenv.config();
 
 interface CliOptions {
     dryRun: boolean;
+    retag: boolean;
     userId?: string;
     limit?: number;
     concurrency: number;
     batchDelayMs: number;
 }
 
-interface UntaggedChat {
+interface ChatCandidate {
     id: string;
     userId: string;
     title: string;
@@ -40,12 +45,15 @@ interface BackfillSummary {
     failed: number;
     topicsCreated: number;
     topicsMatched: number;
+    linksCleared: number;
+    topicsDeleted: number;
     elapsedMs: number;
 }
 
 function parseArgs(argv: string[]): CliOptions {
     const options: CliOptions = {
         dryRun: false,
+        retag: false,
         concurrency: 5,
         batchDelayMs: 200,
     };
@@ -53,6 +61,10 @@ function parseArgs(argv: string[]): CliOptions {
     for (const arg of argv) {
         if (arg === "--dry-run") {
             options.dryRun = true;
+            continue;
+        }
+        if (arg === "--retag") {
+            options.retag = true;
             continue;
         }
         if (arg.startsWith("--userId=")) {
@@ -74,7 +86,7 @@ function parseArgs(argv: string[]): CliOptions {
         if (arg.startsWith("--batch-delay-ms=")) {
             options.batchDelayMs = parsePositiveInt(
                 arg.slice("--batch-delay-ms=".length),
-                "batch-delay-ms"
+                "batch-delay-ms",
             );
             continue;
         }
@@ -100,7 +112,7 @@ function sleep(ms: number): Promise<void> {
 export async function fetchUntaggedChats(params: {
     userId?: string;
     limit?: number;
-}): Promise<UntaggedChat[]> {
+}): Promise<ChatCandidate[]> {
     const filters = [isNull(chatTopics.chatId)];
     if (params.userId) {
         filters.push(eq(chats.userId, params.userId));
@@ -126,11 +138,96 @@ export async function fetchUntaggedChats(params: {
     return query;
 }
 
+/** All chats, optionally filtered by user (for --retag). */
+export async function fetchAllChats(params: {
+    userId?: string;
+    limit?: number;
+}): Promise<ChatCandidate[]> {
+    const filters = params.userId ? [eq(chats.userId, params.userId)] : [];
+
+    let query = db
+        .select({
+            id: chats.id,
+            userId: chats.userId,
+            title: chats.title,
+            turns: chats.turns,
+        })
+        .from(chats)
+        .orderBy(asc(chats.timestamp))
+        .$dynamic();
+
+    if (filters.length > 0) {
+        query = query.where(and(...filters));
+    }
+
+    if (params.limit !== undefined) {
+        query = query.limit(params.limit);
+    }
+
+    return query;
+}
+
+/** Remove topic links and catalog for users whose chats will be retagged. */
+export async function clearTopicsForRetag(params: {
+    userId?: string;
+    chatIds: string[];
+}): Promise<{ linksCleared: number; topicsDeleted: number }> {
+    let linksCleared = 0;
+    let topicsDeleted = 0;
+
+    if (params.chatIds.length > 0) {
+        const deletedLinks = await db
+            .delete(chatTopics)
+            .where(inArray(chatTopics.chatId, params.chatIds))
+            .returning({ chatId: chatTopics.chatId });
+        linksCleared = deletedLinks.length;
+    }
+
+    const userIds = params.userId
+        ? [params.userId]
+        : [
+              ...new Set(
+                  (
+                      await db
+                          .select({ userId: chats.userId })
+                          .from(chats)
+                          .where(inArray(chats.id, params.chatIds))
+                  ).map((row) => row.userId),
+              ),
+          ];
+
+    for (const userId of userIds) {
+        const userTopics = await db
+            .select({ id: topics.id })
+            .from(topics)
+            .where(eq(topics.userId, userId));
+
+        if (userTopics.length === 0) {
+            continue;
+        }
+
+        const topicIds = userTopics.map((t) => t.id);
+        const extraLinks = await db
+            .delete(chatTopics)
+            .where(inArray(chatTopics.topicId, topicIds))
+            .returning({ topicId: chatTopics.topicId });
+        linksCleared += extraLinks.length;
+
+        const deletedTopics = await db
+            .delete(topics)
+            .where(eq(topics.userId, userId))
+            .returning({ id: topics.id });
+        topicsDeleted += deletedTopics.length;
+    }
+
+    return { linksCleared, topicsDeleted };
+}
+
 async function processInBatches<T>(
     items: T[],
     concurrency: number,
     batchDelayMs: number,
-    handler: (item: T) => Promise<void>
+    handler: (item: T) => Promise<void>,
 ): Promise<void> {
     for (let i = 0; i < items.length; i += concurrency) {
         const batch = items.slice(i, i + concurrency);
@@ -153,21 +250,28 @@ export async function runBackfillTopics(options: CliOptions): Promise<BackfillSu
         failed: 0,
         topicsCreated: 0,
         topicsMatched: 0,
+        linksCleared: 0,
+        topicsDeleted: 0,
         elapsedMs: 0,
     };
 
-    const candidates = await fetchUntaggedChats({
-        userId: options.userId,
-        limit: options.limit,
-    });
+    const candidates = options.retag
+        ? await fetchAllChats({ userId: options.userId, limit: options.limit })
+        : await fetchUntaggedChats({ userId: options.userId, limit: options.limit });
     summary.candidates = candidates.length;
 
-    console.log("[backfill-topics] Found untagged chats:", {
-        count: summary.candidates,
-        userId: options.userId ?? "(all users)",
-        limit: options.limit ?? "(none)",
-        dryRun: options.dryRun,
-    });
+    console.log(
+        options.retag
+            ? "[backfill-topics] Retag candidates:"
+            : "[backfill-topics] Found untagged chats:",
+        {
+            count: summary.candidates,
+            userId: options.userId ?? "(all users)",
+            limit: options.limit ?? "(none)",
+            dryRun: options.dryRun,
+            retag: options.retag,
+        },
+    );
 
     if (options.dryRun || candidates.length === 0) {
         if (options.dryRun && candidates.length > 0) {
@@ -177,12 +281,23 @@ export async function runBackfillTopics(options: CliOptions): Promise<BackfillSu
                 console.log(
                     "[backfill-topics] Dry-run preview truncated:",
                     candidates.length - preview.length,
-                    "more"
+                    "more",
                 );
             }
         }
         summary.elapsedMs = Date.now() - startedAt;
         return summary;
+    }
+
+    if (options.retag) {
+        const chatIds = candidates.map((chat) => chat.id);
+        const cleared = await clearTopicsForRetag({
+            userId: options.userId,
+            chatIds,
+        });
+        summary.linksCleared = cleared.linksCleared;
+        summary.topicsDeleted = cleared.topicsDeleted;
+        console.log("[backfill-topics] Cleared for retag:", cleared);
     }
 
     process.env.CHATVAULT_AUTO_TOPICS = "true";
@@ -193,32 +308,38 @@ export async function runBackfillTopics(options: CliOptions): Promise<BackfillSu
         options.batchDelayMs,
         async (chat) => {
             summary.processed++;
-            const result = await assignTopicsForChat({
-                userId: chat.userId,
-                chatId: chat.id,
-                title: chat.title,
-                turns: chat.turns,
-            });
-
-            if (result.skipped) {
-                return;
-            }
-
-            if (result.assignedTopicIds.length > 0) {
-                summary.assigned++;
-                summary.topicsCreated += result.createdCount;
-                summary.topicsMatched += result.matchedExistingCount;
-                console.log("[backfill-topics] Assigned", {
+            try {
+                const result = await assignTopicsForChat({
+                    userId: chat.userId,
                     chatId: chat.id,
-                    topicCount: result.assignedTopicIds.length,
-                    createdCount: result.createdCount,
-                    matchedExistingCount: result.matchedExistingCount,
+                    title: chat.title,
+                    turns: chat.turns,
                 });
-                return;
-            }
 
-            summary.emptySuggestions++;
-        }
+                if (result.skipped) {
+                    return;
+                }
+
+                if (result.assignedTopicIds.length > 0) {
+                    summary.assigned++;
+                    summary.topicsCreated += result.createdCount;
+                    summary.topicsMatched += result.matchedExistingCount;
+                    console.log("[backfill-topics] Assigned", {
+                        chatId: chat.id,
+                        topicCount: result.assignedTopicIds.length,
+                        createdCount: result.createdCount,
+                        matchedExistingCount: result.matchedExistingCount,
+                    });
+                    return;
+                }
+
+                summary.emptySuggestions++;
+            } catch (error) {
+                summary.failed++;
+                const message = error instanceof Error ? error.message : String(error);
+                console.error("[backfill-topics] Failed for chat:", chat.id, message);
+            }
+        },
     );
 
     summary.elapsedMs = Date.now() - startedAt;
@@ -244,6 +365,8 @@ async function main() {
         failed: summary.failed,
         topicsCreated: summary.topicsCreated,
         topicsMatched: summary.topicsMatched,
+        linksCleared: summary.linksCleared,
+        topicsDeleted: summary.topicsDeleted,
         elapsedMs: summary.elapsedMs,
     });
 }
