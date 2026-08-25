@@ -170,10 +170,8 @@ function App() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [exportProgress, setExportProgress] = useState<{
-    loaded: number;
-    total?: number;
-  }>({ loaded: 0 });
+  const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
+  const [exportFileName, setExportFileName] = useState("chat-vault.json");
 
   // Tell agentsyx host to resize iframe when layout-affecting state changes
   useLayoutEffect(() => {
@@ -586,7 +584,10 @@ function App() {
   const handleDownloadChats = async () => {
     setIsExporting(true);
     setExportError(null);
-    setExportProgress({ loaded: 0 });
+    if (exportDownloadUrl) {
+      URL.revokeObjectURL(exportDownloadUrl);
+    }
+    setExportDownloadUrl(null);
 
     try {
       const exportedChats: Chat[] = [];
@@ -606,16 +607,10 @@ function App() {
         const parsed = parseLoadSavedEntriesResponse(
           result?.structuredContent as Record<string, unknown> | undefined,
         );
-
         if (!parsed?.pagination) {
           throw new Error("The server returned an invalid export response.");
         }
-
         exportedChats.push(...parsed.chats);
-        setExportProgress({
-          loaded: exportedChats.length,
-          total: parsed.pagination.total,
-        });
         hasMore = parsed.pagination.hasMore;
         page += 1;
       }
@@ -634,19 +629,13 @@ function App() {
       const blob = new Blob([JSON.stringify(archive, null, 2)], {
         type: "application/json",
       });
-      const url = URL.createObjectURL(blob);
-      const download = document.createElement("a");
-      download.href = url;
-      download.download = `chat-vault-${exportedAt.toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(download);
-      download.click();
-      download.remove();
-      URL.revokeObjectURL(url);
-
-      addLog("Downloaded Chat Vault export", {
+      setExportFileName(
+        `chat-vault-${exportedAt.toISOString().slice(0, 10)}.json`,
+      );
+      setExportDownloadUrl(URL.createObjectURL(blob));
+      addLog("Chat Vault export prepared", {
         chatCount: chatsForDownload.length,
       });
-      setShowDownloadModal(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       addLog("Chat Vault export failed", { error: message });
@@ -654,6 +643,15 @@ function App() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleCloseDownloadModal = () => {
+    if (isExporting) return;
+    if (exportDownloadUrl) {
+      URL.revokeObjectURL(exportDownloadUrl);
+    }
+    setExportDownloadUrl(null);
+    setShowDownloadModal(false);
   };
 
   const handleTopicFilterChange = async (topics: Topic[]) => {
@@ -2626,7 +2624,10 @@ function App() {
                 type="button"
                 onClick={() => {
                   setExportError(null);
-                  setExportProgress({ loaded: 0 });
+                  if (exportDownloadUrl) {
+                    URL.revokeObjectURL(exportDownloadUrl);
+                  }
+                  setExportDownloadUrl(null);
                   setShowDownloadModal(true);
                 }}
                 disabled={
@@ -4276,7 +4277,7 @@ function App() {
                 </h2>
                 <button
                   type="button"
-                  onClick={() => setShowDownloadModal(false)}
+                  onClick={handleCloseDownloadModal}
                   disabled={isExporting}
                   className={`p-1 rounded ${
                     isExporting
@@ -4298,11 +4299,9 @@ function App() {
                 }`}
               >
                 {isExporting
-                  ? `Preparing your download… ${exportProgress.loaded}${
-                      exportProgress.total !== undefined
-                        ? ` of ${exportProgress.total}`
-                        : ""
-                    } chats loaded.`
+                  ? "Preparing your JSON export…"
+                  : exportDownloadUrl
+                    ? "Your JSON export is ready. Click Download JSON to save it."
                   : "Download all saved chats, notes, topics, and complete conversation turns as a JSON file."}
               </p>
 
@@ -4321,7 +4320,7 @@ function App() {
               <div className="flex gap-3 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowDownloadModal(false)}
+                  onClick={handleCloseDownloadModal}
                   disabled={isExporting}
                   className={`flex-1 px-4 py-2 rounded-lg font-medium ${
                     isExporting
@@ -4333,18 +4332,32 @@ function App() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDownloadChats()}
-                  disabled={isExporting}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
-                    isExporting
-                      ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                >
-                  {isExporting ? "Preparing…" : "Download JSON"}
-                </button>
+                {exportDownloadUrl ? (
+                  <a
+                    href={exportDownloadUrl}
+                    download={exportFileName}
+                    className="flex-1 px-4 py-2 rounded-lg font-medium text-center bg-blue-600 text-white hover:bg-blue-700"
+                    onClick={() => {
+                      addLog("Chat Vault export download clicked");
+                      window.setTimeout(handleCloseDownloadModal, 1000);
+                    }}
+                  >
+                    Download JSON
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadChats()}
+                    disabled={isExporting}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                      isExporting
+                        ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                    }`}
+                  >
+                    {isExporting ? "Preparing…" : "Prepare Download"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

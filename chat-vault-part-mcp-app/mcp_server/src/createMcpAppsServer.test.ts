@@ -4,6 +4,10 @@ import test from "node:test";
 import { createMcpAppsServer } from "./createMcpAppsServer.js";
 
 const resourceUri = "ui://chat-vault/mcp-app.html";
+const expectedWidgetVersion =
+  process.env.WIDGET_VERSION?.trim() ||
+  process.env.ACTIVE_WIDGET_VERSION?.trim() ||
+  "1.0.11";
 
 test("exposes the widget launcher to the model only", () => {
   const server = createMcpAppsServer() as any;
@@ -44,5 +48,5 @@ test("publishes the Claude-compatible legacy widget resource metadata", async ()
       "https://agentsyx.com",
     ],
   });
-  assert.equal(metadata["ui/widgetVersion"], "1.0.6");
+  assert.equal(metadata["ui/widgetVersion"], expectedWidgetVersion);
 });
