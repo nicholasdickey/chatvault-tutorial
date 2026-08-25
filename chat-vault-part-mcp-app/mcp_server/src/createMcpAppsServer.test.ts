@@ -44,5 +44,5 @@ test("publishes the Claude-compatible legacy widget resource metadata", async ()
       "https://agentsyx.com",
     ],
   });
-  assert.equal(metadata["ui/widgetVersion"], "1.0.6");
+  assert.equal(metadata["ui/widgetVersion"], "1.0.11");
 });
