@@ -31,7 +31,6 @@ import { updateChat } from "./tools/updateChat.js";
 import { listTopics } from "./tools/listTopics.js";
 import { getJobStatus } from "./utils/redis.js";
 import { resolveDeclaredUserIdWithMerge } from "./user/userMerge.js";
-import { createDataExportUrl } from "./utils/dataExport.js";
 
 dotenv.config();
 
@@ -640,34 +639,12 @@ const explainHowToUseTool: Tool = {
         outputSchema: EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA,
 };
 
-const createDataExportTool: Tool = {
-        name: "createDataExport",
-        title: "Prepare Chat Vault download",
-        description:
-            "Use this when the Chat Vault widget needs a short-lived download link for all of the user's saved chats and notes.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                userId: { type: "string", description: "User ID (required)" },
-            },
-            required: ["userId"],
-        },
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: false,
-            destructiveHint: false,
-        },
-        _meta: { ui: { visibility: ["app"] } },
-        outputSchema: GENERIC_OUTPUT_SCHEMA,
-};
-
 const internalWidgetTools: Tool[] = [
     savePastedContentTool,
     updateSavedEntryTool,
     deleteSavedEntryTool,
     getSaveJobStatusTool,
     listTopicsTool,
-    createDataExportTool,
 ];
 
 const conversationSaveTools: Tool[] = [
@@ -745,17 +722,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
     }
 
     try {
-        if (toolName === "createDataExport") {
-            const result = createDataExportUrl({
-                userId: String(args.userId || ""),
-                userContext,
-                headers: headers ?? {},
-            });
-            return {
-                content: [{ type: "text", text: "Chat Vault export is ready to download." }],
-                structuredContent: result,
-            };
-        } else if (toolName === "saveConversation") {
+        if (toolName === "saveConversation") {
             const result = await saveChat(args as { userId: string; title: string; turns: Array<{ prompt: string; response: string }> });
             console.log("[MCP Handler] handleCallTool - saveConversation result:", JSON.stringify(result));
             const text = "jobId" in result

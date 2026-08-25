@@ -26,7 +26,6 @@ const WIDGET_TOOL_NAMES = [
     "deleteSavedEntry",
     "getSaveJobStatus",
     "listTopics",
-    "createDataExport",
 ];
 
 const GPT_PROFILE_TOOL_NAMES = [
@@ -94,7 +93,7 @@ describe("tool metadata profiles", () => {
                 ...GPT_SAFE_TOOL_NAMES,
             ]),
         );
-        expect(tools).toHaveLength(14);
+        expect(tools).toHaveLength(13);
     });
 
     it("lists app-only widget tools plus read/search tools in gpt profile", () => {
@@ -103,7 +102,7 @@ describe("tool metadata profiles", () => {
         const names = tools.map((tool) => tool.name).sort();
 
         expect(names).toEqual([...GPT_PROFILE_TOOL_NAMES].sort());
-        expect(tools).toHaveLength(14);
+        expect(tools).toHaveLength(13);
     });
 
     it("uses the same app-only widget metadata in gpt and full profiles", () => {
@@ -167,7 +166,6 @@ describe("tool metadata profiles", () => {
         expect(byName.deleteSavedEntry).toBe("Delete saved entry");
         expect(byName.getSaveJobStatus).toBe("Get save job status");
         expect(byName.listTopics).toBe("List topics");
-        expect(byName.createDataExport).toBe("Prepare Chat Vault download");
     });
 
     it("discloses Chat Vault storage in LLM save tool descriptions", () => {
