@@ -28,7 +28,14 @@ export type OpenAiGlobals<
 type API = {
   callTool: CallTool;
   sendFollowUpMessage: (args: { prompt: string }) => Promise<void>;
-  openExternal(payload: { href: string }): void;
+  openExternal(payload: { href: string; redirectUrl?: boolean }): void;
+  uploadFile?: (
+    file: File,
+    options?: { library?: boolean },
+  ) => Promise<{ fileId: string }>;
+  getFileDownloadUrl?: (args: {
+    fileId: string;
+  }) => Promise<{ downloadUrl: string }>;
 
   // Layout controls
   requestDisplayMode: RequestDisplayMode;

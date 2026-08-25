@@ -171,7 +171,6 @@ function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
-  const [exportFileName, setExportFileName] = useState("chat-vault.json");
 
   // Tell agentsyx host to resize iframe when layout-affecting state changes
   useLayoutEffect(() => {
@@ -584,9 +583,6 @@ function App() {
   const handleDownloadChats = async () => {
     setIsExporting(true);
     setExportError(null);
-    if (exportDownloadUrl) {
-      URL.revokeObjectURL(exportDownloadUrl);
-    }
     setExportDownloadUrl(null);
 
     try {
@@ -626,13 +622,25 @@ function App() {
         chatCount: chatsForDownload.length,
         chats: chatsForDownload,
       };
-      const blob = new Blob([JSON.stringify(archive, null, 2)], {
+      const fileName =
+        `chat-vault-${exportedAt.toISOString().slice(0, 10)}.json`;
+      const file = new File([JSON.stringify(archive, null, 2)], fileName, {
         type: "application/json",
       });
-      setExportFileName(
-        `chat-vault-${exportedAt.toISOString().slice(0, 10)}.json`,
-      );
-      setExportDownloadUrl(URL.createObjectURL(blob));
+      if (
+        typeof window.openai?.uploadFile !== "function" ||
+        typeof window.openai?.getFileDownloadUrl !== "function"
+      ) {
+        throw new Error(
+          "Downloads are not supported by this version of the ChatGPT host.",
+        );
+      }
+      const { fileId } = await window.openai.uploadFile(file);
+      const { downloadUrl } = await window.openai.getFileDownloadUrl({ fileId });
+      if (!downloadUrl) {
+        throw new Error("ChatGPT did not return a download URL.");
+      }
+      setExportDownloadUrl(downloadUrl);
       addLog("Chat Vault export prepared", {
         chatCount: chatsForDownload.length,
       });
@@ -647,11 +655,25 @@ function App() {
 
   const handleCloseDownloadModal = () => {
     if (isExporting) return;
-    if (exportDownloadUrl) {
-      URL.revokeObjectURL(exportDownloadUrl);
-    }
     setExportDownloadUrl(null);
     setShowDownloadModal(false);
+  };
+
+  const handleOpenExportDownload = () => {
+    if (!exportDownloadUrl) return;
+    try {
+      window.openai.openExternal({
+        href: exportDownloadUrl,
+        redirectUrl: false,
+      });
+      addLog("Chat Vault export download opened");
+      setShowDownloadModal(false);
+      setExportDownloadUrl(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addLog("Chat Vault export download failed", { error: message });
+      setExportError(message);
+    }
   };
 
   const handleTopicFilterChange = async (topics: Topic[]) => {
@@ -2624,9 +2646,6 @@ function App() {
                 type="button"
                 onClick={() => {
                   setExportError(null);
-                  if (exportDownloadUrl) {
-                    URL.revokeObjectURL(exportDownloadUrl);
-                  }
                   setExportDownloadUrl(null);
                   setShowDownloadModal(true);
                 }}
@@ -4301,7 +4320,7 @@ function App() {
                 {isExporting
                   ? "Preparing your JSON export…"
                   : exportDownloadUrl
-                    ? "Your JSON export is ready. Click Download JSON to save it."
+                    ? "Your JSON export is ready. Click Download JSON to save it through ChatGPT."
                   : "Download all saved chats, notes, topics, and complete conversation turns as a JSON file."}
               </p>
 
@@ -4333,17 +4352,13 @@ function App() {
                   Cancel
                 </button>
                 {exportDownloadUrl ? (
-                  <a
-                    href={exportDownloadUrl}
-                    download={exportFileName}
+                  <button
+                    type="button"
                     className="flex-1 px-4 py-2 rounded-lg font-medium text-center bg-blue-600 text-white hover:bg-blue-700"
-                    onClick={() => {
-                      addLog("Chat Vault export download clicked");
-                      window.setTimeout(handleCloseDownloadModal, 1000);
-                    }}
+                    onClick={handleOpenExportDownload}
                   >
                     Download JSON
-                  </a>
+                  </button>
                 ) : (
                   <button
                     type="button"
