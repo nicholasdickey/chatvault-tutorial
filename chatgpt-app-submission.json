@@ -128,6 +128,18 @@
         "destructive_justification": "Does not overwrite or remove any saved entry."
       }
     },
+    "createDataExport": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a short-lived download link for data already stored in the user's private vault without modifying it.",
+        "open_world_justification": "The link returns private first-party Chat Vault data and does not publish or send it to a third party.",
+        "destructive_justification": "Does not create, overwrite, or delete any saved conversation or note."
+      }
+    },
     "loadFullTurn": {
       "annotations": {
         "readOnlyHint": true,

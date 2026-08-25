@@ -170,10 +170,7 @@ function App() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [exportProgress, setExportProgress] = useState<{
-    loaded: number;
-    total?: number;
-  }>({ loaded: 0 });
+  const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
 
   // Tell agentsyx host to resize iframe when layout-affecting state changes
   useLayoutEffect(() => {
@@ -586,73 +583,38 @@ function App() {
   const handleDownloadChats = async () => {
     setIsExporting(true);
     setExportError(null);
-    setExportProgress({ loaded: 0 });
+    setExportDownloadUrl(null);
 
     try {
-      const exportedChats: Chat[] = [];
-      let page = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const result = (await app.callServerTool({
-          name: "loadSavedEntries",
-          arguments: buildLoadSavedEntriesArgs({
-            page,
-            size: 100,
-            aboveTheFoldOnly: false,
-            widgetVersion: WIDGET_VERSION,
-          }),
-        })) as ChatVaultToolResult | null;
-        const parsed = parseLoadSavedEntriesResponse(
-          result?.structuredContent as Record<string, unknown> | undefined,
-        );
-
-        if (!parsed?.pagination) {
-          throw new Error("The server returned an invalid export response.");
-        }
-
-        exportedChats.push(...parsed.chats);
-        setExportProgress({
-          loaded: exportedChats.length,
-          total: parsed.pagination.total,
-        });
-        hasMore = parsed.pagination.hasMore;
-        page += 1;
+      const result = (await app.callServerTool({
+        name: "createDataExport",
+        arguments: {},
+      })) as ChatVaultToolResult | null;
+      const downloadUrl = result?.structuredContent?.downloadUrl;
+      if (typeof downloadUrl !== "string" || !downloadUrl.startsWith("https://")) {
+        throw new Error("The server did not return a valid download link.");
       }
-
-      const chatsForDownload = deduplicateChats(exportedChats).map(
-        ({ userId: _userId, ...chat }) => chat,
-      );
-      const exportedAt = new Date();
-      const archive = {
-        format: "chat-vault-export",
-        version: 1,
-        exportedAt: exportedAt.toISOString(),
-        chatCount: chatsForDownload.length,
-        chats: chatsForDownload,
-      };
-      const blob = new Blob([JSON.stringify(archive, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const download = document.createElement("a");
-      download.href = url;
-      download.download = `chat-vault-${exportedAt.toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(download);
-      download.click();
-      download.remove();
-      URL.revokeObjectURL(url);
-
-      addLog("Downloaded Chat Vault export", {
-        chatCount: chatsForDownload.length,
-      });
-      setShowDownloadModal(false);
+      setExportDownloadUrl(downloadUrl);
+      addLog("Chat Vault export link prepared");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       addLog("Chat Vault export failed", { error: message });
       setExportError(message);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleOpenExportDownload = async () => {
+    if (!exportDownloadUrl) return;
+    try {
+      await app.openLink({ url: exportDownloadUrl });
+      addLog("Opened Chat Vault export download");
+      setShowDownloadModal(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addLog("Opening Chat Vault export failed", { error: message });
+      setExportError(message);
     }
   };
 
@@ -2626,7 +2588,7 @@ function App() {
                 type="button"
                 onClick={() => {
                   setExportError(null);
-                  setExportProgress({ loaded: 0 });
+                  setExportDownloadUrl(null);
                   setShowDownloadModal(true);
                 }}
                 disabled={
@@ -4298,11 +4260,9 @@ function App() {
                 }`}
               >
                 {isExporting
-                  ? `Preparing your download… ${exportProgress.loaded}${
-                      exportProgress.total !== undefined
-                        ? ` of ${exportProgress.total}`
-                        : ""
-                    } chats loaded.`
+                  ? "Preparing a secure download link…"
+                  : exportDownloadUrl
+                    ? "Your JSON export is ready. This secure download link expires shortly."
                   : "Download all saved chats, notes, topics, and complete conversation turns as a JSON file."}
               </p>
 
@@ -4335,7 +4295,11 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleDownloadChats()}
+                  onClick={() =>
+                    void (exportDownloadUrl
+                      ? handleOpenExportDownload()
+                      : handleDownloadChats())
+                  }
                   disabled={isExporting}
                   className={`flex-1 px-4 py-2 rounded-lg font-medium ${
                     isExporting
@@ -4343,7 +4307,11 @@ function App() {
                       : "bg-blue-600 text-white hover:bg-blue-700"
                   }`}
                 >
-                  {isExporting ? "Preparing…" : "Download JSON"}
+                  {isExporting
+                    ? "Preparing…"
+                    : exportDownloadUrl
+                      ? "Download JSON"
+                      : "Prepare Download"}
                 </button>
               </div>
             </div>

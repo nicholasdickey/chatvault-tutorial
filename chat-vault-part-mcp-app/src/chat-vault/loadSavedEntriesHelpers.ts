@@ -17,12 +17,11 @@ export function buildLoadSavedEntriesArgs(params: {
   query?: string;
   topicIds?: string[];
   size?: number;
-  aboveTheFoldOnly?: boolean;
 }): LoadSavedEntriesArgs {
   const args: LoadSavedEntriesArgs = {
     page: params.page,
     size: params.size ?? 10,
-    aboveTheFoldOnly: params.aboveTheFoldOnly ?? true,
+    aboveTheFoldOnly: true,
     widgetVersion: params.widgetVersion,
   };
   const trimmedQuery = params.query?.trim();
