@@ -20,7 +20,6 @@ import {
   MdMessage,
   MdEdit,
   MdLabel,
-  MdDownload,
 } from "react-icons/md";
 import { app } from "../app-instance.js";
 import type {
@@ -167,11 +166,6 @@ function App() {
   const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
   const [pendingAddJobId, setPendingAddJobId] = useState<string | null>(null);
   const [addSuccessAlert, setAddSuccessAlert] = useState<string | null>(null);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
-  const [exportFileName, setExportFileName] = useState("chat-vault.json");
 
   // Tell agentsyx host to resize iframe when layout-affecting state changes
   useLayoutEffect(() => {
@@ -185,7 +179,6 @@ function App() {
     selectedChat,
     expandedTurns,
     showManualSaveModal,
-    showDownloadModal,
     loading,
     searchLoading,
     paginationLoading,
@@ -579,79 +572,6 @@ function App() {
       ),
       { append: opts?.append, page },
     );
-  };
-
-  const handleDownloadChats = async () => {
-    setIsExporting(true);
-    setExportError(null);
-    if (exportDownloadUrl) {
-      URL.revokeObjectURL(exportDownloadUrl);
-    }
-    setExportDownloadUrl(null);
-
-    try {
-      const exportedChats: Chat[] = [];
-      let page = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const result = (await app.callServerTool({
-          name: "loadSavedEntries",
-          arguments: buildLoadSavedEntriesArgs({
-            page,
-            size: 100,
-            aboveTheFoldOnly: false,
-            widgetVersion: WIDGET_VERSION,
-          }),
-        })) as ChatVaultToolResult | null;
-        const parsed = parseLoadSavedEntriesResponse(
-          result?.structuredContent as Record<string, unknown> | undefined,
-        );
-        if (!parsed?.pagination) {
-          throw new Error("The server returned an invalid export response.");
-        }
-        exportedChats.push(...parsed.chats);
-        hasMore = parsed.pagination.hasMore;
-        page += 1;
-      }
-
-      const chatsForDownload = deduplicateChats(exportedChats).map(
-        ({ userId: _userId, ...chat }) => chat,
-      );
-      const exportedAt = new Date();
-      const archive = {
-        format: "chat-vault-export",
-        version: 1,
-        exportedAt: exportedAt.toISOString(),
-        chatCount: chatsForDownload.length,
-        chats: chatsForDownload,
-      };
-      const blob = new Blob([JSON.stringify(archive, null, 2)], {
-        type: "application/json",
-      });
-      setExportFileName(
-        `chat-vault-${exportedAt.toISOString().slice(0, 10)}.json`,
-      );
-      setExportDownloadUrl(URL.createObjectURL(blob));
-      addLog("Chat Vault export prepared", {
-        chatCount: chatsForDownload.length,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      addLog("Chat Vault export failed", { error: message });
-      setExportError(message);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleCloseDownloadModal = () => {
-    if (isExporting) return;
-    if (exportDownloadUrl) {
-      URL.revokeObjectURL(exportDownloadUrl);
-    }
-    setExportDownloadUrl(null);
-    setShowDownloadModal(false);
   };
 
   const handleTopicFilterChange = async (topics: Topic[]) => {
@@ -2620,39 +2540,6 @@ function App() {
                   }`}
                 />
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setExportError(null);
-                  if (exportDownloadUrl) {
-                    URL.revokeObjectURL(exportDownloadUrl);
-                  }
-                  setExportDownloadUrl(null);
-                  setShowDownloadModal(true);
-                }}
-                disabled={
-                  loading ||
-                  paginationLoading ||
-                  searchLoading ||
-                  isExporting ||
-                  (pagination?.total ?? chats.length) === 0
-                }
-                className={`p-2 rounded-lg transition-colors ${
-                  loading ||
-                  paginationLoading ||
-                  searchLoading ||
-                  isExporting ||
-                  (pagination?.total ?? chats.length) === 0
-                    ? "opacity-50 cursor-not-allowed"
-                    : isDarkMode
-                      ? "bg-gray-800 text-white hover:bg-gray-700"
-                      : "bg-gray-100 text-black hover:bg-gray-200"
-                }`}
-                title="Download all chats"
-                aria-label="Download all chats"
-              >
-                <MdDownload className="w-5 h-5" />
-              </button>
             </div>
           </div>
         )}
@@ -4248,116 +4135,6 @@ function App() {
                 >
                   {isSaving ? "Processing..." : "Save"}
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Download Data Modal */}
-        {showDownloadModal && (
-          <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="download-data-title"
-          >
-            <div
-              className={`w-full max-w-md rounded-lg p-6 ${
-                isDarkMode ? "bg-gray-800" : "bg-white"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2
-                  id="download-data-title"
-                  className={`text-lg font-semibold ${
-                    isDarkMode ? "text-white" : "text-black"
-                  }`}
-                >
-                  Download Data
-                </h2>
-                <button
-                  type="button"
-                  onClick={handleCloseDownloadModal}
-                  disabled={isExporting}
-                  className={`p-1 rounded ${
-                    isExporting
-                      ? "opacity-50 cursor-not-allowed"
-                      : isDarkMode
-                        ? "hover:bg-gray-700 text-gray-300"
-                        : "hover:bg-gray-100 text-gray-600"
-                  }`}
-                  title="Close"
-                  aria-label="Close download dialog"
-                >
-                  <MdClose className="w-5 h-5" />
-                </button>
-              </div>
-
-              <p
-                className={`text-sm ${
-                  isDarkMode ? "text-gray-300" : "text-gray-700"
-                }`}
-              >
-                {isExporting
-                  ? "Preparing your JSON export…"
-                  : exportDownloadUrl
-                    ? "Your JSON export is ready. Click Download JSON to save it."
-                  : "Download all saved chats, notes, topics, and complete conversation turns as a JSON file."}
-              </p>
-
-              {exportError && (
-                <div
-                  className={`mt-4 p-3 rounded-lg border text-sm ${
-                    isDarkMode
-                      ? "bg-red-900/30 border-red-700 text-red-300"
-                      : "bg-red-50 border-red-200 text-red-700"
-                  }`}
-                >
-                  {exportError}
-                </div>
-              )}
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={handleCloseDownloadModal}
-                  disabled={isExporting}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
-                    isExporting
-                      ? "opacity-50 cursor-not-allowed"
-                      : isDarkMode
-                        ? "bg-gray-700 text-white hover:bg-gray-600"
-                        : "bg-gray-100 text-black hover:bg-gray-200"
-                  }`}
-                >
-                  Cancel
-                </button>
-                {exportDownloadUrl ? (
-                  <a
-                    href={exportDownloadUrl}
-                    download={exportFileName}
-                    className="flex-1 px-4 py-2 rounded-lg font-medium text-center bg-blue-600 text-white hover:bg-blue-700"
-                    onClick={() => {
-                      addLog("Chat Vault export download clicked");
-                      window.setTimeout(handleCloseDownloadModal, 1000);
-                    }}
-                  >
-                    Download JSON
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void handleDownloadChats()}
-                    disabled={isExporting}
-                    className={`flex-1 px-4 py-2 rounded-lg font-medium ${
-                      isExporting
-                        ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
-                  >
-                    {isExporting ? "Preparing…" : "Prepare Download"}
-                  </button>
-                )}
               </div>
             </div>
           </div>
