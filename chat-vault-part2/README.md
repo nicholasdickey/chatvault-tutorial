@@ -46,6 +46,21 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
    1,000,000 characters. The `full` (Claude) profile always retains the existing
    behavior.
 
+   The portable-host deployment uses `CHATVAULT_TOOL_METADATA_PROFILE=full`.
+   To enable its JSON export tool, it also requires:
+
+   ```env
+   CHATVAULT_EXPORT_BASE_URL=https://your-portable-part2.example
+   UPSTASH_REDIS_REST_URL=https://...
+   UPSTASH_REDIS_REST_TOKEN=...
+   # Optional; defaults shown
+   CHATVAULT_EXPORT_TOKEN_TTL_SECONDS=300
+   CHATVAULT_EXPORT_MAX_BYTES=10485760
+   ```
+
+   Keep the submitted ChatGPT deployment on `gpt`; that profile neither lists
+   nor executes the export tool.
+
 3. **Run database migrations:**
 
    ```bash

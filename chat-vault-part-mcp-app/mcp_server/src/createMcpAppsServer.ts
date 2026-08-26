@@ -121,7 +121,13 @@ export function createMcpAppsServer(): McpServer {
         );
       }
 
-      const widgetDomain = "https://chatvault-part-mcp-app.vercel.app";
+      const widgetDomain =
+        process.env.CHATVAULT_WIDGET_DOMAIN?.trim() ||
+        "https://chatvault-part-mcp-app.vercel.app";
+      const parsedWidgetDomain = new URL(widgetDomain);
+      if (parsedWidgetDomain.protocol !== "https:") {
+        throw new Error("CHATVAULT_WIDGET_DOMAIN must use https");
+      }
       const legacyWidgetCSP = {
         connect_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],
         resource_domains: [widgetDomain, "https://www.agentsyx.com", "https://agentsyx.com"],

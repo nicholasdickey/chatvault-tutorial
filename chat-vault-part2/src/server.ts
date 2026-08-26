@@ -29,8 +29,11 @@ import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
 import { updateChat } from "./tools/updateChat.js";
 import { listTopics } from "./tools/listTopics.js";
-import { getJobStatus } from "./utils/redis.js";
-import { resolveDeclaredUserIdWithMerge } from "./user/userMerge.js";
+import { createExportToken, getJobStatus, isRedisConfigured } from "./utils/redis.js";
+import {
+    readTrustedCanonicalUserId,
+    resolveDeclaredUserIdWithMerge,
+} from "./user/userMerge.js";
 
 dotenv.config();
 
@@ -214,6 +217,17 @@ const EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA = {
     required: ["helpText"],
     properties: {
         helpText: { type: "string" },
+    },
+};
+
+const EXPORT_SAVED_ENTRIES_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["downloadUrl", "filename", "expiresAt"],
+    properties: {
+        downloadUrl: { type: "string" },
+        filename: { type: "string" },
+        expiresAt: { type: "string" },
     },
 };
 
@@ -639,6 +653,30 @@ const explainHowToUseTool: Tool = {
         outputSchema: EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA,
 };
 
+const exportSavedEntriesTool: Tool = {
+    name: "exportSavedEntries",
+    title: "Export saved entries",
+    description:
+        "Prepare a short-lived JSON download containing all entries stored in the user's Chat Vault. This does not modify saved entries.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            userId: {
+                type: "string",
+                description: "User ID (required, injected by connector)",
+            },
+        },
+        required: ["userId"],
+    },
+    annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+    },
+    _meta: { ui: { visibility: ["app"] } },
+    outputSchema: EXPORT_SAVED_ENTRIES_OUTPUT_SCHEMA,
+};
+
 const internalWidgetTools: Tool[] = [
     savePastedContentTool,
     updateSavedEntryTool,
@@ -673,7 +711,8 @@ function getListedTools(): Tool[] {
             },
         },
     }));
-    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools];
+    const profileOnlyTools = profile === "full" ? [exportSavedEntriesTool] : [];
+    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools, ...profileOnlyTools];
 }
 
 export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
@@ -929,6 +968,34 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 ],
                 structuredContent: result,
             };
+        } else if (toolName === "exportSavedEntries") {
+            if (getToolMetadataProfile() !== "full") {
+                throw new Error("exportSavedEntries is not available in this deployment");
+            }
+            const canonicalUserId = readTrustedCanonicalUserId(headers);
+            if (!canonicalUserId) {
+                throw new Error("A trusted canonical user identity is required to export saved entries");
+            }
+            if (!isRedisConfigured()) {
+                throw new Error("Export service is temporarily unavailable");
+            }
+            const baseUrlRaw = process.env.CHATVAULT_EXPORT_BASE_URL?.trim();
+            if (!baseUrlRaw) {
+                throw new Error("Export service is temporarily unavailable");
+            }
+            const baseUrl = new URL(baseUrlRaw);
+            if (baseUrl.protocol !== "https:" && baseUrl.hostname !== "localhost") {
+                throw new Error("Export service is temporarily unavailable");
+            }
+            const { token, expiresAt } = await createExportToken(canonicalUserId);
+            const downloadUrl = new URL("/api/export", baseUrl);
+            downloadUrl.searchParams.set("token", token);
+            const filename = `chat-vault-export-${new Date().toISOString().slice(0, 10)}.json`;
+            const result = { downloadUrl: downloadUrl.toString(), filename, expiresAt };
+            return {
+                content: [{ type: "text", text: "Your Chat Vault JSON export is ready to download." }],
+                structuredContent: result,
+            };
         } else if (toolName === "deleteSavedEntry") {
             const result = await deleteChat({
                 userId: String((args as { userId?: unknown }).userId ?? ""),
@@ -1072,7 +1139,7 @@ export async function handleMcpRequest(
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
+        "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -1369,7 +1436,7 @@ const server = createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
             "Access-Control-Allow-Headers",
-            "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
+            "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
         );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.writeHead(204);

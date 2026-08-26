@@ -11,7 +11,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "content-type, mcp-session-id, authorization"
+    "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
   );
 
   if (req.method === "OPTIONS") {

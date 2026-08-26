@@ -35,6 +35,8 @@ const GPT_PROFILE_TOOL_NAMES = [
     ...GPT_SAFE_TOOL_NAMES,
 ];
 
+const FULL_ONLY_TOOL_NAMES = ["exportSavedEntries"];
+
 describe("tool metadata profiles", () => {
     const originalProfile = process.env.CHATVAULT_TOOL_METADATA_PROFILE;
 
@@ -93,7 +95,8 @@ describe("tool metadata profiles", () => {
                 ...GPT_SAFE_TOOL_NAMES,
             ]),
         );
-        expect(tools).toHaveLength(13);
+        expect(names).toEqual(expect.arrayContaining(FULL_ONLY_TOOL_NAMES));
+        expect(tools).toHaveLength(14);
     });
 
     it("lists app-only widget tools plus read/search tools in gpt profile", () => {
@@ -103,6 +106,20 @@ describe("tool metadata profiles", () => {
 
         expect(names).toEqual([...GPT_PROFILE_TOOL_NAMES].sort());
         expect(tools).toHaveLength(13);
+        expect(names).not.toContain("exportSavedEntries");
+    });
+
+    it("exposes export only to the full-profile app", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
+        const exportTool = getListedTools().find((tool) => tool.name === "exportSavedEntries");
+
+        expect(exportTool).toBeDefined();
+        expect((exportTool?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["app"]);
+        expect(exportTool?.annotations).toMatchObject({
+            readOnlyHint: true,
+            destructiveHint: false,
+            openWorldHint: false,
+        });
     });
 
     it("uses the same app-only widget metadata in gpt and full profiles", () => {
