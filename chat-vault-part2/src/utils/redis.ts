@@ -2,7 +2,7 @@
  * Upstash Redis utilities for async ChatVault job queue
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Redis } from "@upstash/redis";
 import * as dotenv from "dotenv";
 
@@ -30,6 +30,59 @@ function getUserMergeCacheTtlSeconds(): number {
 }
 const STATUS_KEY_PREFIX = "chatvault:job:";
 const STATUS_TTL_SECONDS = 180;
+const EXPORT_TOKEN_KEY_PREFIX = "chatvault:export:v1:";
+
+export interface ExportTokenRecord {
+    canonicalUserId: string;
+    purpose: "saved-entries-export";
+    createdAt: string;
+    expiresAt: string;
+}
+
+function getExportTokenTtlSeconds(): number {
+    const parsed = Number.parseInt(process.env.CHATVAULT_EXPORT_TOKEN_TTL_SECONDS ?? "300", 10);
+    return Number.isFinite(parsed) ? Math.min(1800, Math.max(60, parsed)) : 300;
+}
+
+function exportTokenKey(token: string): string {
+    const digest = createHash("sha256").update(token, "utf8").digest("hex");
+    return `${EXPORT_TOKEN_KEY_PREFIX}${digest}`;
+}
+
+export async function createExportToken(canonicalUserId: string): Promise<{
+    token: string;
+    expiresAt: string;
+}> {
+    const redis = getRedis();
+    const token = randomBytes(32).toString("base64url");
+    const ttlSeconds = getExportTokenTtlSeconds();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
+    const record: ExportTokenRecord = {
+        canonicalUserId,
+        purpose: "saved-entries-export",
+        createdAt: now.toISOString(),
+        expiresAt,
+    };
+    await redis.set(exportTokenKey(token), JSON.stringify(record), { ex: ttlSeconds });
+    return { token, expiresAt };
+}
+
+export async function getExportTokenRecord(token: string): Promise<ExportTokenRecord | null> {
+    if (!token) return null;
+    const redis = getRedis();
+    const raw = await redis.get(exportTokenKey(token));
+    if (raw == null) return null;
+    const record = (typeof raw === "string" ? JSON.parse(raw) : raw) as ExportTokenRecord;
+    if (
+        record.purpose !== "saved-entries-export" ||
+        !record.canonicalUserId ||
+        Date.parse(record.expiresAt) <= Date.now()
+    ) {
+        return null;
+    }
+    return record;
+}
 
 function maskUrl(url: string | undefined): string {
     if (!url) return "(missing)";

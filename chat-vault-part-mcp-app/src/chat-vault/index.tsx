@@ -20,6 +20,7 @@ import {
   MdMessage,
   MdEdit,
   MdLabel,
+  MdDownload,
 } from "react-icons/md";
 import { app } from "../app-instance.js";
 import type {
@@ -44,8 +45,10 @@ import {
   type ParsedLoadSavedEntries,
 } from "./loadSavedEntriesHelpers.js";
 
-// Widget version from environment variable (injected at build time via vite.config.mts)
-const WIDGET_VERSION = import.meta.env.WIDGET_VERSION || "1.0.13";
+const WIDGET_VERSION = __CHATVAULT_WIDGET_VERSION__;
+const DOWNLOAD_DATA_ENABLED = __CHATVAULT_PROFILE__ === "full";
+
+type ExportStatus = "confirm" | "preparing" | "ready" | "error";
 
 function measureWidgetHeight(): number {
   const root = document.getElementById("chat-vault-root");
@@ -166,6 +169,14 @@ function App() {
   const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
   const [pendingAddJobId, setPendingAddJobId] = useState<string | null>(null);
   const [addSuccessAlert, setAddSuccessAlert] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStatus, setExportStatus] = useState<ExportStatus>("confirm");
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportDownload, setExportDownload] = useState<{
+    downloadUrl: string;
+    filename: string;
+    expiresAt: string;
+  } | null>(null);
 
   // Tell agentsyx host to resize iframe when layout-affecting state changes
   useLayoutEffect(() => {
@@ -179,6 +190,7 @@ function App() {
     selectedChat,
     expandedTurns,
     showManualSaveModal,
+    showExportModal,
     loading,
     searchLoading,
     paginationLoading,
@@ -784,6 +796,72 @@ function App() {
       app.openLink({ url: userInfo.loginLink });
     } else {
       addLog("Sign in clicked but no login link available");
+    }
+  };
+
+  const openExportModal = () => {
+    setExportStatus("confirm");
+    setExportError(null);
+    setExportDownload(null);
+    setShowExportModal(true);
+  };
+
+  const prepareExport = async () => {
+    if (exportStatus === "preparing") return;
+    setExportStatus("preparing");
+    setExportError(null);
+    try {
+      const result = (await app.callServerTool({
+        name: "exportSavedEntries",
+        arguments: {},
+      })) as ChatVaultToolResult | null;
+      const content = result?.structuredContent;
+      if (
+        typeof content?.downloadUrl !== "string" ||
+        typeof content.filename !== "string" ||
+        typeof content.expiresAt !== "string"
+      ) {
+        throw new Error("The export service returned an invalid response");
+      }
+      setExportDownload({
+        downloadUrl: content.downloadUrl,
+        filename: content.filename,
+        expiresAt: content.expiresAt,
+      });
+      setExportStatus("ready");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addLog("Export preparation failed", { error: message });
+      setExportError(message);
+      setExportStatus("error");
+    }
+  };
+
+  const downloadExport = async () => {
+    if (!exportDownload) return;
+    if (Date.parse(exportDownload.expiresAt) <= Date.now()) {
+      setExportError("This download link has expired. Prepare a new export.");
+      setExportStatus("error");
+      return;
+    }
+    try {
+      if (app.getHostCapabilities()?.openLinks) {
+        const result = await app.openLink({ url: exportDownload.downloadUrl });
+        if (result.isError) throw new Error("The host could not open the download link");
+        return;
+      }
+      const anchor = document.createElement("a");
+      anchor.href = exportDownload.downloadUrl;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.download = exportDownload.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setExportError(message);
+      setExportStatus("error");
     }
   };
 
@@ -2479,6 +2557,23 @@ function App() {
               </div>
             </div>
             <div className="flex gap-2">
+              {DOWNLOAD_DATA_ENABLED && (
+                <button
+                  onClick={openExportModal}
+                  disabled={paginationLoading || searchLoading}
+                  className={`p-2 rounded-lg transition-colors ${
+                    paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : isDarkMode
+                        ? "bg-gray-800 text-white hover:bg-gray-700"
+                        : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
+                  title="Download all saved chats as JSON"
+                  aria-label="Download data"
+                >
+                  <MdDownload className="w-5 h-5" />
+                </button>
+              )}
               <button
                 onClick={() => {
                   // Check if limit reached for users on anonymous plan
@@ -3984,6 +4079,93 @@ function App() {
             </div>
           )}
         </div>
+
+        {DOWNLOAD_DATA_ENABLED && showExportModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="export-dialog-title"
+              className={`w-full max-w-md rounded-lg p-6 shadow-xl ${
+                isDarkMode ? "bg-gray-800 text-white" : "bg-white text-black"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 id="export-dialog-title" className="text-lg font-semibold">
+                  Download Chat Vault data
+                </h2>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "hover:bg-gray-700 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                  aria-label="Close export dialog"
+                >
+                  <MdClose className="w-5 h-5" />
+                </button>
+              </div>
+
+              {exportStatus === "confirm" && (
+                <p className={`text-sm mb-5 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Prepare a JSON file containing every chat currently stored in your Chat Vault.
+                </p>
+              )}
+              {exportStatus === "preparing" && (
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">Preparing export…</span>
+                </div>
+              )}
+              {exportStatus === "ready" && exportDownload && (
+                <div className="space-y-2 mb-5 text-sm">
+                  <p>Your export is ready.</p>
+                  <p className={isDarkMode ? "text-gray-300" : "text-gray-600"}>
+                    {exportDownload.filename}
+                  </p>
+                  <p className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
+                    Link expires {new Date(exportDownload.expiresAt).toLocaleString()}.
+                  </p>
+                </div>
+              )}
+              {exportStatus === "error" && (
+                <div className="mb-5 text-sm text-red-500">
+                  {exportError ?? "Unable to prepare the export."}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  Close
+                </button>
+                {(exportStatus === "confirm" || exportStatus === "error") && (
+                  <button
+                    onClick={() => void prepareExport()}
+                    className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    {exportStatus === "error" ? "Try again" : "Prepare export"}
+                  </button>
+                )}
+                {exportStatus === "ready" && (
+                  <button
+                    onClick={() => void downloadExport()}
+                    className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Download JSON
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Manual Save Modal */}
         {showManualSaveModal && (
