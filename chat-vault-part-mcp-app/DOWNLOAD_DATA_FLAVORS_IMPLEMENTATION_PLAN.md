@@ -28,7 +28,7 @@ The code may be built behind the `full` profile before these checks pass, but do
 
 Use `CHATVAULT_TOOL_METADATA_PROFILE` in the frontend production build (`build-all.mts`).
 
-- Require an explicit `gpt` or `full` value in Vercel builds.
+- Default to the unchanged `gpt` build when the value is absent; require an explicit `full` value to enable the portable-host feature.
 - Inject the selected profile into the widget as a build-time constant.
 - `gpt` renders the current widget without Download Data.
 - `full` renders Download Data to the right of **Add Chat**.
@@ -158,7 +158,7 @@ Configure the paired deployments explicitly:
 
 Frontend variables:
 
-- `CHATVAULT_TOOL_METADATA_PROFILE=gpt|full` (required for production builds)
+- `CHATVAULT_TOOL_METADATA_PROFILE=gpt|full` (absent defaults to the unchanged `gpt` build)
 - `CHATVAULT_WIDGET_DOMAIN=https://...` (the origin serving that widget)
 - `WIDGET_VERSION=...` (the version reported by that widget artifact)
 

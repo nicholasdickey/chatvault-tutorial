@@ -1139,7 +1139,9 @@ export async function handleMcpRequest(
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
+        getToolMetadataProfile() === "full"
+            ? "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
+            : "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -1436,7 +1438,9 @@ const server = createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
             "Access-Control-Allow-Headers",
-            "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
+            getToolMetadataProfile() === "full"
+                ? "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
+                : "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
         );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.writeHead(204);

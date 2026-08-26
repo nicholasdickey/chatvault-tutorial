@@ -8,9 +8,11 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 const outDir = "assets";
 const mcpAppHtmlPath = path.resolve("mcp-app.html");
 
-const rawProfile = process.env.CHATVAULT_TOOL_METADATA_PROFILE?.trim().toLowerCase();
+const rawProfile = (
+  process.env.CHATVAULT_TOOL_METADATA_PROFILE?.trim().toLowerCase() || "gpt"
+);
 if (rawProfile !== "gpt" && rawProfile !== "full") {
-  console.error("CHATVAULT_TOOL_METADATA_PROFILE must be explicitly set to gpt or full");
+  console.error("CHATVAULT_TOOL_METADATA_PROFILE must be gpt or full");
   process.exit(1);
 }
 const widgetVersion =
