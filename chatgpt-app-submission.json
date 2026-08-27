@@ -1,0 +1,260 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Chat Vault",
+    "subtitle": "Access your knowledge",
+    "description": "Chat Vault gives users access to conversations and notes saved in their private knowledge base. Users can browse and search their saved content from ChatGPT and use it as context. Saving, pasting, editing, deleting, and downloading a JSON export are available through the embedded app.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "browseMyChatVault": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Opens the Chat Vault widget without creating, updating, or deleting saved content.",
+        "open_world_justification": "Only opens a private first-party widget and does not publish or send content externally.",
+        "destructive_justification": "Launching the widget does not overwrite or remove any saved entry."
+      }
+    },
+    "savePastedContent": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Parses user-pasted content and creates a new entry in the user's private vault.",
+        "open_world_justification": "Stores content only in the user's private Chat Vault and does not publish it publicly.",
+        "destructive_justification": "Creates a new entry without overwriting or deleting existing saved content."
+      }
+    },
+    "updateSavedEntry": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Changes the title or conversation turns of an existing private vault entry.",
+        "open_world_justification": "Updates only the user's private Chat Vault and does not change public internet state.",
+        "destructive_justification": "Can overwrite the selected entry's existing title or conversation turns."
+      }
+    },
+    "deleteSavedEntry": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the selected entry from the user's private Chat Vault.",
+        "open_world_justification": "Changes only private first-party vault data and does not affect public internet state.",
+        "destructive_justification": "Permanently removes the selected saved entry after the app's confirmation flow."
+      }
+    },
+    "getSaveJobStatus": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves the current state of an existing asynchronous save job without changing it.",
+        "open_world_justification": "Reads private first-party job state and does not communicate with public recipients.",
+        "destructive_justification": "Does not create, overwrite, or delete saved content or job state."
+      }
+    },
+    "listTopics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists topic filters derived from the user's private vault without changing saved content.",
+        "open_world_justification": "Reads private first-party topic data and does not communicate with or modify public systems.",
+        "destructive_justification": "Does not create, overwrite, or delete topics or saved entries."
+      }
+    },
+    "saveConversation": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a new saved conversation in the user's private vault.",
+        "open_world_justification": "Stores the conversation privately in Chat Vault and does not publish or message external parties.",
+        "destructive_justification": "Creates a new conversation without overwriting or deleting existing entries."
+      }
+    },
+    "saveConversationBegin": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Starts a private multi-turn save session and records its pending state.",
+        "open_world_justification": "Creates only private first-party workflow state and does not affect public systems.",
+        "destructive_justification": "Starts a new save session without overwriting or deleting an existing vault entry."
+      }
+    },
+    "saveConversationTurn": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Adds one conversation turn to an existing private save session.",
+        "open_world_justification": "Accumulates content only in a private first-party workflow and does not publish it.",
+        "destructive_justification": "Appends a turn to a pending save session without deleting an existing vault entry."
+      }
+    },
+    "saveConversationFinalize": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Finalizes a pending save session and creates the conversation in the user's private vault.",
+        "open_world_justification": "Stores the finalized conversation privately and does not publish it or send it externally.",
+        "destructive_justification": "Creates a new saved conversation without overwriting or deleting existing entries."
+      }
+    },
+    "loadSavedEntries": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists or filters entries already stored in the user's private vault without modifying them.",
+        "open_world_justification": "Reads private Chat Vault content and does not change public or third-party state.",
+        "destructive_justification": "Does not overwrite or remove any saved entry."
+      }
+    },
+    "loadFullTurn": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one full turn from an existing saved entry without changing it.",
+        "open_world_justification": "Reads private vault content and does not communicate with or modify public systems.",
+        "destructive_justification": "Does not update, overwrite, or delete the saved turn."
+      }
+    },
+    "searchKnowledge": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Searches content already stored in the user's private vault without modifying it.",
+        "open_world_justification": "Returns private vault matches and does not publish content or change external systems.",
+        "destructive_justification": "Does not overwrite or delete any stored conversation or note."
+      }
+    },
+    "explainHowToUse": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns static help text and does not change saved content or account state.",
+        "open_world_justification": "Provides first-party usage guidance without contacting or modifying public systems.",
+        "destructive_justification": "Does not create, overwrite, or delete any data."
+      }
+    },
+    "exportSavedEntries": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates short-lived private download authorization state and returns a URL for exporting the user's saved entries as JSON.",
+        "open_world_justification": "Provides the export only through Chat Vault's private first-party service and does not publish or send it to third parties.",
+        "destructive_justification": "Does not overwrite or delete any saved entry while preparing the export."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Open the signed-in user's Chat Vault browser.",
+      "user_prompt": "Open my Chat Vault.",
+      "file_attachment_urls": null,
+      "tools_triggered": "browseMyChatVault",
+      "expected_output": "Opens the Chat Vault widget for the signed-in reviewer, displays the existing saved entries, and provides the embedded Download Data control without an error.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find a seeded recipe using distinctive ingredients and preparation guidance.",
+      "user_prompt": "Search my Chat Vault for the korma recipe with kefir and ground nuts.",
+      "file_attachment_urls": null,
+      "tools_triggered": "searchKnowledge",
+      "expected_output": "Finds the saved Chicken Korma conversation and explains that the kefir is added off heat and should not be boiled afterward.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Compare related guidance across two seeded saved conversations.",
+      "user_prompt": "Using Chat Vault, compare the two saved entries titled 'Baking ciabatta at home (google)' and 'Same-day ciabatta bread', focusing on autolyse and same-day timing.",
+      "file_attachment_urls": null,
+      "tools_triggered": "searchKnowledge",
+      "expected_output": "Compares both saved ciabatta conversations, including the 30-to-60-minute autolyse guidance and the roughly 4-to-5-hour same-day method.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find a seeded note using its distinctive cooking technique.",
+      "user_prompt": "What did I save in Chat Vault about using cast iron to imitate a stone oven?",
+      "file_attachment_urls": null,
+      "tools_triggered": "searchKnowledge",
+      "expected_output": "Finds the saved note 'Adding stone effect to the stove' and reports its cast-iron griddle and high-shelf guidance.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Explain the supported Chat Vault workflows using the app's help tool.",
+      "user_prompt": "Use the Chat Vault app to explain how I can save and find information.",
+      "file_attachment_urls": null,
+      "tools_triggered": "explainHowToUse",
+      "expected_output": "Briefly explains how to save conversations or notes, browse saved entries, and search stored knowledge.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not invoke Chat Vault to find new information on the web.",
+      "user_prompt": "Find me a new ciabatta recipe on the web.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Chat Vault should not be invoked because the user asked for a new web result rather than information saved in their vault.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not invoke Chat Vault for calendar management.",
+      "user_prompt": "Schedule a meeting with my team for tomorrow afternoon.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Chat Vault should not be invoked because it does not create or manage calendar events.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not invoke Chat Vault for outbound email.",
+      "user_prompt": "Send an email to my client confirming the project deadline.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Chat Vault should not be invoked because it does not send email or messages.",
+      "expected_output_url": null
+    }
+  ]
+}
