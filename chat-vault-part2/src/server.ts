@@ -669,7 +669,7 @@ const exportSavedEntriesTool: Tool = {
         required: ["userId"],
     },
     annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: false,
     },
@@ -711,8 +711,7 @@ function getListedTools(): Tool[] {
             },
         },
     }));
-    const profileOnlyTools = profile === "full" ? [exportSavedEntriesTool] : [];
-    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools, ...profileOnlyTools];
+    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools, exportSavedEntriesTool];
 }
 
 export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
@@ -969,9 +968,6 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 structuredContent: result,
             };
         } else if (toolName === "exportSavedEntries") {
-            if (getToolMetadataProfile() !== "full") {
-                throw new Error("exportSavedEntries is not available in this deployment");
-            }
             const canonicalUserId = readTrustedCanonicalUserId(headers);
             if (!canonicalUserId) {
                 throw new Error("A trusted canonical user identity is required to export saved entries");
@@ -1139,9 +1135,7 @@ export async function handleMcpRequest(
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        getToolMetadataProfile() === "full"
-            ? "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
-            : "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
+        "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -1438,9 +1432,7 @@ const server = createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
             "Access-Control-Allow-Headers",
-            getToolMetadataProfile() === "full"
-                ? "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
-                : "content-type, mcp-session-id, authorization, x-a6-canonical-user-id"
+            "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
         );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.writeHead(204);

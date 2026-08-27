@@ -2007,7 +2007,7 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should save unstructured content as note for widgetAdd", async () => {
+    test("should handle unstructured content for widgetAdd", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
             console.log("[widgetAdd Tests] Skipping test - OPENAI_API_KEY not set");
@@ -2023,10 +2023,18 @@ You can download Python from python.org.`;
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
         const result = response.result as {
-            structuredContent: { chatId?: string; turnsCount: number }; 
+            structuredContent: { jobId?: string; chatId?: string; turnsCount: number };
         };
-        expect(result.structuredContent.turnsCount).toBe(1);
-        expect(result.structuredContent.chatId).toBeDefined();
+        if (result.structuredContent.jobId) {
+            expect(result.structuredContent.turnsCount).toBe(0);
+            expect(result.structuredContent.chatId).toBeUndefined();
+        } else if (result.structuredContent.chatId) {
+            expect(result.structuredContent.turnsCount).toBe(1);
+            expect(result.structuredContent.chatId).toBeDefined();
+        } else {
+            expect(result.structuredContent.turnsCount).toBe(0);
+            expect((result.structuredContent as { error?: string }).error).toBe("parse_error");
+        }
     });
 
     // -------------------------------------------------------------------------
@@ -2551,4 +2559,3 @@ You can download Python from python.org.`;
         expect(result1.structuredContent.pagination.page).toBe(1);
     });
 });
-

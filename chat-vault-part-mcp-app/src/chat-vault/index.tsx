@@ -46,7 +46,6 @@ import {
 } from "./loadSavedEntriesHelpers.js";
 
 const WIDGET_VERSION = __CHATVAULT_WIDGET_VERSION__;
-const DOWNLOAD_DATA_ENABLED = __CHATVAULT_PROFILE__ === "full";
 
 type ExportStatus = "confirm" | "preparing" | "ready" | "error";
 
@@ -2557,23 +2556,21 @@ function App() {
               </div>
             </div>
             <div className="flex gap-2">
-              {DOWNLOAD_DATA_ENABLED && (
-                <button
-                  onClick={openExportModal}
-                  disabled={paginationLoading || searchLoading}
-                  className={`p-2 rounded-lg transition-colors ${
-                    paginationLoading || searchLoading
-                      ? "opacity-50 cursor-not-allowed"
-                      : isDarkMode
-                        ? "bg-gray-800 text-white hover:bg-gray-700"
-                        : "bg-gray-100 text-black hover:bg-gray-200"
-                  }`}
-                  title="Download all saved chats as JSON"
-                  aria-label="Download data"
-                >
-                  <MdDownload className="w-5 h-5" />
-                </button>
-              )}
+              <button
+                onClick={openExportModal}
+                disabled={paginationLoading || searchLoading}
+                className={`p-2 rounded-lg transition-colors ${
+                  paginationLoading || searchLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                      ? "bg-gray-800 text-white hover:bg-gray-700"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title="Download all saved chats as JSON"
+                aria-label="Download data"
+              >
+                <MdDownload className="w-5 h-5" />
+              </button>
               <button
                 onClick={() => {
                   // Check if limit reached for users on anonymous plan
@@ -4080,7 +4077,7 @@ function App() {
           )}
         </div>
 
-        {DOWNLOAD_DATA_ENABLED && showExportModal && (
+        {showExportModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div
               role="dialog"
