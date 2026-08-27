@@ -9,13 +9,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // CORS for external callers (ChatGPT, Findexar, etc.)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  const isFullProfile =
-    process.env.CHATVAULT_TOOL_METADATA_PROFILE?.trim().toLowerCase() === "full";
   res.setHeader(
     "Access-Control-Allow-Headers",
-    isFullProfile
-      ? "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
-      : "content-type, mcp-session-id, authorization"
+    "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
   );
 
   if (req.method === "OPTIONS") {

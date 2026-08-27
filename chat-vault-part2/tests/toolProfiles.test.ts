@@ -33,9 +33,8 @@ const GPT_PROFILE_TOOL_NAMES = [
     "saveConversation",
     ...MULTI_TURN_SAVE_TOOL_NAMES,
     ...GPT_SAFE_TOOL_NAMES,
+    "exportSavedEntries",
 ];
-
-const FULL_ONLY_TOOL_NAMES = ["exportSavedEntries"];
 
 describe("tool metadata profiles", () => {
     const originalProfile = process.env.CHATVAULT_TOOL_METADATA_PROFILE;
@@ -95,7 +94,7 @@ describe("tool metadata profiles", () => {
                 ...GPT_SAFE_TOOL_NAMES,
             ]),
         );
-        expect(names).toEqual(expect.arrayContaining(FULL_ONLY_TOOL_NAMES));
+        expect(names).toContain("exportSavedEntries");
         expect(tools).toHaveLength(14);
     });
 
@@ -105,18 +104,18 @@ describe("tool metadata profiles", () => {
         const names = tools.map((tool) => tool.name).sort();
 
         expect(names).toEqual([...GPT_PROFILE_TOOL_NAMES].sort());
-        expect(tools).toHaveLength(13);
-        expect(names).not.toContain("exportSavedEntries");
+        expect(tools).toHaveLength(14);
+        expect(names).toContain("exportSavedEntries");
     });
 
-    it("exposes export only to the full-profile app", () => {
-        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
+    it.each(["gpt", "full"])("exposes export to the %s-profile app", (profile) => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = profile;
         const exportTool = getListedTools().find((tool) => tool.name === "exportSavedEntries");
 
         expect(exportTool).toBeDefined();
         expect((exportTool?._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["app"]);
         expect(exportTool?.annotations).toMatchObject({
-            readOnlyHint: true,
+            readOnlyHint: false,
             destructiveHint: false,
             openWorldHint: false,
         });

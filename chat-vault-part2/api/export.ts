@@ -20,11 +20,6 @@ function getMaximumExportBytes(): number {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  if (process.env.CHATVAULT_TOOL_METADATA_PROFILE?.trim().toLowerCase() !== "full") {
-    writeJsonError(res, 404, "Not found");
-    return;
-  }
-
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     writeJsonError(res, 405, "Method not allowed");
