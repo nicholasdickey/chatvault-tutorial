@@ -69,6 +69,7 @@ jobs:
       # Used by Part2 server helper + db-helper. In CI we use the runner's PostgreSQL
       # (no docker compose / no service container).
       TEST_DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
+      DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       API_KEY: ${{ secrets.API_KEY }}
 
