@@ -64,3 +64,8 @@ export async function testConnection(): Promise<boolean> {
         return false;
     }
 }
+
+/** Close the postgres.js client during long-lived process teardown (primarily tests). */
+export async function closeDatabaseConnection(): Promise<void> {
+    await client.end({ timeout: 1 });
+}
