@@ -22,6 +22,7 @@ import {
 describe("chat-vault-part1 (all)", () => {
     const TEST_PORT = 8007;
     let client: McpTestClient;
+    let widgetResourceUri: string;
 
     beforeAll(async () => {
         process.env.API_KEY = process.env.API_KEY || "test-api-key";
@@ -38,6 +39,18 @@ describe("chat-vault-part1 (all)", () => {
         console.log(`[Part1 all] beforeAll: starting baseline MCP session`);
         await client.initialize();
         console.log(`[Part1 all] beforeAll: baseline sessionId=${client.getSessionId()}`);
+
+        const toolsResponse = await client.listTools();
+        const tools = (toolsResponse.result as { tools?: Array<{
+            name?: string;
+            _meta?: Record<string, unknown>;
+        }> })?.tools ?? [];
+        const browseTool = tools.find((tool) => tool.name === "browseMySavedChats");
+        const outputTemplate = browseTool?._meta?.["openai/outputTemplate"];
+        if (typeof outputTemplate !== "string") {
+            throw new Error("browseMySavedChats did not declare an output template");
+        }
+        widgetResourceUri = outputTemplate;
     }, 120000);
 
     beforeEach(() => {
@@ -221,7 +234,7 @@ describe("chat-vault-part1 (all)", () => {
 
     test("should return resources/read in correct format", async () => {
         await client.initialize();
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -241,7 +254,7 @@ describe("chat-vault-part1 (all)", () => {
         expect(result.contents!.length).toBe(1);
 
         const content = result.contents![0];
-        expect(content.uri).toBe("ui://widget/chat-vault.html");
+        expect(content.uri).toBe(widgetResourceUri);
         expect(content.mimeType).toBe("text/html+skybridge");
         expect(content.text).toBeDefined();
         expect(typeof content.text).toBe("string");
@@ -372,19 +385,19 @@ describe("chat-vault-part1 (all)", () => {
 
         // Find the chat-vault resource
         const chatVaultResource = result.resources!.find(
-            (resource: any) => resource.uri === "ui://widget/chat-vault.html"
+            (resource: any) => resource.uri === widgetResourceUri
         ) as any;
         expect(chatVaultResource).toBeDefined();
-        expect(chatVaultResource?.uri).toBe("ui://widget/chat-vault.html");
+        expect(chatVaultResource?.uri).toBe(widgetResourceUri);
         expect(chatVaultResource?.mimeType).toBe("text/html+skybridge");
 
         // Verify resource metadata matches Apps SDK spec
         expect(chatVaultResource?._meta).toBeDefined();
-        expect(chatVaultResource?._meta?.["openai/outputTemplate"]).toBe("ui://widget/chat-vault.html");
+        expect(chatVaultResource?._meta?.["openai/outputTemplate"]).toBe(widgetResourceUri);
     });
 
     test("should read chat-vault widget resource and return inlined HTML", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -403,7 +416,7 @@ describe("chat-vault-part1 (all)", () => {
         expect(result.contents!.length).toBe(1);
 
         const content = result.contents![0];
-        expect(content.uri).toBe("ui://widget/chat-vault.html");
+        expect(content.uri).toBe(widgetResourceUri);
         expect(content.mimeType).toBe("text/html+skybridge");
         expect(content.text).toBeDefined();
         expect(typeof content.text).toBe("string");
@@ -414,7 +427,7 @@ describe("chat-vault-part1 (all)", () => {
 
         // Verify metadata
         expect(content._meta).toBeDefined();
-        expect(content._meta?.["openai/outputTemplate"]).toBe("ui://widget/chat-vault.html");
+        expect(content._meta?.["openai/outputTemplate"]).toBe(widgetResourceUri);
     });
 
     test("should complete full browseMySavedChats flow end-to-end", async () => {
@@ -429,7 +442,7 @@ describe("chat-vault-part1 (all)", () => {
         expect(callResult?._meta).toBeDefined();
 
         // 3. Read the widget resource
-        const resourceResponse = await client.readResource("ui://widget/chat-vault.html");
+        const resourceResponse = await client.readResource(widgetResourceUri);
         expect(resourceResponse.error).toBeUndefined();
         const resourceResult = resourceResponse.result as any;
         expect(resourceResult?.contents?.[0]?.text).toBeDefined();
@@ -441,7 +454,7 @@ describe("chat-vault-part1 (all)", () => {
     });
 
     test("should return widget HTML with inlined assets", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
 
         expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
@@ -455,7 +468,7 @@ describe("chat-vault-part1 (all)", () => {
     });
 
     test("should contain script tag with type='module' for ESM bundle", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
         const result = response.result as {
             contents?: Array<{ text: string }>;
         };
@@ -486,7 +499,7 @@ describe("chat-vault-part1 (all)", () => {
     });
 
     test("should contain inlined CSS in style tags", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
         const result = response.result as {
             contents?: Array<{ text: string }>;
         };
@@ -512,7 +525,7 @@ describe("chat-vault-part1 (all)", () => {
     });
 
     test("should be self-contained (no external asset requests)", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
         const result = response.result as {
             contents?: Array<{ text: string }>;
         };
@@ -545,7 +558,7 @@ describe("chat-vault-part1 (all)", () => {
     });
 
     test("should escape script tags in inlined JavaScript", async () => {
-        const response = await client.readResource("ui://widget/chat-vault.html");
+        const response = await client.readResource(widgetResourceUri);
         const result = response.result as {
             contents?: Array<{ text: string }>;
         };
@@ -567,5 +580,3 @@ describe("chat-vault-part1 (all)", () => {
         }
     });
 });
-
-
