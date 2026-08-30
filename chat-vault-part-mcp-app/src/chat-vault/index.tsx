@@ -1,0 +1,4440 @@
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  MdArrowBack,
+  MdExpandMore,
+  MdExpandLess,
+  MdContentCopy,
+  MdAdd,
+  MdClose,
+  MdCheck,
+  MdSearch,
+  MdRefresh,
+  MdOpenInNew,
+  MdDelete,
+  MdHelp,
+  MdFullscreen,
+  MdFullscreenExit,
+  MdNote,
+  MdLogin,
+  MdMessage,
+  MdEdit,
+  MdLabel,
+  MdDownload,
+} from "react-icons/md";
+import { app } from "../app-instance.js";
+import type {
+  Chat,
+  UserInfo,
+  Pagination,
+  DeleteConfirmation,
+  ContentMetadata,
+  EditingTurn,
+  ChatVaultToolResult,
+  Topic,
+  AvailableTopic,
+} from "./types.js";
+import { TopicCombobox } from "./TopicCombobox.js";
+import { ChatTopicEditor } from "./ChatTopicEditor.js";
+import {
+  buildLoadSavedEntriesArgs,
+  mergeAvailableTopics,
+  mergeTopicOptionLists,
+  parseListTopicsResponse,
+  parseLoadSavedEntriesResponse,
+  type ParsedLoadSavedEntries,
+} from "./loadSavedEntriesHelpers.js";
+
+const WIDGET_VERSION = __CHATVAULT_WIDGET_VERSION__;
+
+type ExportStatus = "confirm" | "preparing" | "ready" | "error";
+
+function measureWidgetHeight(): number {
+  const root = document.getElementById("chat-vault-root");
+  const rootHeight = root
+    ? Math.max(
+        root.scrollHeight,
+        Math.ceil(root.getBoundingClientRect().height),
+      )
+    : 0;
+  return Math.ceil(
+    Math.max(
+      rootHeight,
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight,
+    ),
+  );
+}
+
+/** Report content height to agentsyx host (MCP Apps size-changed + remeasure trigger). */
+function notifyHostSizeChange() {
+  const height = measureWidgetHeight();
+  void app.sendSizeChanged({ height }).catch(() => {
+    /* host may not be ready yet */
+  });
+  (window as Window & { mcpWidgetResize?: () => void }).mcpWidgetResize?.();
+}
+
+function getRemainingSlotsMessage(
+  remainingSlots: number,
+  limits: ContentMetadata["limits"],
+): string {
+  const template = remainingSlots <= 1
+    ? limits?.lowRemainingSlotsMessage
+    : limits?.remainingSlotsMessage;
+  return (template ?? `You have {remainingSlots} {chatLabel} to save remaining.`)
+    .replace(/{remainingSlots}/g, String(remainingSlots))
+    .replace(/{chatLabel}/g, remainingSlots === 1 ? "chat" : "chats");
+}
+
+// Debug logging
+const debugLogs: Array<{
+  timestamp: string;
+  message: string;
+  data: string | null;
+}> = [];
+const addLog = (message: string, data: unknown = null) => {
+  const log = {
+    timestamp: new Date().toISOString(),
+    message,
+    data: data ? JSON.stringify(data, null, 2) : null,
+  };
+  debugLogs.push(log);
+  console.log(`[ChatVault] ${message}`, data || "");
+  // Keep only last 100 logs
+  if (debugLogs.length > 100) {
+    debugLogs.shift();
+  }
+};
+
+function App() {
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [pageInputValue, setPageInputValue] = useState("1");
+  const [paginationLoading, setPaginationLoading] = useState(false);
+  const [filterTopics, setFilterTopics] = useState<Topic[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<AvailableTopic[]>([]);
+  const [expandedTurns, setExpandedTurns] = useState<Set<string | number>>(
+    new Set(),
+  );
+  const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({});
+  // Debug panel hidden by default, can be toggled with Ctrl+Alt+D (avoids browser Ctrl+Shift+D = Bookmark all tabs)
+  const [showDebug, setShowDebug] = useState(() => {
+    return localStorage.getItem("chatvault-debug-enabled") === "true";
+  });
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showManualSaveModal, setShowManualSaveModal] = useState(false);
+  const [manualSaveTitle, setManualSaveTitle] = useState("");
+  const [manualSaveContent, setManualSaveContent] = useState("");
+  const [manualSaveHtml, setManualSaveHtml] = useState("");
+  const [manualSaveError, setManualSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [contentMetadata, setContentMetadata] =
+    useState<ContentMetadata | null>(null);
+  // Fail open until the server explicitly enables quota behavior.
+  const limitsEnabled = contentMetadata?.config?.limitsEnabled === true;
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [alertPortalLink, setAlertPortalLink] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState<DeleteConfirmation | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [helpText, setHelpText] = useState<string | null>(null);
+  const [helpTextLoading, setHelpTextLoading] = useState(false);
+  const [subTitleExpanded, setSubTitleExpanded] = useState(false);
+  const [displayMode, setDisplayMode] = useState<
+    "inline" | "fullscreen" | "pip"
+  >("inline");
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
+  const [editedTurns, setEditedTurns] = useState<
+    Array<{ prompt: string; response: string; truncated?: boolean }>
+  >([]);
+  const [editingTurn, setEditingTurn] = useState<EditingTurn | null>(null);
+  const [editingTurnValue, setEditingTurnValue] = useState("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSavingChat, setIsSavingChat] = useState(false);
+  const [fullTurnContent, setFullTurnContent] = useState<
+    Record<string, { prompt: string; response: string }>
+  >({});
+  const [loadingTurnIds, setLoadingTurnIds] = useState<Set<string>>(new Set());
+  const [pendingAddJobId, setPendingAddJobId] = useState<string | null>(null);
+  const [addSuccessAlert, setAddSuccessAlert] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStatus, setExportStatus] = useState<ExportStatus>("confirm");
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportDownload, setExportDownload] = useState<{
+    downloadUrl: string;
+    filename: string;
+    expiresAt: string;
+  } | null>(null);
+
+  // Tell agentsyx host to resize iframe when layout-affecting state changes
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => notifyHostSizeChange());
+  }, [
+    showHelp,
+    helpText,
+    helpTextLoading,
+    chats,
+    pagination,
+    selectedChat,
+    expandedTurns,
+    showManualSaveModal,
+    showExportModal,
+    loading,
+    searchLoading,
+    paginationLoading,
+    filterTopics,
+  ]);
+
+  // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Alt+D (or Cmd+Alt+D on Mac) - case-insensitive, capture phase
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        e.stopPropagation();
+        const newState = !showDebug;
+        setShowDebug(newState);
+        // Persist in localStorage
+        if (newState) {
+          localStorage.setItem("chatvault-debug-enabled", "true");
+        } else {
+          localStorage.removeItem("chatvault-debug-enabled");
+        }
+        addLog("Debug panel toggled", { enabled: newState });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true); // capture phase
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [showDebug]);
+
+  // Check for dark mode
+  useEffect(() => {
+    addLog("Widget initialized", { debugEnabled: showDebug });
+
+    const checkDarkMode = () => {
+      const root = document.documentElement;
+      const theme = root.getAttribute("data-theme");
+      const hasDarkClass = root.classList.contains("dark");
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
+
+      // Only use dark mode if explicitly set via data-theme or class
+      // Don't use system preference by default (widget should default to light)
+      const isDark = theme === "dark" || hasDarkClass;
+
+      setIsDarkMode(isDark);
+      addLog("Dark mode check", {
+        isDark,
+        theme,
+        hasDarkClass,
+        prefersDark,
+        note: "Only using explicit theme/class, not system preference",
+      });
+    };
+
+    checkDarkMode();
+
+    // Watch for theme changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class"],
+    });
+
+    // Watch for system theme changes (but don't use it, just log)
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleSystemThemeChange = () => {
+      addLog("System theme changed", { prefersDark: mediaQuery.matches });
+      // Don't update isDarkMode based on system preference
+    };
+    mediaQuery.addEventListener("change", handleSystemThemeChange);
+
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener("change", handleSystemThemeChange);
+    };
+  }, []);
+
+  // Listen for host-side Agentsyx logs (forwarded via postMessage from MCP App host)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as any;
+      if (!data || typeof data !== "object") return;
+      if (data.type !== "agentsyx-log" || data.source !== "mcp-host") return;
+
+      const level =
+        typeof data.level === "string" ? (data.level as string) : "info";
+      const message =
+        typeof data.message === "string" ? (data.message as string) : "Host log";
+      const context =
+        data.context && typeof data.context === "object" ? data.context : null;
+
+      addLog(`[host/${level}] ${message}`, context);
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
+  // Load initial data from embedded script or call loadSavedEntries
+  // Only run once on mount
+  const hasLoadedInitial = useRef(false);
+  useEffect(() => {
+    // Skip if we've already loaded initial data
+    if (hasLoadedInitial.current) {
+      return;
+    }
+
+    const loadInitialData = async () => {
+      hasLoadedInitial.current = true;
+      try {
+        addLog("Loading initial chat data");
+
+        // Try to read embedded data first
+        const dataScript = document.getElementById("chatvault-initial-data");
+        if (dataScript) {
+          try {
+            const initialChats = JSON.parse(
+              dataScript.textContent || "[]",
+            ) as Chat[];
+            addLog("Loaded chats from embedded data", {
+              count: initialChats.length,
+            });
+            setChats(deduplicateChats(initialChats));
+            setLoading(false);
+            void fetchTopicOptions(initialChats);
+            return;
+          } catch (e) {
+            addLog("Failed to parse embedded data", {
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        // Fallback: call loadSavedEntries
+        try {
+          const result = (await app.callServerTool({
+            name: "loadSavedEntries",
+            arguments: buildLoadSavedEntriesArgs({
+              page: 0,
+              widgetVersion: WIDGET_VERSION,
+            }),
+          })) as ChatVaultToolResult | null;
+          addLog("loadSavedEntries result", result);
+
+          const parsed = parseLoadSavedEntriesResponse(
+            result?.structuredContent as Record<string, unknown> | undefined,
+          );
+          if (parsed && (parsed.chats.length > 0 || parsed.pagination)) {
+            setChats(deduplicateChats(parsed.chats));
+            setPagination(parsed.pagination);
+            setCurrentPage(0);
+            setPageInputValue("1");
+            if (parsed.availableTopics.length > 0) {
+              setAvailableTopics(parsed.availableTopics);
+            }
+            const topicsFromChats = mergeAvailableTopics([], parsed.chats);
+            if (topicsFromChats.length > 0) {
+              setAvailableTopics((prev) =>
+                mergeTopicOptionLists(prev, topicsFromChats),
+              );
+            }
+            if (parsed.userInfo) {
+              setUserInfo(parsed.userInfo);
+              addLog("User info extracted", parsed.userInfo);
+            }
+            if (parsed.content) {
+              setContentMetadata(parsed.content);
+              addLog("Content metadata extracted", parsed.content);
+            }
+            const mergedTopics = mergeAvailableTopics(
+              parsed.availableTopics,
+              parsed.chats,
+            );
+            if (mergedTopics.length === 0) {
+              void fetchTopicOptions(parsed.chats);
+            }
+          } else if (result?.content?.[0] && "text" in result.content[0]) {
+            addLog("Unexpected result format", result);
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          addLog("Error calling loadSavedEntries", { error: errorMessage });
+          setError(`Failed to load chats: ${errorMessage}`);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        addLog("Error loading chats", { error: errorMessage });
+        setError(errorMessage);
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  // Debug alert state changes
+  useEffect(() => {
+    if (alertMessage) {
+      addLog("Alert message state changed", {
+        alertMessage,
+        alertPortalLink,
+        deleteConfirmation,
+      });
+    }
+  }, [alertMessage, alertPortalLink, deleteConfirmation]);
+
+  // Update alert message dynamically when userInfo changes (if counter alert is showing)
+  useEffect(() => {
+    if (
+      alertMessage &&
+      !deleteConfirmation &&
+      limitsEnabled &&
+      userInfo?.isAnonymousPlan &&
+      userInfo.remainingSlots !== undefined
+    ) {
+      // Check if this is a counter alert (starts with "You have X chat")
+      if (
+        alertMessage.includes("You have") &&
+        alertMessage.includes("to save remaining")
+      ) {
+        const message = getRemainingSlotsMessage(
+          userInfo.remainingSlots,
+          contentMetadata?.limits,
+        );
+        setAlertMessage(message);
+        setAlertPortalLink(userInfo.portalLink || null);
+      }
+    }
+  }, [
+    userInfo?.remainingSlots,
+    userInfo?.portalLink,
+    userInfo?.isAnonymousPlan,
+    limitsEnabled,
+    contentMetadata?.limits,
+  ]);
+
+  // Handle ESC key to close help
+  useEffect(() => {
+    if (!showHelp) return;
+
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowHelp(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscKey);
+    return () => {
+      window.removeEventListener("keydown", handleEscKey);
+    };
+  }, [showHelp]);
+
+  // Deduplicate chats by id (server already dedupes; this guards against client-side merges)
+  const deduplicateChats = (chatList: Chat[]) => {
+    const seen = new Map<string, Chat>();
+    for (const chat of chatList) {
+      const key = chat.id ?? `${chat.title || ""}|${chat.timestamp || ""}`;
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, chat);
+      } else if (chat.timestamp && existing.timestamp) {
+        const existingTime = new Date(existing.timestamp).getTime();
+        const currentTime = new Date(chat.timestamp).getTime();
+        if (currentTime > existingTime) {
+          seen.set(key, chat);
+        }
+      }
+    }
+    return Array.from(seen.values());
+  };
+
+  const getActiveTopicIds = (topics: Topic[] = filterTopics) =>
+    topics.map((t) => t.id).filter((id) => id && !id.startsWith("new:"));
+
+  const topicOptionsFetchStarted = useRef(false);
+
+  const fetchTopicOptions = async (chatsForMerge: Chat[] = chats) => {
+    if (topicOptionsFetchStarted.current) return;
+    topicOptionsFetchStarted.current = true;
+    addLog("Fetching topic options");
+    try {
+      const listResult = (await app.callServerTool({
+        name: "listTopics",
+        arguments: {},
+      })) as ChatVaultToolResult | null;
+      const fromList = parseListTopicsResponse(
+        listResult?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (fromList.length > 0) {
+        setAvailableTopics((prev) => mergeTopicOptionLists(prev, fromList));
+        addLog("Topic options loaded from listTopics", { count: fromList.length });
+        return;
+      }
+
+      const loadResult = (await app.callServerTool({
+        name: "loadSavedEntries",
+        arguments: buildLoadSavedEntriesArgs({
+          page: 0,
+          widgetVersion: WIDGET_VERSION,
+          size: 1,
+        }),
+      })) as ChatVaultToolResult | null;
+      const parsed = parseLoadSavedEntriesResponse(
+        loadResult?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (parsed) {
+        const topics = mergeAvailableTopics(
+          parsed.availableTopics,
+          [...chatsForMerge, ...parsed.chats],
+        );
+        if (topics.length > 0) {
+          setAvailableTopics((prev) => mergeTopicOptionLists(prev, topics));
+          addLog("Topic options loaded from loadSavedEntries", {
+            count: topics.length,
+          });
+        }
+      }
+    } catch (err) {
+      addLog("Failed to load topic options", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      topicOptionsFetchStarted.current = false;
+    }
+  };
+
+  const handleTopicFilterOpen = () => {
+    if (availableTopics.length === 0) {
+      void fetchTopicOptions();
+    }
+  };
+
+  const applyParsedLoad = (
+    parsed: ParsedLoadSavedEntries | null,
+    opts?: { append?: boolean; page?: number },
+  ) => {
+    if (!parsed) return false;
+    setChats((prev) =>
+      opts?.append
+        ? deduplicateChats([...prev, ...parsed.chats])
+        : deduplicateChats(parsed.chats),
+    );
+    setPagination(parsed.pagination);
+    if (opts?.page != null) {
+      setCurrentPage(opts.page);
+      setPageInputValue(String(opts.page + 1));
+    }
+    const topicsFromResponse = mergeAvailableTopics(
+      parsed.availableTopics,
+      parsed.chats,
+    );
+    if (topicsFromResponse.length > 0) {
+      setAvailableTopics((prev) => mergeTopicOptionLists(prev, topicsFromResponse));
+    }
+    if (parsed.userInfo) {
+      setUserInfo(parsed.userInfo);
+    }
+    if (parsed.content) {
+      setContentMetadata(parsed.content);
+    }
+    return true;
+  };
+
+  const loadChatsAtPage = async (
+    page: number,
+    opts?: {
+      query?: string;
+      topicIds?: string[];
+      append?: boolean;
+    },
+  ) => {
+    const result = (await app.callServerTool({
+      name: "loadSavedEntries",
+      arguments: buildLoadSavedEntriesArgs({
+        page,
+        widgetVersion: WIDGET_VERSION,
+        query: opts?.query,
+        topicIds: opts?.topicIds ?? getActiveTopicIds(),
+      }),
+    })) as ChatVaultToolResult | null;
+    return applyParsedLoad(
+      parseLoadSavedEntriesResponse(
+        result?.structuredContent as Record<string, unknown> | undefined,
+      ),
+      { append: opts?.append, page },
+    );
+  };
+
+  const handleTopicFilterChange = async (topics: Topic[]) => {
+    const validTopics = topics.filter((t) => t.id && !t.id.startsWith("new:"));
+    setFilterTopics(validTopics);
+    setCurrentPage(0);
+    setPaginationLoading(true);
+    addLog("Topic filter changed", {
+      topicIds: validTopics.map((t) => t.id),
+    });
+    try {
+      await loadChatsAtPage(0, {
+        query: isSearching ? searchQuery : undefined,
+        topicIds: validTopics.map((t) => t.id),
+      });
+    } catch (err) {
+      addLog("Topic filter load failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setPaginationLoading(false);
+    }
+  };
+
+  const handleChatTopicsSave = async (chatId: string, nextTopics: Topic[]) => {
+    const previousChats = chats;
+    const previousSelectedTopics =
+      selectedChat?.id === chatId ? selectedChat.topics : undefined;
+
+    const topicRefs = nextTopics.map((topic) =>
+      topic.id.startsWith("new:") ? topic.name : topic.id,
+    );
+
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === chatId ? { ...chat, topics: nextTopics } : chat,
+      ),
+    );
+    setSelectedChat((prev) =>
+      prev && prev.id === chatId ? { ...prev, topics: nextTopics } : prev,
+    );
+
+    try {
+      addLog("Updating chat topics", { chatId, topicRefs });
+      const result = (await app.callServerTool({
+        name: "updateSavedEntry",
+        arguments: {
+          entryId: chatId,
+          entry: { topics: topicRefs },
+        },
+      })) as ChatVaultToolResult | null;
+
+      const savedTopics = result?.structuredContent?.topics;
+      if (!result?.structuredContent?.updated || !Array.isArray(savedTopics)) {
+        throw new Error(
+          String(result?.structuredContent?.message || "Failed to update topics"),
+        );
+      }
+
+      const normalized = savedTopics as Topic[];
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === chatId ? { ...chat, topics: normalized } : chat,
+        ),
+      );
+      setSelectedChat((prev) =>
+        prev && prev.id === chatId ? { ...prev, topics: normalized } : prev,
+      );
+      setAvailableTopics((prev) =>
+        mergeTopicOptionLists(
+          prev,
+          normalized.map((topic) => ({ ...topic, chatCount: 0 })),
+        ),
+      );
+    } catch (err) {
+      setChats(previousChats);
+      if (previousSelectedTopics !== undefined) {
+        setSelectedChat((prev) =>
+          prev && prev.id === chatId
+            ? { ...prev, topics: previousSelectedTopics }
+            : prev,
+        );
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      addLog("Update chat topics failed", { chatId, error: message });
+      setAlertMessage(`Failed to update topics: ${message}`);
+      setAlertPortalLink(null);
+      throw err;
+    }
+  };
+
+  const handleClearTopicFilter = async () => {
+    setFilterTopics([]);
+    setCurrentPage(0);
+    setPaginationLoading(true);
+    try {
+      await loadChatsAtPage(0, {
+        query: isSearching ? searchQuery : undefined,
+        topicIds: [],
+      });
+    } catch (err) {
+      addLog("Clear topic filter failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setPaginationLoading(false);
+    }
+  };
+
+  const handleChatClick = (chat: Chat) => {
+    addLog("Chat clicked", { title: chat.title });
+    setExpandedTurns(new Set());
+    setLoadingTurnIds(new Set());
+    setIsEditingTitle(false);
+    setEditedTitle("");
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    setHasUnsavedChanges(false);
+
+    // Chats always come from loadSavedEntries (with truncated or full turns)
+    setSelectedChat({ ...chat });
+    setEditedTurns((chat.turns ?? []).map((turn) => ({ ...turn })));
+  };
+
+  const handleBackClick = () => {
+    addLog("Back clicked");
+    setSelectedChat(null);
+    setExpandedTurns(new Set());
+    // Reset editing state when going back
+    setIsEditingTitle(false);
+    setEditedTitle("");
+    setEditedTurns([]);
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    setHasUnsavedChanges(false);
+  };
+
+  const handleFullscreen = async () => {
+    try {
+      if (displayMode === "fullscreen") {
+        const response = await app.requestDisplayMode({ mode: "inline" });
+        setDisplayMode(response.mode || "inline");
+        addLog("Exited fullscreen", response);
+      } else {
+        const response = await app.requestDisplayMode({ mode: "fullscreen" });
+        setDisplayMode(response.mode || "fullscreen");
+        addLog("Entered fullscreen", response);
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      addLog("Fullscreen error", { error: errorMessage });
+      setAlertMessage(`Failed to change display mode: ${errorMessage}`);
+      setAlertPortalLink(null);
+    }
+  };
+
+  const handleRefresh = async () => {
+    addLog("Refresh clicked");
+    setLoading(true);
+    setError(null);
+    try {
+      addLog("Calling loadSavedEntries");
+      addLog("loadSavedEntries parameters", {
+        page: 0,
+        size: 10,
+        aboveTheFoldOnly: true,
+        widgetVersion: WIDGET_VERSION,
+      });
+      const result = (await app.callServerTool({
+        name: "loadSavedEntries",
+        arguments: buildLoadSavedEntriesArgs({
+          page: 0,
+          widgetVersion: WIDGET_VERSION,
+          topicIds: getActiveTopicIds(),
+        }),
+      })) as ChatVaultToolResult | null;
+      addLog("loadSavedEntries result", result);
+      const parsed = parseLoadSavedEntriesResponse(
+        result?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (parsed) {
+        applyParsedLoad(parsed, { page: 0 });
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error refreshing chats", { error: errorMessage });
+      setError(
+        errorMessage.includes("Not connected")
+          ? "Connection lost. Reopen the chat to reconnect."
+          : `Failed to refresh: ${errorMessage}`,
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenWebsite = () => {
+    if (userInfo?.portalLink) {
+      addLog("Open on website clicked", { portalLink: userInfo.portalLink });
+      app.openLink({ url: userInfo.portalLink });
+    } else {
+      addLog("Open on website clicked but no portal link available");
+    }
+  };
+
+  const handleSignIn = () => {
+    if (userInfo?.loginLink) {
+      addLog("Sign in clicked", { loginLink: userInfo.loginLink });
+      app.openLink({ url: userInfo.loginLink });
+    } else {
+      addLog("Sign in clicked but no login link available");
+    }
+  };
+
+  const openExportModal = () => {
+    setExportStatus("confirm");
+    setExportError(null);
+    setExportDownload(null);
+    setShowExportModal(true);
+  };
+
+  const prepareExport = async () => {
+    if (exportStatus === "preparing") return;
+    setExportStatus("preparing");
+    setExportError(null);
+    try {
+      const result = (await app.callServerTool({
+        name: "exportSavedEntries",
+        arguments: {},
+      })) as ChatVaultToolResult | null;
+      const content = result?.structuredContent;
+      if (
+        typeof content?.downloadUrl !== "string" ||
+        typeof content.filename !== "string" ||
+        typeof content.expiresAt !== "string"
+      ) {
+        throw new Error("The export service returned an invalid response");
+      }
+      setExportDownload({
+        downloadUrl: content.downloadUrl,
+        filename: content.filename,
+        expiresAt: content.expiresAt,
+      });
+      setExportStatus("ready");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addLog("Export preparation failed", { error: message });
+      setExportError(message);
+      setExportStatus("error");
+    }
+  };
+
+  const downloadExport = async () => {
+    if (!exportDownload) return;
+    if (Date.parse(exportDownload.expiresAt) <= Date.now()) {
+      setExportError("This download link has expired. Prepare a new export.");
+      setExportStatus("error");
+      return;
+    }
+    try {
+      if (app.getHostCapabilities()?.openLinks) {
+        const result = await app.openLink({ url: exportDownload.downloadUrl });
+        if (result.isError) throw new Error("The host could not open the download link");
+        return;
+      }
+      const anchor = document.createElement("a");
+      anchor.href = exportDownload.downloadUrl;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.download = exportDownload.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setExportError(message);
+      setExportStatus("error");
+    }
+  };
+
+  const handleCounterClick = () => {
+    if (
+      limitsEnabled &&
+      userInfo?.isAnonymousPlan &&
+      userInfo.remainingSlots !== undefined
+    ) {
+      const message = getRemainingSlotsMessage(
+        userInfo.remainingSlots,
+        contentMetadata?.limits,
+      );
+
+      addLog("Counter clicked - setting alert", {
+        message,
+        portalLink: userInfo.portalLink,
+      });
+      setAlertMessage(message);
+      setAlertPortalLink(userInfo.portalLink || null);
+      addLog("Counter clicked - alert state set", { message });
+    } else {
+      addLog("Counter clicked but user is not on anonymous plan", {
+        isAnonymousPlan: userInfo?.isAnonymousPlan,
+      });
+    }
+  };
+
+  const handleCloseAlert = () => {
+    if (deleteConfirmation) {
+      handleCancelDelete();
+    } else {
+      setAlertMessage(null);
+      setAlertPortalLink(null);
+    }
+  };
+
+  const handleAlertPortalClick = () => {
+    if (alertPortalLink) {
+      app.openLink({ url: alertPortalLink });
+      handleCloseAlert();
+    }
+  };
+
+  const handleDeleteChat = async (chat: Chat) => {
+    addLog("Delete chat clicked", { chatId: chat.id, title: chat.title });
+
+    // Show confirmation in alert area
+    setDeleteConfirmation({
+      chatId: chat.id,
+      title: chat.title,
+    });
+    setAlertMessage(`Are you sure you want to delete "${chat.title}"?`);
+    setAlertPortalLink(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmation) return;
+
+    const { chatId } = deleteConfirmation;
+    setDeleteConfirmation(null);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+
+    // Show loading indicator during delete operation
+    setPaginationLoading(true);
+
+    try {
+      addLog("Calling deleteSavedEntry tool", { chatId });
+      const result = (await app.callServerTool({
+        name: "deleteSavedEntry",
+        arguments: { entryId: chatId },
+      })) as ChatVaultToolResult | null;
+
+      addLog("Delete chat result", result);
+
+      if (result?.structuredContent?.deleted) {
+        // Remove from local state immediately
+        setChats((prev) => prev.filter((c) => c.id !== chatId));
+        addLog("Chat removed from local state");
+
+        // Update userInfo counts locally
+        if (userInfo) {
+          setUserInfo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  totalChats: Math.max(0, (prev.totalChats || 0) - 1),
+                  remainingSlots:
+                    limitsEnabled && prev.remainingSlots !== undefined
+                      ? (prev.remainingSlots || 0) + 1
+                      : undefined,
+                }
+              : null,
+          );
+          addLog("UserInfo counts updated locally");
+        }
+
+        // If deleted chat was selected, clear selection
+        if (selectedChat?.id === chatId) {
+          setSelectedChat(null);
+        }
+      } else {
+        throw new Error(result?.structuredContent?.message || "Delete failed");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error deleting chat", { error: errorMessage });
+      setAlertMessage(`Failed to delete chat: ${errorMessage}`);
+      setAlertPortalLink(null);
+    } finally {
+      // Hide loading indicator when done
+      setPaginationLoading(false);
+    }
+  };
+
+  const handleStartEditTitle = () => {
+    if (!selectedChat) return;
+    setEditedTitle(selectedChat.title);
+    setIsEditingTitle(true);
+    addLog("Started editing title", { currentTitle: selectedChat.title });
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setEditedTitle("");
+    addLog("Cancelled editing title");
+  };
+
+  const handleSaveTitle = async () => {
+    if (!selectedChat) return;
+
+    const trimmedTitle = editedTitle.trim();
+
+    // Local validation
+    if (trimmedTitle.length === 0) {
+      setAlertMessage("Title cannot be empty");
+      setAlertPortalLink(null);
+      return;
+    }
+
+    if (trimmedTitle.length > 2048) {
+      setAlertMessage("Title cannot exceed 2048 characters");
+      setAlertPortalLink(null);
+      return;
+    }
+
+    // If title hasn't changed, just cancel editing
+    if (trimmedTitle === selectedChat.title) {
+      handleCancelEditTitle();
+      return;
+    }
+
+    setIsUpdatingTitle(true);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+
+    // Capture chatId and current title before async operation to avoid closure issues
+    const chatId = selectedChat.id;
+
+    try {
+      addLog("Calling updateSavedEntry tool", { chatId, title: trimmedTitle });
+      const result = (await app.callServerTool({
+        name: "updateSavedEntry",
+        arguments: {
+          entryId: chatId,
+          entry: {
+            title: trimmedTitle,
+          },
+        },
+      })) as ChatVaultToolResult | null;
+
+      addLog("Update chat result", result);
+
+      if (result?.structuredContent?.updated) {
+        const newTitle = (
+          typeof result.structuredContent.title === "string"
+            ? result.structuredContent.title
+            : trimmedTitle
+        ) as string;
+
+        // Update selectedChat only if it's still the same chat
+        setSelectedChat((prev) =>
+          prev && prev.id === chatId ? { ...prev, title: newTitle } : prev,
+        );
+
+        // Update chats list
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId ? { ...chat, title: newTitle } : chat,
+          ),
+        );
+
+        addLog("Title updated in local state", { chatId, newTitle });
+
+        // Exit edit mode
+        setIsEditingTitle(false);
+        setEditedTitle("");
+      } else {
+        throw new Error(
+          String(result?.structuredContent?.message || "Update failed"),
+        );
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error updating chat title", { error: errorMessage });
+      setAlertMessage(`Failed to update title: ${errorMessage}`);
+      setAlertPortalLink(null);
+    } finally {
+      setIsUpdatingTitle(false);
+    }
+  };
+
+  const handleStartEditTurn = async (
+    turnIndex: number,
+    field: "prompt" | "response",
+  ) => {
+    if (!selectedChat || !editedTurns[turnIndex]) return;
+    const turn = editedTurns[turnIndex];
+    const turnId = `${selectedChat.id}-${turnIndex}`;
+    let value = field === "prompt" ? turn.prompt : turn.response;
+
+    if (turn.truncated && !fullTurnContent[turnId]) {
+      try {
+        const result = (await app.callServerTool({
+          name: "loadFullTurn",
+          arguments: { entryId: selectedChat.id, turnIndex },
+        })) as ChatVaultToolResult | null;
+        const turnData = result?.structuredContent?.turn as
+          | { prompt: string; response: string }
+          | undefined;
+        if (turnData) {
+          setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
+          value = field === "prompt" ? turnData.prompt : turnData.response;
+        }
+      } catch (err) {
+        addLog("Error loading full turn for edit", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setAlertMessage(
+          `Failed to load turn: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return;
+      }
+    } else if (fullTurnContent[turnId]) {
+      value =
+        field === "prompt"
+          ? fullTurnContent[turnId].prompt
+          : fullTurnContent[turnId].response;
+    }
+
+    setEditingTurn({ turnIndex, field });
+    setEditingTurnValue(value);
+    addLog("Started editing turn", { turnIndex, field });
+  };
+
+  const handleCancelEditTurn = () => {
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    addLog("Cancelled editing turn");
+  };
+
+  const handleSaveTurnEdit = (
+    turnIndex: number,
+    field: "prompt" | "response",
+  ) => {
+    if (!selectedChat || !editedTurns[turnIndex]) return;
+
+    const trimmedValue = editingTurnValue.trim();
+
+    // Update the edited turn
+    const updatedTurns = [...editedTurns];
+    updatedTurns[turnIndex] = {
+      ...updatedTurns[turnIndex],
+      [field]: trimmedValue,
+    };
+
+    setEditedTurns(updatedTurns);
+    setEditingTurn(null);
+    setEditingTurnValue("");
+    setHasUnsavedChanges(true);
+    addLog("Turn edited", { turnIndex, field });
+  };
+
+  const handleDeleteTurn = (turnIndex: number) => {
+    if (!selectedChat || editedTurns.length <= 1) {
+      setAlertMessage(
+        "Cannot delete the last turn. A chat must have at least one turn.",
+      );
+      setAlertPortalLink(null);
+      return;
+    }
+
+    const updatedTurns = editedTurns.filter((_, index) => index !== turnIndex);
+    setEditedTurns(updatedTurns);
+    setHasUnsavedChanges(true);
+    addLog("Turn deleted", { turnIndex, remainingTurns: updatedTurns.length });
+  };
+
+  const handleSaveChat = async () => {
+    if (!selectedChat) return;
+
+    // Validate: at least one turn
+    if (editedTurns.length === 0) {
+      setAlertMessage("Chat must have at least one turn");
+      setAlertPortalLink(null);
+      return;
+    }
+
+    // Validate each turn (notes can have empty response, but must have prompt)
+    for (let i = 0; i < editedTurns.length; i++) {
+      const turn = editedTurns[i];
+      if (!turn.prompt || turn.prompt.trim().length === 0) {
+        setAlertMessage(`Turn ${i + 1} must have a prompt`);
+        setAlertPortalLink(null);
+        return;
+      }
+      // Response is optional (for notes), but if present must be a string
+      if (turn.response !== undefined && typeof turn.response !== "string") {
+        setAlertMessage(`Turn ${i + 1} response must be a string`);
+        setAlertPortalLink(null);
+        return;
+      }
+    }
+
+    setIsSavingChat(true);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+
+    // Capture chatId before async operation
+    const chatId = selectedChat.id;
+
+    try {
+      addLog("Calling updateSavedEntry tool with turns", {
+        chatId,
+        turnsCount: editedTurns.length,
+      });
+      const result = (await app.callServerTool({
+        name: "updateSavedEntry",
+        arguments: {
+          entryId: chatId,
+          entry: {
+            turns: editedTurns,
+          },
+        },
+      })) as ChatVaultToolResult | null;
+
+      addLog("Update chat result", result);
+
+      if (result?.structuredContent?.updated) {
+        const updatedTurns =
+          (result.structuredContent?.turns as
+            | { prompt: string; response: string }[]
+            | undefined) || editedTurns;
+
+        // Update selectedChat
+        setSelectedChat((prev) =>
+          prev && prev.id === chatId ? { ...prev, turns: updatedTurns } : prev,
+        );
+
+        // Update chats list
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId ? { ...chat, turns: updatedTurns } : chat,
+          ),
+        );
+
+        addLog("Chat turns updated in local state", {
+          chatId,
+          turnsCount: updatedTurns.length,
+        });
+
+        // Clear editing state
+        setHasUnsavedChanges(false);
+        setEditingTurn(null);
+        setEditingTurnValue("");
+      } else {
+        throw new Error(
+          String(result?.structuredContent?.message || "Update failed"),
+        );
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error updating chat turns", { error: errorMessage });
+      setAlertMessage(`Failed to update chat: ${errorMessage}`);
+      setAlertPortalLink(null);
+    } finally {
+      setIsSavingChat(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmation(null);
+    setAlertMessage(null);
+    setAlertPortalLink(null);
+    addLog("Delete cancelled by user");
+  };
+
+  // Convert markdown to HTML
+  const markdownToHtml = (markdown: string): string => {
+    if (!markdown) return "";
+
+    let html = markdown;
+    const codeBlocks: string[] = [];
+
+    // Extract fenced code blocks (```tsx, ```json, etc.) first so paragraph split doesn't break them
+    html = html.replace(
+      /```(\w*)\n([\s\S]*?)```/g,
+      (_: string, lang: string, content: string) => {
+        const escaped = content
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+        const langClass = lang ? ` language-${lang}` : "";
+        const index = codeBlocks.length;
+        codeBlocks.push(
+          `<pre class="mb-3 overflow-x-auto rounded bg-gray-100 dark:bg-gray-800 p-3 text-sm"><code class="${langClass}">${escaped}</code></pre>`,
+        );
+        return `\n\n%%%CODEBLOCK${index}%%%\n\n`;
+      },
+    );
+
+    // Convert headers (do this first before paragraph processing)
+    html = html.replace(
+      /^### (.*$)/gim,
+      '<h5 class="text-base font-semibold mt-6 mb-3">$1</h5>',
+    );
+    html = html.replace(
+      /^## (.*$)/gim,
+      '<h4 class="text-lg font-semibold mt-6 mb-3">$1</h4>',
+    );
+    html = html.replace(
+      /^# (.*$)/gim,
+      '<h3 class="text-xl font-semibold mt-6 mb-4">$1</h3>',
+    );
+
+    // Convert links [text](url) - do this before bold to avoid conflicts
+    html = html.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">$1</a>',
+    );
+
+    // Convert bold
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    // Italic (after bold so ** is already consumed)
+    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    html = html.replace(/_([^_]+)_/g, "<em>$1</em>");
+    // Inline code (after fenced blocks so ``` is gone; no newlines in inline code)
+    html = html.replace(
+      /`([^`\n]+)`/g,
+      '<code class="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-1 rounded">$1</code>',
+    );
+    // Strikethrough
+    html = html.replace(/~~(.*?)~~/g, "<del>$1</del>");
+
+    // Parse a markdown table block into header row and body rows
+    const parseMarkdownTable = (block: string) => {
+      const lines = block
+        .split(/\n/)
+        .map((l: string) => l.trim())
+        .filter(Boolean);
+      if (lines.length === 0)
+        return { header: [] as string[], body: [] as string[][] };
+      const rowToCells = (line: string) => {
+        const cells = line.split("|").map((c: string) => c.trim());
+        while (cells.length && cells[0] === "") cells.shift();
+        while (cells.length && cells[cells.length - 1] === "") cells.pop();
+        return cells;
+      };
+      const rows = lines.map(rowToCells);
+      const header = rows[0] || [];
+      const isSeparator = (cells: string[]) =>
+        cells.every((c: string) => /^[\s\-:]+$/.test(c));
+      const body =
+        rows.length > 1 && isSeparator(rows[1]) ? rows.slice(2) : rows.slice(1);
+      return { header, body };
+    };
+
+    // Convert line breaks to paragraphs (double newline = paragraph, single = br)
+    const paragraphs = html.split(/\n\s*\n/);
+    const tableRowPattern = /^\|.+\|$/;
+    const tableCellClasses =
+      "px-2 py-1 border border-gray-300 dark:border-gray-600";
+    const tableHeaderClasses =
+      "px-2 py-1 border border-gray-300 dark:border-gray-600 font-semibold bg-gray-100 dark:bg-gray-700 text-left";
+    html = paragraphs
+      .map((p: string) => {
+        const trimmed = p.trim();
+        if (!trimmed) return "";
+        if (/^%%%CODEBLOCK\d+%%%$/.test(trimmed)) return trimmed;
+        const lines = trimmed.split(/\n/).map((l: string) => l.trim());
+        const looksLikeTable =
+          lines.length >= 1 &&
+          lines.every((line: string) => tableRowPattern.test(line));
+        if (looksLikeTable) {
+          const { header, body } = parseMarkdownTable(trimmed);
+          const colCount = header.length;
+          const thead = header.length
+            ? `<thead><tr>${header.map((c) => `<th class="${tableHeaderClasses}">${c}</th>`).join("")}</tr></thead>`
+            : "";
+          const tbodyRows = body.map(
+            (row: string[]) =>
+              `<tr>${Array.from({ length: colCount }, (_: unknown, i: number) => `<td class="${tableCellClasses}">${row[i] ?? ""}</td>`).join("")}</tr>`,
+          );
+          const tbody = tbodyRows.length
+            ? `<tbody>${tbodyRows.join("")}</tbody>`
+            : "";
+          return `<table class="mb-3 table-auto border-collapse border border-gray-300 dark:border-gray-600 text-sm">${thead}${tbody}</table>`;
+        }
+        const ulPattern = /^\s*[-*+]\s+.+$/;
+        const looksLikeUl =
+          lines.length >= 1 &&
+          lines.every((line: string) => ulPattern.test(line.trim()));
+        if (looksLikeUl) {
+          const items = lines.map((line: string) =>
+            line.replace(/^\s*[-*+]\s+/, "").trim(),
+          );
+          return `<ul class="mb-3 list-disc list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join("")}</ul>`;
+        }
+        const olPattern = /^\d+\.\s+.+$/;
+        const looksLikeOl =
+          lines.length >= 1 &&
+          lines.every((line: string) => olPattern.test(line.trim()));
+        if (looksLikeOl) {
+          const items = lines.map((line: string) =>
+            line.replace(/^\d+\.\s+/, "").trim(),
+          );
+          return `<ol class="mb-3 list-decimal list-inside space-y-1">${items.map((item: string) => `<li>${item}</li>`).join("")}</ol>`;
+        }
+        const looksLikeBlockquote =
+          lines.length >= 1 &&
+          lines.every((line: string) => line.startsWith("> ") || line === ">");
+        if (looksLikeBlockquote) {
+          const content = lines
+            .map((line: string) =>
+              line.startsWith("> ") ? line.slice(2) : line === ">" ? "" : line,
+            )
+            .join("<br />");
+          return `<blockquote class="mb-3 border-l-4 border-gray-300 dark:border-gray-600 pl-4 text-gray-700 dark:text-gray-300">${content}</blockquote>`;
+        }
+        // Replace single newlines with <br> within paragraphs
+        const withBreaks = trimmed.replace(/\n/g, "<br />");
+        return `<p class="mb-3">${withBreaks}</p>`;
+      })
+      .join("");
+
+    codeBlocks.forEach((block: string, i: number) => {
+      html = html.replace(`%%%CODEBLOCK${i}%%%`, block);
+    });
+    return html;
+  };
+
+  const handleHelpClick = async () => {
+    if (showHelp) {
+      setShowHelp(false);
+      return;
+    }
+
+    // If help text is already cached, just show it
+    if (helpText) {
+      setShowHelp(true);
+      return;
+    }
+
+    // Show help panel and fetch help text on demand
+    setShowHelp(true);
+    setHelpTextLoading(true);
+
+    try {
+      addLog("Calling explainHowToUse tool");
+      const result = (await app.callServerTool({
+        name: "explainHowToUse",
+        arguments: {},
+      })) as ChatVaultToolResult | null;
+
+      addLog("explainHowToUse result", result);
+
+      if (result?.structuredContent?.helpText) {
+        const rawHelpText = String(result.structuredContent.helpText);
+        // Replace placeholders in help text
+        const expirationDays = contentMetadata?.config?.chatExpirationDays ?? 7;
+        const processedHelpText = rawHelpText.replace(
+          /{expirationDays}/g,
+          String(expirationDays),
+        );
+        setHelpText(processedHelpText);
+      } else {
+        throw new Error("No help text received from server");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Error loading help text", { error: errorMessage });
+      setAlertMessage(`Failed to load help text: ${errorMessage}`);
+      setAlertPortalLink(null);
+      // Keep help panel open but show error state
+    } finally {
+      setHelpTextLoading(false);
+    }
+  };
+
+  const toggleTurnExpansion = async (index: number) => {
+    addLog("Toggle turn expansion", { index });
+    if (!selectedChat) return;
+
+    const turnId = `${selectedChat.id}-${index}`;
+    const turn = editedTurns[index];
+    const isCurrentlyExpanded = expandedTurns.has(index);
+
+    if (isCurrentlyExpanded) {
+      setExpandedTurns((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+      return;
+    }
+
+    // Expanding: if truncated and not cached, fetch full content
+    const needsFetch = turn?.truncated && !fullTurnContent[turnId];
+    if (needsFetch) {
+      setLoadingTurnIds((prev) => new Set(prev).add(turnId));
+      try {
+        const result = (await app.callServerTool({
+          name: "loadFullTurn",
+          arguments: { entryId: selectedChat.id, turnIndex: index },
+        })) as ChatVaultToolResult | null;
+        const turnData = result?.structuredContent?.turn as
+          | { prompt: string; response: string }
+          | undefined;
+        if (turnData) {
+          setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
+        }
+      } catch (err) {
+        addLog("Error loading full turn", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setAlertMessage(
+          `Failed to load turn: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        setLoadingTurnIds((prev) => {
+          const next = new Set(prev);
+          next.delete(turnId);
+          return next;
+        });
+      }
+    }
+
+    setExpandedTurns((prev) => {
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
+  };
+
+  const ensureFullTurnContent = async (
+    turnIndex: number,
+  ): Promise<{ prompt: string; response: string } | null> => {
+    if (!selectedChat) return null;
+    const turn = editedTurns[turnIndex];
+    const turnId = `${selectedChat.id}-${turnIndex}`;
+    if (!turn?.truncated)
+      return { prompt: turn.prompt, response: turn.response };
+    if (fullTurnContent[turnId]) return fullTurnContent[turnId];
+    try {
+      const result = (await app.callServerTool({
+        name: "loadFullTurn",
+        arguments: { entryId: selectedChat.id, turnIndex },
+      })) as ChatVaultToolResult | null;
+      const turnData = result?.structuredContent?.turn as
+        | { prompt: string; response: string }
+        | undefined;
+      if (turnData) {
+        setFullTurnContent((prev) => ({ ...prev, [turnId]: turnData }));
+        return turnData;
+      }
+    } catch (err) {
+      addLog("Error loading full turn for copy", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return null;
+  };
+
+  const handleCopyTurnField = async (
+    turnIndex: number,
+    field: "prompt" | "response",
+    id: string,
+  ) => {
+    const full = await ensureFullTurnContent(turnIndex);
+    const turn = editedTurns[turnIndex];
+    const text = full
+      ? field === "prompt"
+        ? full.prompt
+        : full.response
+      : field === "prompt"
+        ? (turn?.prompt ?? "")
+        : (turn?.response ?? "");
+    await copyToClipboard(text, id);
+  };
+
+  const copyToClipboard = async (text: string, id: string) => {
+    console.log("[copyToClipboard] Called", { id, textLength: text?.length });
+
+    const setCopiedState = () => {
+      setCopiedItems((prev) => {
+        const next = {
+          ...prev,
+          [id]: true,
+        };
+        console.log("[copyToClipboard] Setting copiedItems", {
+          id,
+          prev,
+          next,
+        });
+        return next;
+      });
+      setTimeout(() => {
+        console.log("[copyToClipboard] Removing copied state after timeout", {
+          id,
+        });
+        setCopiedItems((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          console.log("[copyToClipboard] Removed from copiedItems", {
+            id,
+            next,
+          });
+          return next;
+        });
+      }, 3000);
+    };
+
+    // Use execCommand (works in iframes)
+    try {
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+
+      // Create a temporary textarea element
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-999999px";
+      textarea.style.top = "-999999px";
+      textarea.style.opacity = "0";
+      textarea.setAttribute("readonly", "");
+      document.body.appendChild(textarea);
+
+      // Select text without focusing (to avoid scroll)
+      textarea.select();
+      textarea.setSelectionRange(0, text.length);
+
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+
+      // Restore scroll position
+      window.scrollTo(scrollX, scrollY);
+
+      if (successful) {
+        console.log("[copyToClipboard] Copy successful", { id });
+        addLog("Copied to clipboard", { id });
+        setCopiedState();
+      } else {
+        throw new Error("execCommand('copy') returned false");
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[copyToClipboard] Copy failed", {
+        id,
+        error: errMsg,
+        err,
+      });
+      addLog(
+        "Failed to copy - clipboard access blocked. Please copy manually.",
+        {
+          error: errMsg,
+          suggestion:
+            "The clipboard API is blocked in this context. You may need to copy the text manually.",
+        },
+      );
+
+      // Show a user-friendly message
+      setAlertMessage(
+        "Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.",
+      );
+      setAlertPortalLink(null);
+    }
+  };
+
+  const formatChatForCopy = (chat: Chat | null) => {
+    if (!chat) {
+      return "";
+    }
+
+    // Handle notes differently
+    if (chat.type === "note") {
+      return chat.content || "";
+    }
+
+    // Handle chats with turns
+    if (!chat.turns || chat.turns.length === 0) {
+      return "";
+    }
+
+    return chat.turns
+      .map((turn: { prompt: string; response: string }) => {
+        return `You said:\n${turn.prompt}\n\nAI said:\n${turn.response}`;
+      })
+      .join("\n\n");
+  };
+
+  const copyEntireChat = async (chat: Chat | null) => {
+    console.log("[copyEntireChat] Called", {
+      chat,
+      timestamp: chat?.timestamp,
+    });
+    try {
+      if (!chat || !chat.timestamp) {
+        throw new Error("Invalid chat object");
+      }
+      const chatId = `chat-${chat.timestamp}`;
+      console.log("[copyEntireChat] Formatting chat", {
+        chatId,
+        turnsCount: chat.turns?.length,
+      });
+      const formattedText = formatChatForCopy(chat);
+      console.log("[copyEntireChat] Formatted text length", {
+        chatId,
+        textLength: formattedText.length,
+      });
+      await copyToClipboard(formattedText, chatId);
+      console.log("[copyEntireChat] Success", { chatId });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[copyEntireChat] Error", { error: errMsg, err, chat });
+      addLog("Failed to copy entire chat", { error: errMsg });
+    }
+  };
+
+  const truncateText = (text: string, maxLength = 150) => {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + "...";
+  };
+
+  const formatDate = (timestamp: string | number | Date | undefined) => {
+    if (timestamp == null) return "";
+    const date = new Date(timestamp);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const closeModalAndResetForm = () => {
+    setShowManualSaveModal(false);
+    setManualSaveTitle("");
+    setManualSaveContent("");
+    setManualSaveHtml("");
+    setManualSaveError(null);
+    setIsSaving(false);
+  };
+
+  const reloadChatsAfterSave = async () => {
+    setSearchQuery("");
+    setIsSearching(false);
+    setPaginationLoading(true);
+    try {
+      const loadResult = (await app.callServerTool({
+        name: "loadSavedEntries",
+        arguments: buildLoadSavedEntriesArgs({
+          page: 0,
+          widgetVersion: WIDGET_VERSION,
+          topicIds: getActiveTopicIds(),
+        }),
+      })) as ChatVaultToolResult | null;
+      const parsed = parseLoadSavedEntriesResponse(
+        loadResult?.structuredContent as Record<string, unknown> | undefined,
+      );
+      if (parsed) {
+        applyParsedLoad(parsed, { page: 0 });
+        if (parsed.userInfo) {
+          addLog("UserInfo updated after save", parsed.userInfo);
+        }
+      }
+    } catch (err) {
+      addLog("Error reloading chats after manual save", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      setError(
+        `Failed to reload chats: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setPaginationLoading(false);
+    }
+  };
+
+  const handleManualSave = async () => {
+    if (!manualSaveContent.trim()) {
+      setManualSaveError("Please paste the chat conversation");
+      return;
+    }
+
+    setIsSaving(true);
+    setManualSaveError(null);
+
+    const contentToSend = manualSaveHtml || manualSaveContent;
+    const titleToSend = manualSaveTitle.trim() || undefined;
+
+    addLog("🚀 [WIDGET] Starting manual save", {
+      hasTitle: !!titleToSend,
+      title: titleToSend || "(none)",
+      contentLength: contentToSend.length,
+      contentPreview: contentToSend.substring(0, 200),
+      hasHtml: !!manualSaveHtml,
+      htmlLength: manualSaveHtml?.length || 0,
+      textLength: manualSaveContent?.length || 0,
+    });
+
+    try {
+      const toolArgs = {
+        htmlContent: contentToSend,
+        title: titleToSend,
+        widgetVersion: WIDGET_VERSION,
+      };
+
+      addLog("📤 [WIDGET] Calling savePastedContent tool", {
+        toolName: "savePastedContent",
+        args: {
+          htmlContentLength: toolArgs.htmlContent.length,
+          htmlContentPreview: toolArgs.htmlContent.substring(0, 200),
+          title: toolArgs.title || "(none)",
+        },
+      });
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error("Request timed out after 30 seconds")),
+          30000,
+        );
+      });
+
+      const callToolPromise = app.callServerTool({
+        name: "savePastedContent",
+        arguments: toolArgs,
+      });
+
+      addLog("⏳ [WIDGET] Waiting for response...");
+      const result = (await Promise.race([
+        callToolPromise,
+        timeoutPromise,
+      ])) as ChatVaultToolResult;
+      addLog("✅ [WIDGET] Response received");
+
+      addLog("📥 [WIDGET] Manual save result received", {
+        resultType: typeof result,
+        isNull: result === null,
+        hasError: !!result?.error,
+        hasStructuredContent: !!result?.structuredContent,
+        structuredContentError: result?.structuredContent?.error || "(none)",
+        structuredContentChatId: result?.structuredContent?.chatId || "(none)",
+        structuredContentJobId: result?.structuredContent?.jobId || "(none)",
+      });
+
+      if (result == null) {
+        addLog("❌ [WIDGET] No response received from server");
+        throw new Error("No response received from server");
+      }
+
+      if (result?.error) {
+        const errorMessage =
+          result.error.message ||
+          result.error?.data ||
+          result.error ||
+          "Unknown error occurred";
+        addLog("❌ [WIDGET] Error found in result.error", {
+          error: result.error,
+          errorMessage,
+        });
+        throw new Error(String(errorMessage));
+      }
+
+      if (result?.jsonrpc === "2.0" && result?.error) {
+        const errorMessage =
+          (typeof result.error === "object" &&
+          result.error &&
+          "message" in result.error
+            ? (result.error as { message?: string }).message
+            : result.error) ||
+          result.error?.data ||
+          "Unknown error occurred";
+        addLog("❌ [WIDGET] JSON-RPC error found", {
+          error: result.error,
+          errorMessage,
+        });
+        throw new Error(String(errorMessage));
+      }
+
+      if (
+        result?.content &&
+        Array.isArray(result.content) &&
+        result.content.length > 0
+      ) {
+        const firstContent = result.content[0] as
+          | { type?: string; text?: string }
+          | undefined;
+        if (firstContent && "text" in firstContent && firstContent.text) {
+          const text = firstContent.text;
+          if (
+            text.toLowerCase().includes("error") ||
+            text.toLowerCase().includes("failed") ||
+            text.toLowerCase().includes("could not parse")
+          ) {
+            addLog("❌ [WIDGET] Error text found in content", { text });
+            throw new Error(text);
+          }
+        }
+      }
+
+      if (result?.structuredContent) {
+        if (result.structuredContent.error === "limit_reached") {
+          const message =
+            typeof result.structuredContent.message === "string"
+              ? result.structuredContent.message
+              : "Chat limit reached";
+          const portalLink = result.structuredContent.portalLink;
+          addLog("❌ [WIDGET] Limit reached error", { message, portalLink });
+          closeModalAndResetForm();
+          setAlertMessage(message);
+          setAlertPortalLink(
+            typeof portalLink === "string" ? portalLink : null,
+          );
+          return;
+        }
+
+        if (result.structuredContent.error === "server_error") {
+          const message = (
+            typeof result.structuredContent.message === "string"
+              ? result.structuredContent.message
+              : "An error occurred while saving the chat"
+          ) as string;
+          addLog("❌ [WIDGET] Server error in structuredContent", { message });
+          closeModalAndResetForm();
+          setAlertMessage(message);
+          setAlertPortalLink(null);
+          return;
+        }
+
+        if (result.structuredContent.error) {
+          const errObj = result.structuredContent.error;
+          const errorMessage =
+            (typeof errObj === "object" && errObj && "message" in errObj
+              ? (errObj as { message?: string }).message
+              : String(errObj)) || "Unknown error occurred";
+          addLog("❌ [WIDGET] Error found in structuredContent.error", {
+            error: result.structuredContent.error,
+            errorMessage,
+          });
+          throw new Error(String(errorMessage));
+        }
+      }
+
+      // Sync path: chatId returned directly
+      const chatId = result?.structuredContent?.chatId;
+      if (chatId) {
+        addLog("✅ [WIDGET] Sync save completed", { chatId });
+        closeModalAndResetForm();
+        await reloadChatsAfterSave();
+        return;
+      }
+
+      // Async path: jobId returned, poll for completion
+      const jobId =
+        typeof result?.structuredContent?.jobId === "string"
+          ? result.structuredContent.jobId
+          : undefined;
+      if (!jobId) {
+        addLog("❌ [WIDGET] No jobId or chatId in successful response");
+        throw new Error("Save queued but no job ID received");
+      }
+
+      addLog(
+        "✅ [WIDGET] Job queued, closing modal and polling for completion",
+        { jobId },
+      );
+
+      // Close modal immediately, show success alert, start polling
+      closeModalAndResetForm();
+      setAddSuccessAlert("Chat save started successfully.");
+      setPendingAddJobId(jobId);
+
+      const POLL_INTERVAL_MS = 1500;
+      const POLL_TIMEOUT_MS = 180_000; // 3 min
+      const startTime = Date.now();
+      let pollCount = 0;
+
+      const pollStatus = async (): Promise<{
+        status: string;
+        chatId?: string;
+        error?: string;
+      } | null> => {
+        if (pollCount === 0) {
+          addLog("First poll: calling getSaveJobStatus with jobId", {
+            jobId,
+            jobIdLength: jobId.length,
+          });
+        }
+        pollCount += 1;
+        const statusResult = (await app.callServerTool({
+          name: "getSaveJobStatus",
+          arguments: { jobId },
+        })) as ChatVaultToolResult | null;
+        const statusSc = statusResult?.structuredContent as
+          | { status?: string; chatId?: string; error?: string }
+          | undefined;
+        if (!statusSc || typeof statusSc.status !== "string") return null;
+        return {
+          status: statusSc.status,
+          chatId: statusSc.chatId,
+          error: statusSc.error,
+        };
+      };
+
+      let statusResult: {
+        status: string;
+        chatId?: string;
+        error?: string;
+      } | null = null;
+      while (Date.now() - startTime < POLL_TIMEOUT_MS) {
+        statusResult = await pollStatus();
+        if (statusResult?.status === "completed") {
+          addLog("✅ [WIDGET] Job completed", { chatId: statusResult.chatId });
+          break;
+        }
+        if (statusResult?.status === "failed") {
+          addLog("❌ [WIDGET] Job failed", { error: statusResult.error });
+          setPendingAddJobId(null);
+          setAddSuccessAlert(null);
+          setAlertMessage(statusResult.error || "Save failed");
+          setAlertPortalLink(null);
+          return;
+        }
+        if (statusResult?.status === "expired") {
+          addLog("⚠️ [WIDGET] Job status expired (key TTL)");
+          setPendingAddJobId(null);
+          setAddSuccessAlert(null);
+          setAlertMessage(
+            "Save is still processing. Please refresh in a moment to see your chat.",
+          );
+          setAlertPortalLink(null);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      }
+
+      if (statusResult?.status !== "completed") {
+        setPendingAddJobId(null);
+        setAddSuccessAlert(null);
+        setAlertMessage(
+          "Save is taking longer than expected. Please refresh in a moment to check.",
+        );
+        setAlertPortalLink(null);
+        return;
+      }
+
+      // Poll completed successfully
+      setPendingAddJobId(null);
+      setAddSuccessAlert(null);
+      await reloadChatsAfterSave();
+    } catch (err) {
+      let errorMessage = "Unknown error occurred";
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      } else if (err && typeof err === "object" && err !== null) {
+        const o = err as {
+          message?: string;
+          name?: string;
+          stack?: string;
+          error?: { message?: string } | string;
+        };
+        errorMessage =
+          o.message ||
+          (typeof o.error === "object" && o.error?.message) ||
+          (typeof o.error === "string" ? o.error : "") ||
+          JSON.stringify(err);
+      }
+
+      addLog("❌ [WIDGET] Manual save failed", {
+        error: errorMessage,
+        errorType: typeof err,
+        errorString: String(err),
+      });
+      closeModalAndResetForm();
+      setAlertMessage(
+        errorMessage ||
+          "Failed to save chat. Please check the debug panel for details.",
+      );
+      setAlertPortalLink(null);
+    }
+  };
+
+  const handleCloseManualSaveModal = () => {
+    setShowManualSaveModal(false);
+    setManualSaveTitle("");
+    setManualSaveContent("");
+    setManualSaveHtml("");
+    setManualSaveError(null);
+  };
+
+  const handleSearch = async (query: string, page = 0) => {
+    if (!query.trim()) {
+      // Clear search - reload regular chats
+      handleClearSearch();
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchLoading(true);
+    setError(null);
+    setCurrentPage(page);
+    addLog("Searching chats", { query, page });
+
+    try {
+      const result = (await app.callServerTool({
+        name: "loadSavedEntries",
+        arguments: buildLoadSavedEntriesArgs({
+          page,
+          widgetVersion: WIDGET_VERSION,
+          query: query.trim(),
+          topicIds: getActiveTopicIds(),
+        }),
+      })) as ChatVaultToolResult | null;
+
+      addLog("Search result", result);
+      applyParsedLoad(
+        parseLoadSavedEntriesResponse(
+          result?.structuredContent as Record<string, unknown> | undefined,
+        ),
+        { page },
+      );
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addLog("Search failed", { error: errorMessage });
+      setError(
+        errorMessage.includes("Not connected")
+          ? "Connection lost. Reopen the chat to reconnect."
+          : `Search failed: ${errorMessage}`,
+      );
+    } finally {
+      setSearchLoading(false);
+      // Keep isSearching true - it indicates search is active
+    }
+  };
+
+  const handleClearSearch = async () => {
+    setSearchQuery("");
+    setIsSearching(false);
+    setCurrentPage(0);
+    setPaginationLoading(true);
+    addLog("Clearing search, reloading chats");
+
+    try {
+      await loadChatsAtPage(0, {
+        topicIds: getActiveTopicIds(),
+      });
+    } catch (err) {
+      addLog("Error reloading chats", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setPaginationLoading(false);
+    }
+  };
+
+  const loadMoreChats = async () => {
+    if (!pagination?.hasMore || loading) return;
+
+    const nextPage = currentPage + 1;
+    setLoading(true);
+    addLog("Loading more chats", { page: nextPage, isSearching });
+
+    try {
+      if (isSearching && searchQuery) {
+        await loadChatsAtPage(nextPage, {
+          query: searchQuery,
+          append: true,
+        });
+      } else {
+        await loadChatsAtPage(nextPage, { append: true });
+      }
+    } catch (err) {
+      addLog("Error loading more chats", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Esc key to clear search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && searchQuery && !selectedChat) {
+        e.preventDefault();
+        handleClearSearch();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [searchQuery, selectedChat]);
+
+  // SVG logo component
+  const ChatVaultLogo = () => (
+    <svg
+      width="64"
+      height="64"
+      viewBox="0 0 1024 1024"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="0" y="0" width="1024" height="1024" rx="220" fill="#0F172A" />
+      <circle
+        cx="512"
+        cy="512"
+        r="300"
+        fill="none"
+        stroke="#E5E7EB"
+        strokeWidth="80"
+      />
+      <rect x="492" y="212" width="40" height="120" rx="20" fill="#E5E7EB" />
+      <rect x="492" y="692" width="40" height="120" rx="20" fill="#E5E7EB" />
+      <rect x="212" y="492" width="120" height="40" rx="20" fill="#E5E7EB" />
+      <rect x="692" y="492" width="120" height="40" rx="20" fill="#E5E7EB" />
+      <circle cx="512" cy="512" r="40" fill="#E5E7EB" />
+      <rect x="590" y="350" width="220" height="140" rx="40" fill="#3B82F6" />
+      <path d="M650 490 L620 560 L700 500 Z" fill="#3B82F6" />
+      <rect x="630" y="385" width="140" height="16" rx="8" fill="#E5E7EB" />
+      <rect x="630" y="420" width="100" height="16" rx="8" fill="#E5E7EB" />
+    </svg>
+  );
+
+  return (
+    <div
+      className={`antialiased w-full text-black px-4 pb-2 border rounded-2xl sm:rounded-3xl overflow-x-hidden ${
+        isDarkMode
+          ? "bg-gray-900 border-gray-700 text-white"
+          : "bg-white border-black/10 text-black"
+      }`}
+    >
+      <div className="max-w-full relative">
+        {/* Toolbar */}
+        <div
+          className={`flex flex-row items-center justify-between gap-2 py-3 border-b ${
+            isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {selectedChat ? (
+              <button
+                onClick={handleBackClick}
+                className={`p-2 rounded-lg ${
+                  isDarkMode
+                    ? "bg-gray-800 text-white hover:bg-gray-700"
+                    : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title="Back"
+              >
+                <MdArrowBack className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className={`p-2 rounded-lg transition-colors ${
+                  loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                      ? "hover:bg-gray-800 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                }`}
+                title="Refresh chats"
+              >
+                {loading ? (
+                  <div
+                    className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${isDarkMode ? "border-gray-300" : "border-gray-600"}`}
+                  />
+                ) : (
+                  <MdRefresh className="w-5 h-5" />
+                )}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {userInfo?.userName && !userInfo?.isAnon ? (
+              <button
+                onClick={handleOpenWebsite}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  isDarkMode
+                    ? "text-gray-300 hover:text-gray-200 hover:bg-gray-800"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+                title="Open on the website"
+              >
+                {userInfo.userName}
+              </button>
+            ) : userInfo?.isAnonymousPlan && userInfo?.portalLink ? (
+              <button
+                onClick={handleSignIn}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600 hover:bg-gray-700 text-gray-300"
+                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+                title={contentMetadata?.limits?.signInTooltip ?? "Sign in"}
+              >
+                <MdLogin className="w-4 h-4" />
+                <span>Sign In</span>
+              </button>
+            ) : null}
+            {userInfo?.isAnonymousPlan &&
+              limitsEnabled &&
+              userInfo.remainingSlots !== undefined && (
+                <button
+                  onClick={handleCounterClick}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    isDarkMode
+                      ? "bg-gray-800 border-gray-600 hover:bg-gray-700"
+                      : "bg-white border-gray-300 hover:bg-gray-50"
+                  } ${
+                    userInfo.remainingSlots === 0
+                      ? "text-red-500"
+                      : userInfo.remainingSlots === 1
+                        ? "text-yellow-500"
+                        : "text-green-500"
+                  }`}
+                  title={contentMetadata?.limits?.counterTooltip}
+                >
+                  {userInfo.remainingSlots}
+                </button>
+              )}
+            <button
+              onClick={handleOpenWebsite}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              }`}
+              title="Open on the website"
+            >
+              <MdOpenInNew className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleFullscreen}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-300"
+                  : "hover:bg-gray-100 text-gray-600"
+              }`}
+              title={
+                displayMode === "fullscreen"
+                  ? "Exit fullscreen"
+                  : "Enter fullscreen"
+              }
+            >
+              {displayMode === "fullscreen" ? (
+                <MdFullscreenExit className="w-5 h-5" />
+              ) : (
+                <MdFullscreen className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+        </div>
+        {/* Delete Confirmation Modal - Centered Overlay */}
+        {deleteConfirmation && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 min-h-screen">
+            <div
+              className={`w-full max-w-md rounded-lg ${
+                isDarkMode ? "bg-gray-800" : "bg-white"
+              } p-6 shadow-xl`}
+            >
+              <div
+                className={`text-sm mb-4 ${
+                  isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}
+              >
+                {alertMessage}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={handleCancelDelete}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-red-500 text-white hover:bg-red-600"
+                  }`}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Alert - Dismissible OK after widgetAdd started */}
+        {addSuccessAlert && (
+          <div
+            className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
+              isDarkMode
+                ? "bg-gray-800 border-blue-600"
+                : "bg-blue-50 border-blue-200"
+            }`}
+          >
+            <div
+              className={`flex-1 text-sm ${isDarkMode ? "text-gray-200" : "text-blue-900"}`}
+            >
+              {addSuccessAlert}
+            </div>
+            <button
+              onClick={() => setAddSuccessAlert(null)}
+              className={`px-3 py-1.5 rounded text-sm font-medium ${
+                isDarkMode
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {/* Work-in-Progress Indicator - Non-dismissible while polling */}
+        {pendingAddJobId && (
+          <div
+            className={`flex items-center gap-3 p-3 rounded-lg border mb-2 ${
+              isDarkMode
+                ? "bg-gray-800 border-gray-600"
+                : "bg-gray-50 border-gray-200"
+            }`}
+          >
+            <div
+              className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0 ${isDarkMode ? "border-gray-300" : "border-gray-600"}`}
+            />
+            <div
+              className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}
+            >
+              Processing...
+            </div>
+          </div>
+        )}
+
+        {/* Alert Area - Regular alerts (not delete confirmation) */}
+        {alertMessage &&
+          !deleteConfirmation &&
+          (() => {
+            console.log("[ChatVault] Rendering alert", {
+              alertMessage,
+              alertPortalLink,
+            });
+            return (
+              <div
+                className={`flex items-center justify-between gap-3 p-3 rounded-lg border mb-2 ${
+                  isDarkMode
+                    ? "bg-gray-800 border-gray-600"
+                    : "bg-gray-50 border-gray-200"
+                } ${
+                  limitsEnabled &&
+                  userInfo?.isAnonymousPlan &&
+                  userInfo.remainingSlots !== undefined
+                    ? userInfo.remainingSlots === 0
+                      ? "border-red-500"
+                      : userInfo.remainingSlots === 1
+                        ? "border-yellow-500"
+                        : "border-green-500"
+                    : "border-gray-300"
+                }`}
+              >
+                <div
+                  className={`flex-1 text-sm ${
+                    isDarkMode ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  {alertMessage}
+                  {alertPortalLink &&
+                    contentMetadata?.limits?.portalActionLabel && (
+                    <>
+                      {" "}{contentMetadata.limits.portalActionPrefix}{" "}
+                      <button
+                        onClick={handleAlertPortalClick}
+                        className={`underline font-medium ${
+                          isDarkMode
+                            ? "text-blue-400 hover:text-blue-300"
+                            : "text-blue-600 hover:text-blue-700"
+                        }`}
+                      >
+                        {contentMetadata.limits.portalActionLabel}
+                      </button>{" "}
+                      {contentMetadata.limits.portalActionSuffix}
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={handleCloseAlert}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                  }`}
+                  title="Close"
+                >
+                  <MdClose className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })()}
+        {/* Header */}
+        {!showHelp && (
+          <div
+            className={`flex flex-row items-center gap-4 sm:gap-4 border-b py-4 ${
+              isDarkMode ? "border-gray-700" : "border-black/5"
+            }`}
+          >
+            <div
+              className={`sm:w-18 w-16 aspect-square rounded-xl flex items-center justify-center overflow-hidden ${
+                selectedChat ? "cursor-pointer hover:opacity-80" : ""
+              }`}
+              onClick={selectedChat ? handleBackClick : undefined}
+              title={selectedChat ? "Back to conversations" : undefined}
+            >
+              <ChatVaultLogo />
+            </div>
+            <div className="flex-1">
+              <div
+                className={`text-base sm:text-xl font-medium ${
+                  selectedChat ? "cursor-pointer hover:opacity-80" : ""
+                }`}
+                onClick={selectedChat ? handleBackClick : undefined}
+                title={selectedChat ? "Back to conversations" : undefined}
+              >
+                The Chat Vault
+              </div>
+              <div
+                className={`text-sm ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+              >
+                {selectedChat ? (
+                  selectedChat.title
+                ) : contentMetadata?.subTitle ? (
+                  <span
+                    onClick={() => {
+                      if (
+                        contentMetadata.subTitle &&
+                        contentMetadata.subTitle.length > 64
+                      ) {
+                        setSubTitleExpanded(!subTitleExpanded);
+                      }
+                    }}
+                    className={
+                      contentMetadata.subTitle.length > 64
+                        ? "cursor-pointer hover:opacity-80"
+                        : ""
+                    }
+                    title={
+                      contentMetadata.subTitle.length > 64
+                        ? subTitleExpanded
+                          ? "Click to collapse"
+                          : "Click to expand"
+                        : ""
+                    }
+                  >
+                    {subTitleExpanded || contentMetadata.subTitle.length <= 64
+                      ? contentMetadata.subTitle
+                      : `${contentMetadata.subTitle.substring(0, 64)}...`}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={openExportModal}
+                disabled={paginationLoading || searchLoading}
+                className={`p-2 rounded-lg transition-colors ${
+                  paginationLoading || searchLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                      ? "bg-gray-800 text-white hover:bg-gray-700"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title="Download all saved chats as JSON"
+                aria-label="Download data"
+              >
+                <MdDownload className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  // Check if limit reached for users on anonymous plan
+                  if (
+                    limitsEnabled &&
+                    userInfo?.isAnonymousPlan &&
+                    userInfo.remainingSlots === 0
+                  ) {
+                    const maxChats =
+                      userInfo.totalChats !== undefined &&
+                      userInfo.remainingSlots !== undefined
+                        ? userInfo.totalChats + userInfo.remainingSlots
+                        : (contentMetadata?.config?.freeChatLimit ?? 10);
+                    const serverMessageTemplate = userInfo.portalLink
+                      ? contentMetadata?.limits?.limitReachedMessageWithPortal
+                      : contentMetadata?.limits?.limitReachedMessageWithoutPortal;
+                    const message = (serverMessageTemplate ?? "Chat limit reached").replace(
+                      /{maxChats}/g,
+                      String(maxChats),
+                    );
+                    setAlertMessage(message);
+                    setAlertPortalLink(userInfo.portalLink || null);
+                    return;
+                  }
+                  // Clear alert when opening save modal
+                  setAlertMessage(null);
+                  setAlertPortalLink(null);
+                  setShowManualSaveModal(true);
+                }}
+                disabled={
+                  paginationLoading || searchLoading || !!pendingAddJobId
+                }
+                className={`p-2 rounded-lg transition-colors ${
+                  paginationLoading || searchLoading || pendingAddJobId
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                } ${
+                  limitsEnabled &&
+                  userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                    ? "hover:bg-gray-100"
+                    : isDarkMode
+                      ? "bg-gray-800 text-white hover:bg-gray-700"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                }`}
+                title={
+                  limitsEnabled &&
+                  userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                    ? (contentMetadata?.limits?.limitReachedTooltip ??
+                      "Chat limit reached")
+                    : "Save chat manually"
+                }
+              >
+                <MdAdd
+                  className={`w-5 h-5 ${
+                    limitsEnabled &&
+                    userInfo?.isAnonymousPlan && userInfo.remainingSlots === 0
+                      ? "text-red-500"
+                      : ""
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Search Box - Only show when not viewing a chat */}
+        {!selectedChat && !showHelp && (
+          <div
+            className={`border-b py-3 ${isDarkMode ? "border-gray-700" : "border-black/5"}`}
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  disabled={paginationLoading || searchLoading}
+                  onChange={(e) => {
+                    if (paginationLoading || searchLoading) return;
+                    setSearchQuery(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (paginationLoading || searchLoading) return;
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (searchQuery.trim()) {
+                        handleSearch(searchQuery, 0);
+                      }
+                    }
+                  }}
+                  placeholder="Search conversations..."
+                  className={`w-full px-3 py-2 pl-10 pr-10 rounded-lg border text-sm ${
+                    paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  } ${
+                    isDarkMode
+                      ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                      : "bg-white border-gray-300 text-black placeholder-gray-500"
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+                {isSearching ? (
+                  <button
+                    onClick={handleClearSearch}
+                    disabled={paginationLoading || searchLoading}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${
+                      paginationLoading || searchLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    } ${
+                      isDarkMode
+                        ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    }`}
+                    title="Clear search (Esc)"
+                  >
+                    <MdClose className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <div
+                    className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                      isDarkMode ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
+                    <MdSearch className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={async () => {
+                  if (paginationLoading || searchLoading) return;
+                  if (isSearching) {
+                    // Clear search if already searching
+                    await handleClearSearch();
+                  } else if (searchQuery.trim() && !searchLoading) {
+                    // Perform search
+                    await handleSearch(searchQuery, 0);
+                  }
+                }}
+                disabled={
+                  (!searchQuery.trim() && !isSearching) ||
+                  searchLoading ||
+                  paginationLoading
+                }
+                className={`p-2 rounded-lg ${
+                  (!searchQuery.trim() && !isSearching) ||
+                  searchLoading ||
+                  paginationLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : isDarkMode
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+                title={isSearching ? "Clear search" : "Search"}
+              >
+                {isSearching ? (
+                  <MdClose className="w-5 h-5" />
+                ) : (
+                  <MdSearch className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 relative">
+                <TopicCombobox
+                  selected={filterTopics}
+                  options={availableTopics}
+                  onChange={handleTopicFilterChange}
+                  allowCreate={false}
+                  disabled={paginationLoading || searchLoading}
+                  placeholder="Filter by topic…"
+                  isDarkMode={isDarkMode}
+                  matchSearchInput
+                  leadingIcon={<MdLabel className="w-4 h-4" />}
+                  onOpen={handleTopicFilterOpen}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleClearTopicFilter}
+                disabled={
+                  filterTopics.length === 0 ||
+                  paginationLoading ||
+                  searchLoading
+                }
+                className={`p-2 rounded-lg shrink-0 ${
+                  filterTopics.length === 0
+                    ? "invisible pointer-events-none"
+                    : paginationLoading || searchLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : isDarkMode
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+                title="Clear topic filter"
+              >
+                <MdClose className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        {!showHelp && (
+          <div className="min-w-full text-sm flex flex-col py-8">
+            {selectedChat ? (
+              // Chat detail view
+              <div className="space-y-4 pb-20">
+                <div
+                  className={`p-4 rounded-lg ${
+                    isDarkMode ? "bg-gray-800" : "bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      {isEditingTitle ? (
+                        // Inline editing mode
+                        <div className="mb-1">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editedTitle}
+                              onChange={(e) => setEditedTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveTitle();
+                                } else if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  handleCancelEditTitle();
+                                }
+                              }}
+                              disabled={isUpdatingTitle}
+                              autoFocus
+                              maxLength={2048}
+                              className={`flex-1 px-2 py-1 rounded border text-sm font-medium ${
+                                isUpdatingTitle
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              } ${
+                                isDarkMode
+                                  ? "bg-gray-700 border-gray-600 text-white"
+                                  : "bg-white border-gray-300 text-black"
+                              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            />
+                            <button
+                              onClick={handleSaveTitle}
+                              disabled={
+                                isUpdatingTitle ||
+                                editedTitle.trim().length === 0 ||
+                                editedTitle.trim().length > 2048
+                              }
+                              className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                isUpdatingTitle ||
+                                editedTitle.trim().length === 0 ||
+                                editedTitle.trim().length > 2048
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : isDarkMode
+                                    ? "bg-green-600 text-white hover:bg-green-700"
+                                    : "bg-green-600 text-white hover:bg-green-700"
+                              }`}
+                              title="Save"
+                            >
+                              {isUpdatingTitle ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <MdCheck className="w-3 h-3" />
+                              )}
+                            </button>
+                            <button
+                              onClick={handleCancelEditTitle}
+                              disabled={isUpdatingTitle}
+                              className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                isUpdatingTitle
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : isDarkMode
+                                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              }`}
+                              title="Cancel"
+                            >
+                              <MdClose className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {editedTitle.trim().length > 2048 && (
+                            <div
+                              className={`text-xs mt-1 ${isDarkMode ? "text-red-400" : "text-red-600"}`}
+                            >
+                              Title cannot exceed 2048 characters
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // Display mode
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="font-medium flex-1">
+                            {selectedChat.title}
+                          </div>
+                          <button
+                            onClick={handleStartEditTitle}
+                            className={`p-1 rounded flex items-center flex-shrink-0 ${
+                              isDarkMode
+                                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
+                            title="Edit title"
+                          >
+                            <MdEdit className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                      <div
+                        className={`text-xs ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                      >
+                        <div
+                          className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                        >
+                          {(() => {
+                            const currentTurns =
+                              (editedTurns.length > 0
+                                ? editedTurns
+                                : selectedChat.turns) ?? [];
+                            return (
+                              currentTurns.length === 1 &&
+                              !currentTurns[0]?.response
+                            );
+                          })() ? (
+                            <MdNote
+                              className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`}
+                            />
+                          ) : (
+                            <MdMessage
+                              className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                            />
+                          )}
+                          {formatDate(selectedChat.timestamp)}
+                          {(() => {
+                            const currentTurns: {
+                              prompt: string;
+                              response: string;
+                            }[] =
+                              (editedTurns.length > 0
+                                ? editedTurns
+                                : selectedChat.turns) ?? [];
+                            return (
+                              currentTurns.length === 1 &&
+                              !currentTurns[0]?.response
+                            );
+                          })()
+                            ? " • Note"
+                            : ` • ${(() => {
+                                const currentTurns =
+                                  (editedTurns.length > 0
+                                    ? editedTurns
+                                    : selectedChat.turns) ?? [];
+                                return currentTurns.length;
+                              })()} turn${(() => {
+                                const currentTurns =
+                                  (editedTurns.length > 0
+                                    ? editedTurns
+                                    : selectedChat.turns) ?? [];
+                                return currentTurns.length !== 1 ? "s" : "";
+                              })()}`}
+                        </div>
+                        {selectedChat.id ? (
+                          <ChatTopicEditor
+                            chatId={selectedChat.id}
+                            topics={selectedChat.topics ?? []}
+                            options={availableTopics}
+                            onSave={handleChatTopicsSave}
+                            disabled={isSavingChat}
+                            isDarkMode={isDarkMode}
+                            onOpenOptions={handleTopicFilterOpen}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        copyEntireChat(selectedChat);
+                      }}
+                      className={`p-1 rounded flex items-center flex-shrink-0 ${
+                        isDarkMode
+                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                      title="Copy entire chat"
+                    >
+                      {copiedItems[`chat-${selectedChat.timestamp}`] ? (
+                        <MdCheck className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <MdContentCopy className="w-3 h-3" />
+                      )}
+                    </button>
+                    {hasUnsavedChanges && (
+                      <button
+                        onClick={handleSaveChat}
+                        disabled={isSavingChat}
+                        className={`p-1 rounded flex items-center flex-shrink-0 ${
+                          isSavingChat
+                            ? "opacity-50 cursor-not-allowed"
+                            : isDarkMode
+                              ? "bg-green-600 text-white hover:bg-green-700"
+                              : "bg-green-600 text-white hover:bg-green-700"
+                        }`}
+                        title="Save changes"
+                      >
+                        {isSavingChat ? (
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <MdCheck className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {(() => {
+                    const chat = selectedChat!;
+                    const isNoteView =
+                      (chat.turns?.length ?? 0) === 1 &&
+                      !chat.turns?.[0]?.response;
+                    const turns =
+                      (editedTurns.length > 0
+                        ? editedTurns
+                        : (chat.turns ?? [])) ?? [];
+                    const chatTurnsJsx = turns.map((turn, index) => {
+                      const isExpanded = expandedTurns.has(index);
+                      const turnId = `${chat.id}-${index}`;
+                      const promptId = `prompt-${chat.timestamp}-${index}`;
+                      const responseId = `response-${chat.timestamp}-${index}`;
+                      const promptCopied = !!copiedItems[promptId];
+                      const responseCopied = !!copiedItems[responseId];
+                      const maxLength = 150;
+                      const promptNeedsTruncation =
+                        !turn.truncated && turn.prompt.length > maxLength;
+                      const responseNeedsTruncation =
+                        !turn.truncated && turn.response.length > maxLength;
+                      const needsExpansion =
+                        turn.truncated ||
+                        promptNeedsTruncation ||
+                        responseNeedsTruncation;
+                      const isLoadingTurn = loadingTurnIds.has(turnId);
+                      const fullContent = fullTurnContent[turnId];
+                      const displayPrompt =
+                        isExpanded && fullContent
+                          ? fullContent.prompt
+                          : isExpanded
+                            ? turn.prompt
+                            : turn.truncated
+                              ? turn.prompt
+                              : truncateText(turn.prompt);
+                      const displayResponse =
+                        isExpanded && fullContent
+                          ? fullContent.response
+                          : isExpanded
+                            ? turn.response
+                            : turn.truncated
+                              ? turn.response
+                              : truncateText(turn.response);
+                      const isEditingPrompt =
+                        editingTurn?.turnIndex === index &&
+                        editingTurn?.field === "prompt";
+                      const isEditingResponse =
+                        editingTurn?.turnIndex === index &&
+                        editingTurn?.field === "response";
+                      return (
+                        <div
+                          key={index}
+                          className={`space-y-2 p-4 rounded-lg border ${isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"}`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div
+                                className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                              >
+                                Prompt
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isEditingPrompt && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCopyTurnField(
+                                          index,
+                                          "prompt",
+                                          promptId,
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Copy prompt"
+                                    >
+                                      {promptCopied ? (
+                                        <MdCheck className="w-3 h-3 text-green-500" />
+                                      ) : (
+                                        <MdContentCopy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStartEditTurn(index, "prompt");
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Edit prompt"
+                                    >
+                                      <MdEdit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTurn(index);
+                                      }}
+                                      disabled={editedTurns.length <= 1}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title={
+                                        editedTurns.length <= 1
+                                          ? "Cannot delete the last turn"
+                                          : "Delete turn"
+                                      }
+                                    >
+                                      <MdDelete className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                                {needsExpansion && !isEditingPrompt && (
+                                  <button
+                                    onClick={() => toggleTurnExpansion(index)}
+                                    disabled={isLoadingTurn}
+                                    className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                    title={isExpanded ? "Collapse" : "Expand"}
+                                  >
+                                    {isLoadingTurn ? (
+                                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : isExpanded ? (
+                                      <MdExpandLess className="w-3 h-3" />
+                                    ) : (
+                                      <MdExpandMore className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}
+                            >
+                              {isEditingPrompt ? (
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <textarea
+                                      value={editingTurnValue}
+                                      onChange={(e) =>
+                                        setEditingTurnValue(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          (e.ctrlKey || e.metaKey)
+                                        ) {
+                                          e.preventDefault();
+                                          handleSaveTurnEdit(index, "prompt");
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          handleCancelEditTurn();
+                                        }
+                                      }}
+                                      autoFocus
+                                      rows={4}
+                                      className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleSaveTurnEdit(index, "prompt")
+                                      }
+                                      disabled={
+                                        editingTurnValue.trim().length === 0
+                                      }
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`}
+                                      title="Save (Ctrl+Enter)"
+                                    >
+                                      <MdCheck className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditTurn}
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Cancel (Esc)"
+                                    >
+                                      <MdClose className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`}
+                                  onClick={
+                                    needsExpansion &&
+                                    !isExpanded &&
+                                    !isLoadingTurn
+                                      ? () => toggleTurnExpansion(index)
+                                      : undefined
+                                  }
+                                  onMouseDown={(e) => {
+                                    if (isExpanded) return;
+                                    if (needsExpansion) e.preventDefault();
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: markdownToHtml(displayPrompt),
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div
+                                className={`text-xs font-medium ${isDarkMode ? "text-green-400" : "text-green-600"}`}
+                              >
+                                Response
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isEditingResponse && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCopyTurnField(
+                                          index,
+                                          "response",
+                                          responseId,
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Copy response"
+                                    >
+                                      {responseCopied ? (
+                                        <MdCheck className="w-3 h-3 text-green-500" />
+                                      ) : (
+                                        <MdContentCopy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStartEditTurn(index, "response");
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Edit response"
+                                    >
+                                      <MdEdit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTurn(index);
+                                      }}
+                                      disabled={editedTurns.length <= 1}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${editedTurns.length <= 1 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title={
+                                        editedTurns.length <= 1
+                                          ? "Cannot delete the last turn"
+                                          : "Delete turn"
+                                      }
+                                    >
+                                      <MdDelete className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                                {needsExpansion && !isEditingResponse && (
+                                  <button
+                                    onClick={() => toggleTurnExpansion(index)}
+                                    disabled={isLoadingTurn}
+                                    className={`p-1 rounded ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                    title={isExpanded ? "Collapse" : "Expand"}
+                                  >
+                                    {isLoadingTurn ? (
+                                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : isExpanded ? (
+                                      <MdExpandLess className="w-3 h-3" />
+                                    ) : (
+                                      <MdExpandMore className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}
+                            >
+                              {isEditingResponse ? (
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <textarea
+                                      value={editingTurnValue}
+                                      onChange={(e) =>
+                                        setEditingTurnValue(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          (e.ctrlKey || e.metaKey)
+                                        ) {
+                                          e.preventDefault();
+                                          handleSaveTurnEdit(index, "response");
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          handleCancelEditTurn();
+                                        }
+                                      }}
+                                      autoFocus
+                                      rows={4}
+                                      className={`flex-1 px-2 py-1 rounded border text-sm ${isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-black"} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleSaveTurnEdit(index, "response")
+                                      }
+                                      disabled={
+                                        editingTurnValue.trim().length === 0
+                                      }
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${editingTurnValue.trim().length === 0 ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-600 text-white hover:bg-green-700"}`}
+                                      title="Save (Ctrl+Enter)"
+                                    >
+                                      <MdCheck className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditTurn}
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${isDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                                      title="Cancel (Esc)"
+                                    >
+                                      <MdClose className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`${needsExpansion && !isExpanded && !isLoadingTurn ? "cursor-pointer hover:opacity-80" : ""}`}
+                                  onClick={
+                                    needsExpansion &&
+                                    !isExpanded &&
+                                    !isLoadingTurn
+                                      ? () => toggleTurnExpansion(index)
+                                      : undefined
+                                  }
+                                  onMouseDown={(e) => {
+                                    if (isExpanded) return;
+                                    if (needsExpansion) e.preventDefault();
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: markdownToHtml(displayResponse),
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                    if (isNoteView) {
+                      const noteTurns = turns;
+                      const noteTurn = noteTurns[0] as {
+                        prompt: string;
+                        response: string;
+                        truncated?: boolean;
+                      };
+                      const noteIndex = 0;
+                      const noteTurnId = `${chat.id}-${noteIndex}`;
+                      const isExpanded = expandedTurns.has(noteIndex);
+                      const noteFullContent = fullTurnContent[noteTurnId];
+                      const noteLoading = loadingTurnIds.has(noteTurnId);
+                      const noteId = `note-${chat.timestamp}`;
+                      const noteCopied = !!copiedItems[noteId];
+                      const isEditingNote =
+                        editingTurn?.turnIndex === noteIndex &&
+                        editingTurn?.field === "prompt";
+                      const maxLength = 150;
+                      const noteNeedsTruncation =
+                        noteTurn.truncated ||
+                        (!noteTurn.truncated &&
+                          noteTurn.prompt.length > maxLength);
+                      const noteDisplayPrompt =
+                        isExpanded && noteFullContent
+                          ? noteFullContent.prompt
+                          : isExpanded
+                            ? noteTurn.prompt
+                            : noteTurn.truncated
+                              ? noteTurn.prompt
+                              : truncateText(noteTurn.prompt);
+                      return (
+                        <div
+                          key="note"
+                          className={
+                            "space-y-2 p-4 rounded-lg border " +
+                            (isDarkMode
+                              ? "bg-gray-800 border-gray-700"
+                              : "bg-gray-50 border-gray-200")
+                          }
+                        >
+                          {/* Note */}
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div
+                                className={`text-xs font-medium ${
+                                  isDarkMode
+                                    ? "text-purple-400"
+                                    : "text-purple-600"
+                                }`}
+                              >
+                                Note
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isEditingNote && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCopyTurnField(
+                                          noteIndex,
+                                          "prompt",
+                                          noteId,
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                        isDarkMode
+                                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title="Copy note"
+                                    >
+                                      {noteCopied ? (
+                                        <MdCheck className="w-3 h-3 text-green-500" />
+                                      ) : (
+                                        <MdContentCopy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStartEditTurn(
+                                          noteIndex,
+                                          "prompt",
+                                        );
+                                      }}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                        isDarkMode
+                                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title="Edit note"
+                                    >
+                                      <MdEdit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTurn(noteIndex);
+                                      }}
+                                      disabled={noteTurns.length <= 1}
+                                      className={`p-0.5 rounded flex items-center flex-shrink-0 ${
+                                        noteTurns.length <= 1
+                                          ? "opacity-50 cursor-not-allowed"
+                                          : isDarkMode
+                                            ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title={
+                                        noteTurns.length <= 1
+                                          ? "Cannot delete the last turn"
+                                          : "Delete note"
+                                      }
+                                    >
+                                      <MdDelete className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                                {noteNeedsTruncation && !isEditingNote && (
+                                  <button
+                                    onClick={() =>
+                                      toggleTurnExpansion(noteIndex)
+                                    }
+                                    disabled={noteLoading}
+                                    className={`p-1 rounded ${
+                                      isDarkMode
+                                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                    }`}
+                                    title={isExpanded ? "Collapse" : "Expand"}
+                                  >
+                                    {noteLoading ? (
+                                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    ) : isExpanded ? (
+                                      <MdExpandLess className="w-3 h-3" />
+                                    ) : (
+                                      <MdExpandMore className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}
+                            >
+                              {isEditingNote ? (
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <textarea
+                                      value={editingTurnValue}
+                                      onChange={(e) =>
+                                        setEditingTurnValue(e.target.value)
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" &&
+                                          (e.ctrlKey || e.metaKey)
+                                        ) {
+                                          e.preventDefault();
+                                          handleSaveTurnEdit(
+                                            noteIndex,
+                                            "prompt",
+                                          );
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          handleCancelEditTurn();
+                                        }
+                                      }}
+                                      autoFocus
+                                      rows={4}
+                                      className={`flex-1 px-2 py-1 rounded border text-sm ${
+                                        isDarkMode
+                                          ? "bg-gray-700 border-gray-600 text-white"
+                                          : "bg-white border-gray-300 text-black"
+                                      } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        handleSaveTurnEdit(noteIndex, "prompt")
+                                      }
+                                      disabled={
+                                        editingTurnValue.trim().length === 0
+                                      }
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                        editingTurnValue.trim().length === 0
+                                          ? "opacity-50 cursor-not-allowed"
+                                          : isDarkMode
+                                            ? "bg-green-600 text-white hover:bg-green-700"
+                                            : "bg-green-600 text-white hover:bg-green-700"
+                                      }`}
+                                      title="Save (Ctrl+Enter)"
+                                    >
+                                      <MdCheck className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditTurn}
+                                      className={`p-1 rounded flex items-center flex-shrink-0 ${
+                                        isDarkMode
+                                          ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                      }`}
+                                      title="Cancel (Esc)"
+                                    >
+                                      <MdClose className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`${noteNeedsTruncation && !isExpanded && !noteLoading ? "cursor-pointer hover:opacity-80" : ""}`}
+                                  onClick={
+                                    noteNeedsTruncation &&
+                                    !isExpanded &&
+                                    !noteLoading
+                                      ? () => toggleTurnExpansion(noteIndex)
+                                      : undefined
+                                  }
+                                  onMouseDown={(e) => {
+                                    // If expanded, allow text selection by not preventing default
+                                    if (isExpanded) {
+                                      return; // Allow normal text selection
+                                    }
+                                    // If not expanded and clickable, prevent text selection on click
+                                    if (noteNeedsTruncation) {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: markdownToHtml(noteDisplayPrompt),
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      return <div className="contents">{chatTurnsJsx}</div>;
+                    }
+                  })()}
+                </div>
+              </div>
+            ) : (
+              // Chat list view
+              <div className="space-y-2 relative pb-4">
+                {loading && chats.length === 0 ? (
+                  <div
+                    className={`relative min-h-[240px] rounded-lg ${
+                      isDarkMode ? "bg-gray-800/40" : "bg-gray-50"
+                    }`}
+                  >
+                    <div
+                      className={`absolute inset-0 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                        isDarkMode ? "bg-black/50" : "bg-white/70"
+                      }`}
+                    >
+                      <div
+                        className={`px-4 py-2 rounded-lg font-medium ${
+                          isDarkMode
+                            ? "bg-gray-800 text-white"
+                            : "bg-white text-black shadow-lg"
+                        }`}
+                      >
+                        Loading...
+                      </div>
+                    </div>
+                  </div>
+                ) : searchLoading && chats.length === 0 ? (
+                  <div
+                    className={`relative min-h-[240px] rounded-lg ${
+                      isDarkMode ? "bg-gray-800/40" : "bg-gray-50"
+                    }`}
+                  >
+                    <div
+                      className={`absolute inset-0 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                        isDarkMode ? "bg-black/50" : "bg-white/70"
+                      }`}
+                    >
+                      <div
+                        className={`px-4 py-2 rounded-lg font-medium ${
+                          isDarkMode
+                            ? "bg-gray-800 text-white"
+                            : "bg-white text-black shadow-lg"
+                        }`}
+                      >
+                        Searching...
+                      </div>
+                    </div>
+                  </div>
+                ) : chats.length === 0 ? (
+                  <div
+                    className={`py-6 text-center ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                  >
+                    {isSearching
+                      ? `No chats found matching "${searchQuery}"`
+                      : "No chats yet. Use the + button to save a chat manually or instruct your AI host or agent connected to the app to save the chat or a fragment."}
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      {chats.map((chat) => (
+                        <div
+                          key={chat.timestamp || chat.id}
+                          className={`w-full flex items-center gap-2 p-4 rounded-lg border transition-colors ${
+                            isDarkMode
+                              ? "bg-gray-800 border-gray-700"
+                              : "bg-gray-50 border-gray-200"
+                          }`}
+                        >
+                          <button
+                            onClick={() => handleChatClick(chat)}
+                            className="flex-1 text-left"
+                          >
+                            <div className="flex items-center gap-2 font-medium mb-1">
+                              {chat.title}
+                            </div>
+                            <div
+                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-gray-400" : "text-black/60"}`}
+                            >
+                              {(chat.isNote ??
+                              ((chat.turns?.length ?? 0) === 1 &&
+                                !chat.turns?.[0]?.response)) ? (
+                                <MdNote
+                                  className={`w-3 h-3 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`}
+                                />
+                              ) : (
+                                <MdMessage
+                                  className={`w-3 h-3 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                                />
+                              )}
+                              {formatDate(chat.timestamp ?? "")}
+                              {(chat.isNote ??
+                              ((chat.turns?.length ?? 0) === 1 &&
+                                !chat.turns?.[0]?.response))
+                                ? " • Note"
+                                : ` • ${chat.turnsCount ?? chat.turns?.length ?? 0} turn${(chat.turnsCount ?? chat.turns?.length ?? 0) !== 1 ? "s" : ""}`}
+                            </div>
+                            {chat.id ? (
+                              <ChatTopicEditor
+                                chatId={chat.id}
+                                topics={chat.topics ?? []}
+                                options={availableTopics}
+                                onSave={handleChatTopicsSave}
+                                disabled={paginationLoading || searchLoading}
+                                isDarkMode={isDarkMode}
+                                onOpenOptions={handleTopicFilterOpen}
+                              />
+                            ) : null}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteChat(chat);
+                            }}
+                            className={`p-0.5 rounded transition-colors flex-shrink-0 ${
+                              isDarkMode
+                                ? "text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                                : "text-gray-500 hover:text-red-600 hover:bg-gray-200"
+                            }`}
+                            title="Delete chat"
+                          >
+                            <MdDelete className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {/* Loading overlay for pagination/search */}
+                      {(paginationLoading ||
+                        (searchLoading && chats.length > 0)) && (
+                        <div
+                          className={`absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 ${
+                            isDarkMode ? "bg-black/50" : "bg-white/70"
+                          }`}
+                        >
+                          <div
+                            className={`px-4 py-2 rounded-lg font-medium ${
+                              isDarkMode
+                                ? "bg-gray-800 text-white"
+                                : "bg-white text-black shadow-lg"
+                            }`}
+                          >
+                            Loading...
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Pagination */}
+                    {pagination && pagination.totalPages > 1 && (
+                      <div className="pt-4 flex items-center justify-between gap-2 mb-4">
+                        <button
+                          onClick={async () => {
+                            if (
+                              currentPage > 0 &&
+                              !paginationLoading &&
+                              !searchLoading
+                            ) {
+                              const targetPage = currentPage - 1;
+                              if (isSearching && searchQuery) {
+                                await handleSearch(searchQuery, targetPage);
+                              } else {
+                                setPaginationLoading(true);
+                                try {
+                                  await loadChatsAtPage(targetPage, {
+                                    query: isSearching ? searchQuery : undefined,
+                                  });
+                                } catch (err) {
+                                  addLog("Error loading previous page", {
+                                    error:
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                  });
+                                } finally {
+                                  setPaginationLoading(false);
+                                }
+                              }
+                            }
+                          }}
+                          disabled={
+                            paginationLoading ||
+                            searchLoading ||
+                            currentPage === 0
+                          }
+                          className={`px-3 py-1.5 rounded text-sm font-medium ${
+                            paginationLoading || currentPage === 0
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
+                                ? "bg-gray-800 text-white hover:bg-gray-700"
+                                : "bg-gray-100 text-black hover:bg-gray-200"
+                          }`}
+                        >
+                          Previous
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}
+                          >
+                            Page
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={pageInputValue}
+                            disabled={paginationLoading || searchLoading}
+                            onChange={(e) => {
+                              if (paginationLoading || searchLoading) return;
+                              const value = e.target.value;
+                              // Only allow numbers
+                              if (value === "" || /^\d+$/.test(value)) {
+                                setPageInputValue(value);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (paginationLoading || searchLoading) return;
+                              if (e.key === "Enter") {
+                                const page = parseInt(pageInputValue) - 1;
+                                if (
+                                  page >= 0 &&
+                                  page < pagination.totalPages &&
+                                  page !== currentPage &&
+                                  !paginationLoading &&
+                                  !searchLoading
+                                ) {
+                                  if (isSearching && searchQuery) {
+                                    handleSearch(searchQuery, page);
+                                  } else {
+                                    setPaginationLoading(true);
+                                    loadChatsAtPage(page, {
+                                      query: isSearching ? searchQuery : undefined,
+                                    })
+                                      .catch((err: unknown) => {
+                                        addLog("Error loading page", {
+                                          error:
+                                            err instanceof Error
+                                              ? err.message
+                                              : String(err),
+                                        });
+                                      })
+                                      .finally(() => {
+                                        setPaginationLoading(false);
+                                      });
+                                  }
+                                } else {
+                                  // Reset to current page if invalid
+                                  setPageInputValue(String(currentPage + 1));
+                                }
+                              }
+                            }}
+                            className={`w-12 px-1.5 py-1 text-center text-sm rounded border ${
+                              paginationLoading || searchLoading
+                                ? "opacity-50 cursor-not-allowed"
+                                : ""
+                            } ${
+                              isDarkMode
+                                ? "bg-gray-800 border-gray-600 text-white"
+                                : "bg-white border-gray-300 text-black"
+                            }`}
+                            style={{
+                              WebkitAppearance: "none",
+                              MozAppearance: "textfield",
+                            }}
+                          />
+                          <span
+                            className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}
+                          >
+                            of {pagination.totalPages}
+                          </span>
+                          {pageInputValue !== String(currentPage + 1) &&
+                            parseInt(pageInputValue) >= 1 &&
+                            parseInt(pageInputValue) <=
+                              pagination.totalPages && (
+                              <button
+                                onClick={async () => {
+                                  const page = parseInt(pageInputValue) - 1;
+                                  if (
+                                    page >= 0 &&
+                                    page < pagination.totalPages &&
+                                    page !== currentPage &&
+                                    !paginationLoading &&
+                                    !searchLoading
+                                  ) {
+                                    if (isSearching && searchQuery) {
+                                      await handleSearch(searchQuery, page);
+                                    } else {
+                                      setPaginationLoading(true);
+                                      try {
+                                        await loadChatsAtPage(page, {
+                                          query: isSearching
+                                            ? searchQuery
+                                            : undefined,
+                                        });
+                                      } catch (err) {
+                                        addLog("Error loading page", {
+                                          error:
+                                            err instanceof Error
+                                              ? err.message
+                                              : String(err),
+                                        });
+                                      } finally {
+                                        setPaginationLoading(false);
+                                      }
+                                    }
+                                  }
+                                }}
+                                disabled={paginationLoading || searchLoading}
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  paginationLoading || searchLoading
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : isDarkMode
+                                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                                      : "bg-gray-200 text-black hover:bg-gray-300"
+                                }`}
+                              >
+                                Go
+                              </button>
+                            )}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (
+                              pagination.hasMore &&
+                              !paginationLoading &&
+                              !searchLoading
+                            ) {
+                              const targetPage = currentPage + 1;
+                              if (isSearching && searchQuery) {
+                                await handleSearch(searchQuery, targetPage);
+                              } else {
+                                setPaginationLoading(true);
+                                try {
+                                  await loadChatsAtPage(targetPage, {
+                                    query: isSearching ? searchQuery : undefined,
+                                  });
+                                } catch (err) {
+                                  addLog("Error loading next page", {
+                                    error:
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                  });
+                                } finally {
+                                  setPaginationLoading(false);
+                                }
+                              }
+                            }
+                          }}
+                          disabled={
+                            paginationLoading ||
+                            searchLoading ||
+                            !pagination.hasMore
+                          }
+                          className={`px-3 py-1.5 rounded text-sm font-medium ${
+                            paginationLoading ||
+                            searchLoading ||
+                            !pagination.hasMore
+                              ? "opacity-50 cursor-not-allowed"
+                              : isDarkMode
+                                ? "bg-gray-800 text-white hover:bg-gray-700"
+                                : "bg-gray-100 text-black hover:bg-gray-200"
+                          }`}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                    {pagination &&
+                      pagination.totalPages <= 1 &&
+                      chats.length > 0 &&
+                      !pagination.hasMore && (
+                        <div
+                          className={`pt-2 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}
+                        >
+                          {isSearching
+                            ? `Showing all ${chats.length} result${chats.length !== 1 ? "s" : ""}`
+                            : `Showing all ${pagination.total} chat${pagination.total !== 1 ? "s" : ""}`}
+                        </div>
+                      )}
+                    {pagination?.hasMore &&
+                      chats.length > 0 &&
+                      pagination.totalPages <= 1 && (
+                        <div className="pt-2 text-center">
+                          <button
+                            onClick={loadMoreChats}
+                            disabled={
+                              loading || paginationLoading || searchLoading
+                            }
+                            className={`px-3 py-1.5 rounded text-sm font-medium ${loading || paginationLoading || searchLoading ? "opacity-50 cursor-not-allowed" : isDarkMode ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-black hover:bg-gray-200"}`}
+                          >
+                            Load more
+                          </button>
+                        </div>
+                      )}
+                    {userInfo?.message && (
+                      <div
+                        className={`mt-4 p-3 rounded-lg border ${
+                          userInfo.messageType === "success"
+                            ? isDarkMode
+                              ? "bg-green-900/30 border-green-700/50 text-green-200"
+                              : "bg-green-50 border-green-200 text-green-800"
+                            : userInfo.messageType === "error"
+                              ? isDarkMode
+                                ? "bg-red-900/30 border-red-700/50 text-red-200"
+                                : "bg-red-50 border-red-200 text-red-800"
+                              : userInfo.messageType === "alert"
+                                ? isDarkMode
+                                  ? "bg-yellow-900/30 border-yellow-700/50 text-yellow-200"
+                                  : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                : isDarkMode
+                                  ? "bg-gray-800/50 border-gray-700 text-gray-300"
+                                  : "bg-gray-50 border-gray-200 text-gray-700"
+                        }`}
+                      >
+                        <div
+                          className="text-sm"
+                          dangerouslySetInnerHTML={{
+                            __html: markdownToHtml(userInfo.message),
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Debug Panel - Toggle with Ctrl+Alt+D or on-screen button */}
+        <div
+          className={`mt-4 pt-4 border-t ${
+            isDarkMode ? "border-gray-700" : "border-black/5"
+          }`}
+        >
+          <button
+            onClick={() => {
+              const newState = !showDebug;
+              setShowDebug(newState);
+              // Persist in localStorage
+              if (newState) {
+                localStorage.setItem("chatvault-debug-enabled", "true");
+              } else {
+                localStorage.removeItem("chatvault-debug-enabled");
+              }
+            }}
+            className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
+              isDarkMode
+                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
+            <span className="ml-2 text-xs opacity-60">
+              (Ctrl+Alt+D to toggle)
+            </span>
+          </button>
+          {showDebug && (
+            <div
+              className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
+                isDarkMode
+                  ? "bg-gray-950 text-gray-300"
+                  : "bg-gray-50 text-gray-800"
+              }`}
+            >
+              <div
+                className={`mb-3 pb-3 border-b ${
+                  isDarkMode ? "border-gray-700" : "border-gray-300"
+                }`}
+              >
+                <div className="font-semibold mb-1">
+                  Widget Version: v{WIDGET_VERSION}
+                </div>
+                <div
+                  className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                >
+                  Mode: MCP App
+                </div>
+              </div>
+              {debugLogs.length === 0 ? (
+                <div className="opacity-60">No logs yet</div>
+              ) : (
+                debugLogs.map((log, idx) => (
+                  <div
+                    key={idx}
+                    className="mb-2 border-b border-gray-700 pb-2"
+                  >
+                    <div className="opacity-60 text-xs">{log.timestamp}</div>
+                    <div className="mt-1">{log.message}</div>
+                    {log.data && (
+                      <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
+                        {log.data}
+                      </pre>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {showExportModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="export-dialog-title"
+              className={`w-full max-w-md rounded-lg p-6 shadow-xl ${
+                isDarkMode ? "bg-gray-800 text-white" : "bg-white text-black"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 id="export-dialog-title" className="text-lg font-semibold">
+                  Download Chat Vault data
+                </h2>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "hover:bg-gray-700 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                  aria-label="Close export dialog"
+                >
+                  <MdClose className="w-5 h-5" />
+                </button>
+              </div>
+
+              {exportStatus === "confirm" && (
+                <p className={`text-sm mb-5 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Prepare a JSON file containing every chat currently stored in your Chat Vault.
+                </p>
+              )}
+              {exportStatus === "preparing" && (
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">Preparing export…</span>
+                </div>
+              )}
+              {exportStatus === "ready" && exportDownload && (
+                <div className="space-y-2 mb-5 text-sm">
+                  <p>Your export is ready.</p>
+                  <p className={isDarkMode ? "text-gray-300" : "text-gray-600"}>
+                    {exportDownload.filename}
+                  </p>
+                  <p className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
+                    Link expires {new Date(exportDownload.expiresAt).toLocaleString()}.
+                  </p>
+                </div>
+              )}
+              {exportStatus === "error" && (
+                <div className="mb-5 text-sm text-red-500">
+                  {exportError ?? "Unable to prepare the export."}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className={`px-4 py-2 rounded text-sm font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  Close
+                </button>
+                {(exportStatus === "confirm" || exportStatus === "error") && (
+                  <button
+                    onClick={() => void prepareExport()}
+                    className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    {exportStatus === "error" ? "Try again" : "Prepare export"}
+                  </button>
+                )}
+                {exportStatus === "ready" && (
+                  <button
+                    onClick={() => void downloadExport()}
+                    className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Download JSON
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Manual Save Modal */}
+        {showManualSaveModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div
+              className={`w-full max-w-2xl rounded-lg ${
+                isDarkMode ? "bg-gray-800" : "bg-white"
+              } p-6 max-h-[90vh] flex flex-col`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2
+                  className={`text-lg font-semibold ${
+                    isDarkMode ? "text-white" : "text-black"
+                  }`}
+                >
+                  Save Chat Manually
+                </h2>
+                <button
+                  onClick={handleCloseManualSaveModal}
+                  className={`p-1 rounded ${
+                    isDarkMode
+                      ? "hover:bg-gray-700 text-gray-300"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <MdClose className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-2">
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        isDarkMode ? "text-gray-300" : "text-gray-700"
+                      }`}
+                    >
+                      Title (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSaveTitle}
+                      onChange={(e) => setManualSaveTitle(e.target.value)}
+                      placeholder="manual"
+                      className={`w-full px-3 py-2 rounded-lg border ${
+                        isDarkMode
+                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                          : "bg-white border-gray-300 text-black placeholder-gray-500"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        isDarkMode ? "text-gray-300" : "text-gray-700"
+                      }`}
+                    >
+                      Paste Chat Conversation or Note
+                    </label>
+                    <textarea
+                      value={manualSaveContent}
+                      onChange={(e) => {
+                        setManualSaveContent(e.target.value);
+                        // Clear HTML when user manually edits
+                        if (manualSaveHtml) {
+                          setManualSaveHtml("");
+                        }
+                      }}
+                      onPaste={(
+                        e: React.ClipboardEvent<HTMLTextAreaElement>,
+                      ) => {
+                        e.preventDefault();
+                        const clipboardData = e.clipboardData;
+                        if (!clipboardData) return;
+
+                        // Try to get HTML content first
+                        const html = clipboardData.getData("text/html");
+                        const plainText = clipboardData.getData("text/plain");
+
+                        if (html && html.trim().length > 0) {
+                          // HTML found - store it and display plain text in textarea
+                          setManualSaveHtml(html);
+                          setManualSaveContent(
+                            plainText || html.replace(/<[^>]*>/g, "").trim(),
+                          );
+                          addLog("Pasted HTML content", {
+                            htmlLength: html.length,
+                            textLength: plainText.length,
+                          });
+                        } else if (plainText) {
+                          // Only plain text available
+                          setManualSaveHtml("");
+                          setManualSaveContent(plainText);
+                        }
+                      }}
+                      placeholder="Paste the copied conversation here..."
+                      rows={2}
+                      className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${
+                        isDarkMode
+                          ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                          : "bg-white border-gray-300 text-black placeholder-gray-500"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y`}
+                    />
+                  </div>
+
+                  {manualSaveError && (
+                    <div
+                      className={`p-3 rounded-lg ${
+                        isDarkMode
+                          ? "bg-red-900/30 border border-red-700"
+                          : "bg-red-50 border border-red-200"
+                      }`}
+                    >
+                      <p
+                        className={`text-sm ${
+                          isDarkMode ? "text-red-300" : "text-red-700"
+                        }`}
+                      >
+                        {manualSaveError}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleCloseManualSaveModal}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isDarkMode
+                      ? "bg-gray-700 text-white hover:bg-gray-600"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleManualSave}
+                  disabled={isSaving || !manualSaveContent.trim()}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                    isSaving || !manualSaveContent.trim()
+                      ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                      : isDarkMode
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {isSaving ? "Processing..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error message at bottom */}
+        {error && (
+          <div
+            className={`mt-4 p-3 rounded-lg border ${
+              isDarkMode
+                ? "bg-red-900/30 border-red-700/50 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 text-sm">
+                <div className="font-medium mb-1">Error</div>
+                <div>{error}</div>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className={`p-1 rounded flex-shrink-0 ${
+                  isDarkMode
+                    ? "text-red-300 hover:text-red-200 hover:bg-red-800/50"
+                    : "text-red-700 hover:text-red-800 hover:bg-red-100"
+                }`}
+                title="Dismiss error"
+              >
+                <MdClose className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Help Icon - Absolute bottom right on main panel */}
+        {!showHelp && (
+          <button
+            onClick={handleHelpClick}
+            className={`absolute bottom-4 right-4 w-6 h-6 mt-4 flex items-center justify-center transition-colors z-50 ${
+              isDarkMode
+                ? "text-gray-400 hover:text-gray-300"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            title="Help"
+          >
+            <MdHelp className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Help Area - Fixed bottom */}
+      {showHelp && (
+        <div
+          className={`absolute inset-0 z-40 flex flex-col rounded-lg ${
+            isDarkMode ? "bg-gray-900 text-white" : "bg-gray-200 text-black"
+          }`}
+        >
+          <div
+            className={`flex items-center justify-between px-6 py-3 border-b flex-shrink-0 ${
+              isDarkMode ? "border-gray-800" : "border-gray-300"
+            }`}
+            style={{ minHeight: "40px", height: "40px" }}
+          >
+            <h3
+              className={`text-lg font-semibold ${
+                isDarkMode ? "text-white" : "text-black"
+              }`}
+            >
+              Help
+            </h3>
+            <button
+              onClick={() => setShowHelp(false)}
+              className={`p-1.5 rounded flex-shrink-0 ${
+                isDarkMode
+                  ? "text-white hover:bg-gray-700"
+                  : "text-black hover:bg-gray-200"
+              }`}
+              title="Close help"
+            >
+              <MdClose className="w-5 h-5" />
+            </button>
+          </div>
+          <div
+            className="flex-1 min-h-0 px-6 pt-6 relative"
+            style={{ paddingRight: "calc(1.5rem + 8px)" }}
+          >
+            {helpTextLoading && (
+              <div
+                className={`absolute inset-0 flex items-center justify-center ${isDarkMode ? "bg-gray-900/80" : "bg-gray-200/80"}`}
+              >
+                <div
+                  className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}
+                >
+                  Loading...
+                </div>
+              </div>
+            )}
+            {helpText ? (
+              <div
+                className={`text-sm ${
+                  isDarkMode ? "text-gray-300" : "text-gray-700"
+                }`}
+                dangerouslySetInnerHTML={{
+                  __html: markdownToHtml(helpText ?? ""),
+                }}
+              />
+            ) : !helpTextLoading ? (
+              <div
+                className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}
+              >
+                No help text available.
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const rootEl = document.getElementById("chat-vault-root");
+if (rootEl) {
+  createRoot(rootEl).render(<App />);
+}

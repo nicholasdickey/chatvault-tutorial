@@ -34,7 +34,32 @@ Backend MCP server for ChatVault with PostgreSQL database and vector search capa
    OPENAI_API_KEY=sk-proj-...
    PORT_BACKEND=8001
    NODE_ENV=development
+   # GPT deployments default to approval-safe behavior with product limits off.
+   CHATVAULT_TOOL_METADATA_PROFILE=gpt
+   CHATVAULT_LIMITS_ENABLED=false
    ```
+
+   `CHATVAULT_LIMITS_ENABLED` only affects the `gpt` profile. Set it to `true`
+   to restore the existing chat quota, anonymous expiry, 40,000-character
+   free-plan paste limit, remaining-slot UI, and account/upgrade copy without
+   rebuilding the widget. With GPT limits disabled, the free-plan paste cap is
+   1,000,000 characters. The `full` (Claude) profile always retains the existing
+   behavior.
+
+   The JSON export tool is available in both metadata profiles and requires:
+
+   ```env
+   CHATVAULT_EXPORT_BASE_URL=https://your-portable-part2.example
+   UPSTASH_REDIS_REST_URL=https://...
+   UPSTASH_REDIS_REST_TOKEN=...
+   # Optional; defaults shown
+   CHATVAULT_EXPORT_TOKEN_TTL_SECONDS=300
+   CHATVAULT_EXPORT_MAX_BYTES=10485760
+   ```
+
+   `CHATVAULT_TOOL_METADATA_PROFILE` still controls the existing model-facing
+   save-tool visibility and product-limit behavior; it no longer controls JSON
+   export availability.
 
 3. **Run database migrations:**
 

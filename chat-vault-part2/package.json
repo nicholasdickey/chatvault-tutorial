@@ -18,17 +18,13 @@
     "db:cleanup": "tsx scripts/cleanup-prod-db.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
-  "keywords": [
-    "mcp",
-    "chatvault",
-    "postgresql",
-    "vector-search"
-  ],
+  "keywords": ["mcp", "chatvault", "postgresql", "vector-search"],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@neondatabase/serverless": "^0.10.4",
+    "@upstash/redis": "^1.35.5",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.36.0",
     "openai": "^4.70.0",

@@ -1,0 +1,139 @@
+/** Chat turn (prompt/response pair) */
+export interface ChatTurn {
+  prompt: string;
+  response: string;
+  /** True when server returned truncated content; use loadFullTurn to fetch full */
+  truncated?: boolean;
+}
+
+/** Topic label for organizing saved chats */
+export interface Topic {
+  id: string;
+  name: string;
+}
+
+/** Topic with usage count for filter dropdowns */
+export interface AvailableTopic extends Topic {
+  chatCount?: number;
+}
+
+/** Chat preview (above-the-fold only; no turns) */
+export interface ChatPreview {
+  id: string;
+  title: string;
+  timestamp?: string;
+  userId?: string;
+  turnsCount: number;
+  isNote: boolean;
+  topics?: Topic[];
+}
+
+/** Chat item from loadSavedEntries/searchKnowledge - preview or full */
+export interface Chat {
+  id: string;
+  title: string;
+  timestamp?: string;
+  turns?: ChatTurn[];
+  userId?: string;
+  type?: "chat" | "note";
+  content?: string;
+  /** Present when aboveTheFoldOnly - use instead of turns?.length */
+  turnsCount?: number;
+  /** Present when aboveTheFoldOnly - use instead of checking first turn */
+  isNote?: boolean;
+  topics?: Topic[];
+}
+
+/** User info from widget/user context */
+export interface UserInfo {
+  portalLink?: string | null;
+  loginLink?: string | null;
+  isAnonymousPlan?: boolean;
+  remainingSlots?: number;
+  includes?: string[];
+  limits?: {
+    maxChats?: number;
+    counterTooltip?: string;
+    limitReachedMessageWithPortal?: string;
+    limitReachedMessageWithoutPortal?: string;
+    limitReachedTooltip?: string;
+  };
+  totalChats?: number;
+  userName?: string;
+  isAnon?: boolean;
+  config?: { replace?: string };
+  message?: string;
+  messageType?: string;
+}
+
+/** Pagination info from loadSavedEntries */
+export interface Pagination {
+  totalPages: number;
+  hasMore: boolean;
+  total?: number;
+}
+
+/** Delete confirmation state */
+export interface DeleteConfirmation {
+  chatId: string;
+  title?: string;
+}
+
+/** Content metadata from widgetAdd parse */
+export interface ContentMetadata {
+  hasTitle: boolean;
+  title: string;
+  contentLength: number;
+  contentPreview: string;
+  hasHtml: boolean;
+  htmlLength: number;
+  textLength: number;
+  subTitle?: string;
+  limits?: {
+    maxChats?: number;
+    counterTooltip?: string;
+    remainingSlotsMessage?: string;
+    lowRemainingSlotsMessage?: string;
+    limitReachedMessageWithPortal?: string;
+    limitReachedMessageWithoutPortal?: string;
+    limitReachedTooltip?: string;
+    signInTooltip?: string;
+    portalActionPrefix?: string;
+    portalActionLabel?: string;
+    portalActionSuffix?: string;
+  };
+  config?: {
+    limitsEnabled?: boolean;
+    replace?: string;
+    chatExpirationDays?: number;
+    freeChatLimit?: number;
+    limitReachedMessageWithPortal?: string;
+    limitReachedMessageWithoutPortal?: string;
+    limitReachedTooltip?: string;
+  };
+  message?: string;
+  messageType?: string;
+}
+
+/** Editing turn state */
+export interface EditingTurn {
+  turnIndex: number;
+  field: "prompt" | "response";
+}
+
+/** Tool result from ChatVault MCP (extends SDK with structuredContent) */
+export interface ChatVaultToolResult {
+  structuredContent?: {
+    deleted?: boolean;
+    message?: string;
+    chatId?: string;
+    saved?: boolean;
+    turnsCount?: number;
+    error?: unknown;
+    [key: string]: unknown;
+  };
+  content?: Array<{ type: string; text?: string }>;
+  error?: { message?: string; data?: unknown };
+  jsonrpc?: string;
+  [key: string]: unknown;
+}

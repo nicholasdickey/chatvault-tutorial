@@ -124,14 +124,16 @@ describe("chat-vault-part2 (all)", () => {
         ).resolves.not.toThrow();
     });
 
-    test("should require session for tools/list", async () => {
+    test("should return tools when tools/list called (session created on demand)", async () => {
         const newClient = new McpTestClient(serverUrl);
-        // Don't initialize - try to call tools/list directly
+        // Don't initialize - server creates session on demand for tools/list
         const response = await newClient.listTools();
 
-        expect(response.error).toBeDefined();
-        expect(response.error?.code).toBe(-32000);
-        expect(response.error?.message).toContain("Session not found");
+        expect(response.error).toBeUndefined();
+        expect(response.result).toBeDefined();
+        const result = response.result as { tools: unknown[] };
+        expect(Array.isArray(result.tools)).toBe(true);
+        expect(result.tools.length).toBeGreaterThan(0);
     });
 
     test("should return all ChatVault tools in tools list", async () => {
@@ -146,15 +148,15 @@ describe("chat-vault-part2 (all)", () => {
 
         const result = response.result as { tools: unknown[] };
         expect(Array.isArray(result.tools)).toBe(true);
-        expect(result.tools.length).toBeGreaterThanOrEqual(6); // All ChatVault tools should be present
+        expect(result.tools.length).toBeGreaterThanOrEqual(12); // Full profile lists 12 tools
 
-        // Verify all tools are in the list
+        // Verify all tools are in the list with functional public names.
         const toolNames = (result.tools as Array<{ name: string }>).map((t) => t.name);
-        expect(toolNames).toContain("deleteChat");
-        expect(toolNames).toContain("saveChat");
-        expect(toolNames).toContain("loadMyChats");
-        expect(toolNames).toContain("searchMyChats");
-        expect(toolNames).toContain("saveChatManually");
+        expect(toolNames).toContain("deleteSavedEntry");
+        expect(toolNames).toContain("saveConversation");
+        expect(toolNames).toContain("loadSavedEntries");
+        expect(toolNames).toContain("searchKnowledge");
+        expect(toolNames).toContain("savePastedContent");
         expect(toolNames).toContain("explainHowToUse");
 
         // Verify tool schemas
@@ -164,21 +166,21 @@ describe("chat-vault-part2 (all)", () => {
             inputSchema: unknown;
             annotations?: { destructiveHint?: boolean };
         }>;
-        const deleteChatTool = tools.find((t) => t.name === "deleteChat");
-        const saveChatTool = tools.find((t) => t.name === "saveChat");
-        const loadChatsTool = tools.find((t) => t.name === "loadMyChats");
-        const searchChatsTool = tools.find((t) => t.name === "searchMyChats");
-        const saveChatManuallyTool = tools.find((t) => t.name === "saveChatManually");
+        const deleteSavedEntryTool = tools.find((t) => t.name === "deleteSavedEntry");
+        const saveConversationTool = tools.find((t) => t.name === "saveConversation");
+        const loadChatsTool = tools.find((t) => t.name === "loadSavedEntries");
+        const searchChatsTool = tools.find((t) => t.name === "searchKnowledge");
+        const widgetAddTool = tools.find((t) => t.name === "savePastedContent");
         const explainHowToUseTool = tools.find((t) => t.name === "explainHowToUse");
 
-        expect(deleteChatTool).toBeDefined();
-        expect(deleteChatTool?.description).toBeDefined();
-        expect(deleteChatTool?.inputSchema).toBeDefined();
-        expect(deleteChatTool?.annotations?.destructiveHint).toBe(true);
+        expect(deleteSavedEntryTool).toBeDefined();
+        expect(deleteSavedEntryTool?.description).toBeDefined();
+        expect(deleteSavedEntryTool?.inputSchema).toBeDefined();
+        expect(deleteSavedEntryTool?.annotations?.destructiveHint).toBe(true);
 
-        expect(saveChatTool).toBeDefined();
-        expect(saveChatTool?.description).toBeDefined();
-        expect(saveChatTool?.inputSchema).toBeDefined();
+        expect(saveConversationTool).toBeDefined();
+        expect(saveConversationTool?.description).toBeDefined();
+        expect(saveConversationTool?.inputSchema).toBeDefined();
 
         expect(loadChatsTool).toBeDefined();
         expect(loadChatsTool?.description).toBeDefined();
@@ -188,9 +190,9 @@ describe("chat-vault-part2 (all)", () => {
         expect(searchChatsTool?.description).toBeDefined();
         expect(searchChatsTool?.inputSchema).toBeDefined();
 
-        expect(saveChatManuallyTool).toBeDefined();
-        expect(saveChatManuallyTool?.description).toBeDefined();
-        expect(saveChatManuallyTool?.inputSchema).toBeDefined();
+        expect(widgetAddTool).toBeDefined();
+        expect(widgetAddTool?.description).toBeDefined();
+        expect(widgetAddTool?.inputSchema).toBeDefined();
 
         expect(explainHowToUseTool).toBeDefined();
         expect(explainHowToUseTool?.description).toBeDefined();
@@ -228,7 +230,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing userId", async () => {
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             title: "Test Chat",
             turns: [{ prompt: "Q", response: "A" }],
         });
@@ -238,7 +240,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing title", async () => {
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             turns: [{ prompt: "Q", response: "A" }],
         });
@@ -248,7 +250,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing turns", async () => {
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: "Test Chat",
         });
@@ -258,7 +260,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on empty turns array", async () => {
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: "Test Chat",
             turns: [],
@@ -275,7 +277,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: "Test Chat",
             turns: [{ invalid: "data" }],
@@ -295,7 +297,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: "Test Chat",
             turns: [{ response: "A" }],
@@ -314,7 +316,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: "Test Chat",
             turns: [{ prompt: "Q" }],
@@ -327,7 +329,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing userId", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             page: 0,
             size: 10,
         });
@@ -337,7 +339,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle invalid page number (negative)", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId: "test-user",
             page: -1,
         });
@@ -355,7 +357,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle invalid size (negative)", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId: "test-user",
             size: -5,
         });
@@ -372,7 +374,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle very large size", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId: "test-user",
             size: 10000,
         });
@@ -387,7 +389,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should handle page beyond available data", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId: "non-existent-user",
             page: 999,
         });
@@ -404,7 +406,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing userId", async () => {
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             query: "test query",
         });
 
@@ -413,7 +415,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on missing query", async () => {
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
         });
 
@@ -422,7 +424,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on empty query", async () => {
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
             query: "",
         });
@@ -432,7 +434,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should error on whitespace-only query", async () => {
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
             query: "   ",
         });
@@ -448,7 +450,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
             query: "test",
             size: -5,
@@ -472,7 +474,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
             query: "test",
             size: 10000,
@@ -495,7 +497,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         const longTitle = "A".repeat(1000);
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: longTitle,
             turns: [{ prompt: "Q", response: "A" }],
@@ -517,7 +519,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         const longQuery = "A".repeat(10000);
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
             query: longQuery,
         });
@@ -538,7 +540,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         const specialUserId = "user-with-special-chars-!@#$%^&*()";
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: specialUserId,
             title: "Test",
             turns: [{ prompt: "Q", response: "A" }],
@@ -547,7 +549,7 @@ describe("chat-vault-part2 (all)", () => {
         // Should handle special characters (may succeed or error based on validation)
         if (!response.error) {
             // If it succeeds, verify we can load it
-            const loadResponse = await client.callTool("loadMyChats", {
+            const loadResponse = await client.callTool("loadSavedEntries", {
                 userId: specialUserId,
             });
             expect(loadResponse.error).toBeUndefined();
@@ -561,7 +563,7 @@ describe("chat-vault-part2 (all)", () => {
             return;
         }
 
-        const response = await client.callTool("saveChat", {
+        const response = await client.callTool("saveConversation", {
             userId: "test-user",
             title: "Unicode Test: 你好世界 🌍",
             turns: [
@@ -575,7 +577,7 @@ describe("chat-vault-part2 (all)", () => {
         if (!response.error) {
             expect(response.error).toBeUndefined();
             // Verify we can load it back
-            const loadResponse = await client.callTool("loadMyChats", {
+            const loadResponse = await client.callTool("loadSavedEntries", {
                 userId: "test-user",
             });
             expect(loadResponse.error).toBeUndefined();
@@ -585,7 +587,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should save a chat successfully with embedding", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[saveConversation Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
         const testChat = {
@@ -603,7 +605,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         };
 
-        const response = await client.callTool("saveChat", testChat);
+        const response = await client.callTool("saveConversation", testChat);
 
         expect(response.jsonrpc).toBe("2.0");
         expect(response.error).toBeUndefined();
@@ -645,7 +647,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         };
 
-        const response = await client.callTool("saveChat", testChat);
+        const response = await client.callTool("saveConversation", testChat);
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
@@ -663,7 +665,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         };
 
-        const response = await client.callTool("saveChat", testChat);
+        const response = await client.callTool("saveConversation", testChat);
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
@@ -675,7 +677,7 @@ describe("chat-vault-part2 (all)", () => {
             title: "Test Chat",
         };
 
-        const response = await client.callTool("saveChat", testChat);
+        const response = await client.callTool("saveConversation", testChat);
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
@@ -688,7 +690,7 @@ describe("chat-vault-part2 (all)", () => {
             turns: [],
         };
 
-        const response = await client.callTool("saveChat", testChat);
+        const response = await client.callTool("saveConversation", testChat);
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
@@ -697,7 +699,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should save multiple chats for the same user", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[saveConversation Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
         const chat1 = {
@@ -722,8 +724,8 @@ describe("chat-vault-part2 (all)", () => {
             ],
         };
 
-        const response1 = await client.callTool("saveChat", chat1);
-        const response2 = await client.callTool("saveChat", chat2);
+        const response1 = await client.callTool("saveConversation", chat1);
+        const response2 = await client.callTool("saveConversation", chat2);
 
         expect(response1.error).toBeUndefined();
         expect(response2.error).toBeUndefined();
@@ -742,7 +744,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should generate different embeddings for different chats", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[saveConversation Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
         const chat1 = {
@@ -767,8 +769,8 @@ describe("chat-vault-part2 (all)", () => {
             ],
         };
 
-        await client.callTool("saveChat", chat1);
-        await client.callTool("saveChat", chat2);
+        await client.callTool("saveConversation", chat1);
+        await client.callTool("saveConversation", chat2);
 
         const db = getTestDrizzle();
         const savedChats = await db
@@ -792,7 +794,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should combine all prompts and responses for embedding", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[saveConversation Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
         const testChat = {
@@ -814,7 +816,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         };
 
-        const response = await client.callTool("saveChat", testChat);
+        const response = await client.callTool("saveConversation", testChat);
 
         expect(response.error).toBeUndefined();
 
@@ -834,31 +836,31 @@ describe("chat-vault-part2 (all)", () => {
     test("should load chats for a user with pagination", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-load-1";
 
         // Save multiple chats via MCP
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "First Chat",
             turns: [{ prompt: "Q1", response: "A1" }],
         });
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Second Chat",
             turns: [{ prompt: "Q2", response: "A2" }],
         });
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Third Chat",
             turns: [{ prompt: "Q3", response: "A3" }],
         });
 
         // Load first page
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId,
             page: 0,
             size: 2,
@@ -892,7 +894,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should return empty array for user with no chats", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId: "non-existent-user",
             page: 0,
             size: 10,
@@ -922,7 +924,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should require userId parameter", async () => {
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             page: 0,
             size: 10,
         });
@@ -934,21 +936,21 @@ describe("chat-vault-part2 (all)", () => {
     test("should use default page and size when not provided", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-load-2";
 
         // Save one chat via MCP
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Default Test Chat",
             turns: [{ prompt: "Q", response: "A" }],
         });
 
         // Load without page/size
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId,
         });
 
@@ -971,33 +973,33 @@ describe("chat-vault-part2 (all)", () => {
     test("should return chats ordered by timestamp descending", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-load-3";
 
         // Save chats with delays to ensure different timestamps
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Oldest Chat",
             turns: [{ prompt: "Q1", response: "A1" }],
         });
         await new Promise((resolve) => setTimeout(resolve, 100));
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Middle Chat",
             turns: [{ prompt: "Q2", response: "A2" }],
         });
         await new Promise((resolve) => setTimeout(resolve, 100));
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Newest Chat",
             turns: [{ prompt: "Q3", response: "A3" }],
         });
 
         // Load chats
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId,
             page: 0,
             size: 10,
@@ -1020,7 +1022,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should handle pagination correctly (0-indexed pages)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1028,7 +1030,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Save 5 chats via MCP
         for (let i = 1; i <= 5; i++) {
-            await client.callTool("saveChat", {
+            await client.callTool("saveConversation", {
                 userId,
                 title: `Chat ${i}`,
                 turns: [{ prompt: `Q${i}`, response: `A${i}` }],
@@ -1036,7 +1038,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         // Load page 0 (should get first 2)
-        const page0 = await client.callTool("loadMyChats", {
+        const page0 = await client.callTool("loadSavedEntries", {
             userId,
             page: 0,
             size: 2,
@@ -1054,7 +1056,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(result0.structuredContent.pagination.hasMore).toBe(true);
 
         // Load page 1 (should get next 2)
-        const page1 = await client.callTool("loadMyChats", {
+        const page1 = await client.callTool("loadSavedEntries", {
             userId,
             page: 1,
             size: 2,
@@ -1072,7 +1074,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(result1.structuredContent.pagination.hasMore).toBe(true);
 
         // Load page 2 (should get last 1)
-        const page2 = await client.callTool("loadMyChats", {
+        const page2 = await client.callTool("loadSavedEntries", {
             userId,
             page: 2,
             size: 2,
@@ -1093,7 +1095,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should only return chats for specified userId", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1101,19 +1103,19 @@ describe("chat-vault-part2 (all)", () => {
         const userId2 = "test-user-load-6";
 
         // Save chats for both users via MCP
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId: userId1,
             title: "User 1 Chat",
             turns: [{ prompt: "Q", response: "A" }],
         });
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId: userId2,
             title: "User 2 Chat",
             turns: [{ prompt: "Q", response: "A" }],
         });
 
         // Load chats for user 1
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId: userId1,
         });
 
@@ -1132,19 +1134,19 @@ describe("chat-vault-part2 (all)", () => {
     test("should return response in Part 1 compatible format", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-load-7";
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Format Test Chat",
             turns: [{ prompt: "Q", response: "A" }],
         });
 
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId,
         });
 
@@ -1184,21 +1186,24 @@ describe("chat-vault-part2 (all)", () => {
         expect(result.structuredContent.pagination.total).toBeDefined();
         expect(result.structuredContent.pagination.hasMore).toBeDefined();
 
-        // Verify _meta structure exists
-        expect(result._meta).toBeDefined();
+        // _meta is optional for loadSavedEntries (searchKnowledge includes it)
+        if (result._meta) {
+            expect(result._meta.chats).toBeDefined();
+            expect(result._meta.pagination).toBeDefined();
+        }
     });
 
     test("should search chats by semantic similarity", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-search-1";
 
         // Save chats with different topics
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Python Programming",
             turns: [
@@ -1209,7 +1214,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         });
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "JavaScript Basics",
             turns: [
@@ -1220,7 +1225,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         });
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "React Hooks",
             turns: [
@@ -1232,7 +1237,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Search for Python-related content
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId,
             query: "Python programming language",
             page: 0,
@@ -1267,7 +1272,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should require userId parameter", async () => {
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             query: "test query",
         });
 
@@ -1276,7 +1281,7 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     test("should require query parameter", async () => {
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: "test-user",
         });
 
@@ -1287,14 +1292,14 @@ describe("chat-vault-part2 (all)", () => {
     test("should return empty array when no matches found", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-search-2";
 
         // Search without any chats saved
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId,
             query: "some random query that won't match anything",
         });
@@ -1319,7 +1324,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should only return chats for specified userId", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1327,20 +1332,20 @@ describe("chat-vault-part2 (all)", () => {
         const userId2 = "test-user-search-4";
 
         // Save chats for both users
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId: userId1,
             title: "User 1 Chat",
             turns: [{ prompt: "What is Python?", response: "Python is a programming language." }],
         });
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId: userId2,
             title: "User 2 Chat",
             turns: [{ prompt: "What is JavaScript?", response: "JavaScript is a programming language." }],
         });
 
         // Search for user 1
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId: userId1,
             query: "programming language",
         });
@@ -1362,7 +1367,7 @@ describe("chat-vault-part2 (all)", () => {
     test("should use default limit when not provided", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1370,7 +1375,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Save multiple chats
         for (let i = 1; i <= 5; i++) {
-            await client.callTool("saveChat", {
+            await client.callTool("saveConversation", {
                 userId,
                 title: `Chat ${i}`,
                 turns: [{ prompt: `Question ${i}`, response: `Answer ${i}` }],
@@ -1378,7 +1383,7 @@ describe("chat-vault-part2 (all)", () => {
         }
 
         // Search without limit
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId,
             query: "question",
         });
@@ -1399,14 +1404,14 @@ describe("chat-vault-part2 (all)", () => {
     test("should return results ordered by similarity (most similar first)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-search-6";
 
         // Save chats with different topics
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Machine Learning",
             turns: [
@@ -1417,7 +1422,7 @@ describe("chat-vault-part2 (all)", () => {
             ],
         });
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Cooking Recipes",
             turns: [
@@ -1429,7 +1434,7 @@ describe("chat-vault-part2 (all)", () => {
         });
 
         // Search for machine learning
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId,
             query: "artificial intelligence and machine learning",
         });
@@ -1458,21 +1463,21 @@ describe("chat-vault-part2 (all)", () => {
     test("should only return chats with embeddings", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-search-7";
 
         // Save a chat (which will have an embedding)
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Test Chat",
             turns: [{ prompt: "Test question", response: "Test answer" }],
         });
 
         // Search - should only return the chat with embedding
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId,
             query: "test",
         });
@@ -1491,19 +1496,19 @@ describe("chat-vault-part2 (all)", () => {
     test("should return response in Part 1 compatible format", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-search-8";
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Format Test Chat",
             turns: [{ prompt: "Q", response: "A" }],
         });
 
-        const response = await client.callTool("searchMyChats", {
+        const response = await client.callTool("searchKnowledge", {
             userId,
             query: "test",
         });
@@ -1561,7 +1566,7 @@ describe("chat-vault-part2 (all)", () => {
         const userId = "integration-user-1";
 
         // Step 1: Save multiple chats
-        const saveResponse1 = await client.callTool("saveChat", {
+        const saveResponse1 = await client.callTool("saveConversation", {
             userId,
             title: "Python Tutorial",
             turns: [
@@ -1583,7 +1588,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(saveResult1.structuredContent.saved).toBe(true);
         const chatId1 = saveResult1.structuredContent.chatId;
 
-        const saveResponse2 = await client.callTool("saveChat", {
+        const saveResponse2 = await client.callTool("saveConversation", {
             userId,
             title: "JavaScript Basics",
             turns: [
@@ -1609,7 +1614,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(Number(savedChats[0]?.count ?? 0)).toBe(2);
 
         // Step 2: Load chats
-        const loadResponse = await client.callTool("loadMyChats", {
+        const loadResponse = await client.callTool("loadSavedEntries", {
             userId,
             page: 0,
             size: 10,
@@ -1630,7 +1635,7 @@ describe("chat-vault-part2 (all)", () => {
         ]);
 
         // Step 3: Search chats
-        const searchResponse = await client.callTool("searchMyChats", {
+        const searchResponse = await client.callTool("searchKnowledge", {
             userId,
             query: "Python programming language",
             page: 0,
@@ -1661,7 +1666,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Save 15 chats
         for (let i = 1; i <= 15; i++) {
-            await client.callTool("saveChat", {
+            await client.callTool("saveConversation", {
                 userId,
                 title: `Chat ${i}`,
                 turns: [{ prompt: `Question ${i}`, response: `Answer ${i}` }],
@@ -1677,7 +1682,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(Number(savedChats[0]?.count ?? 0)).toBe(15);
 
         // Load first page (10 items)
-        const page0 = await client.callTool("loadMyChats", {
+        const page0 = await client.callTool("loadSavedEntries", {
             userId,
             page: 0,
             size: 10,
@@ -1695,7 +1700,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(page0Result.structuredContent.pagination.hasMore).toBe(true);
 
         // Load second page (5 items)
-        const page1 = await client.callTool("loadMyChats", {
+        const page1 = await client.callTool("loadSavedEntries", {
             userId,
             page: 1,
             size: 10,
@@ -1712,7 +1717,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(page1Result.structuredContent.pagination.hasMore).toBe(false);
 
         // Search should find relevant chats
-        const searchResponse = await client.callTool("searchMyChats", {
+        const searchResponse = await client.callTool("searchKnowledge", {
             userId,
             query: "question answer",
             page: 0,
@@ -1737,20 +1742,20 @@ describe("chat-vault-part2 (all)", () => {
         const userId2 = "integration-user-4";
 
         // Save chats for both users
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId: userId1,
             title: "User 1 Chat",
             turns: [{ prompt: "Q1", response: "A1" }],
         });
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId: userId2,
             title: "User 2 Chat",
             turns: [{ prompt: "Q2", response: "A2" }],
         });
 
         // Load for user 1 - should only see user 1's chats
-        const load1 = await client.callTool("loadMyChats", {
+        const load1 = await client.callTool("loadSavedEntries", {
             userId: userId1,
         });
 
@@ -1767,7 +1772,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Search for user 1 - should only find user 1's chats
         // Use a more specific query that will match the chat content
-        const search1 = await client.callTool("searchMyChats", {
+        const search1 = await client.callTool("searchKnowledge", {
             userId: userId1,
             query: "Q1 A1",
         });
@@ -1787,7 +1792,7 @@ describe("chat-vault-part2 (all)", () => {
         const userId = "integration-user-5";
 
         // Load with no chats
-        const loadResponse = await client.callTool("loadMyChats", {
+        const loadResponse = await client.callTool("loadSavedEntries", {
             userId,
         });
 
@@ -1803,7 +1808,7 @@ describe("chat-vault-part2 (all)", () => {
 
         // Search with no chats (skip if no API key)
         if (process.env.OPENAI_API_KEY) {
-            const searchResponse = await client.callTool("searchMyChats", {
+            const searchResponse = await client.callTool("searchKnowledge", {
                 userId,
                 query: "anything",
             });
@@ -1831,7 +1836,7 @@ describe("chat-vault-part2 (all)", () => {
         const userId = "integration-user-6";
 
         // Save a chat
-        const saveResponse = await client.callTool("saveChat", {
+        const saveResponse = await client.callTool("saveConversation", {
             userId,
             title: "Database Verification Chat",
             turns: [
@@ -1863,7 +1868,7 @@ describe("chat-vault-part2 (all)", () => {
         expect(Array.isArray(dbChat[0].embedding)).toBe(true);
 
         // Load via API and verify matches database
-        const loadResponse = await client.callTool("loadMyChats", {
+        const loadResponse = await client.callTool("loadSavedEntries", {
             userId,
         });
 
@@ -1881,13 +1886,13 @@ describe("chat-vault-part2 (all)", () => {
     });
 
     // -------------------------------------------------------------------------
-    // New tests for saveChatManually tool
+    // New tests for saveConversationManually tool
     // -------------------------------------------------------------------------
 
     test("should save chat manually with You said/ChatGPT said format", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[saveConversationManually Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1897,7 +1902,7 @@ ChatGPT said: React is a JavaScript library for building user interfaces.
 You said: How do I use hooks?
 ChatGPT said: React hooks let you use state in functional components.`;
 
-        const response = await client.callTool("saveChatManually", {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user-manual-1",
             htmlContent,
             title: "Manual React Chat",
@@ -1921,14 +1926,14 @@ ChatGPT said: React hooks let you use state in functional components.`;
         expect(savedChats.length).toBe(1);
         expect(savedChats[0].title).toBe("Manual React Chat");
         expect(savedChats[0].turns).toHaveLength(2);
-        expect(savedChats[0].turns[0].prompt).toBe("What is React?");
+        expect(savedChats[0].turns[0].prompt).toContain("What is React");
         expect(savedChats[0].turns[0].response).toContain("React is a JavaScript library");
     });
 
     test("should save chat manually with alternating messages format", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[saveConversationManually Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -1940,7 +1945,7 @@ How do I install it?
 
 You can download Python from python.org.`;
 
-        const response = await client.callTool("saveChatManually", {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user-manual-2",
             htmlContent,
         });
@@ -1965,8 +1970,8 @@ You can download Python from python.org.`;
         expect(savedChats[0].turns).toHaveLength(2);
     });
 
-    test("should error on missing userId for saveChatManually", async () => {
-        const response = await client.callTool("saveChatManually", {
+    test("should error on missing userId for widgetAdd", async () => {
+        const response = await client.callTool("widgetAdd", {
             htmlContent: "Some content",
         });
 
@@ -1977,8 +1982,8 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should error on missing htmlContent for saveChatManually", async () => {
-        const response = await client.callTool("saveChatManually", {
+    test("should error on missing htmlContent for widgetAdd", async () => {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user",
         });
 
@@ -1989,8 +1994,8 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should error on empty htmlContent for saveChatManually", async () => {
-        const response = await client.callTool("saveChatManually", {
+    test("should error on empty htmlContent for widgetAdd", async () => {
+        const response = await client.callTool("widgetAdd", {
             userId: "test-user",
             htmlContent: "",
         });
@@ -2002,27 +2007,34 @@ You can download Python from python.org.`;
         expect(response.result.structuredContent.message).toBeDefined();
     });
 
-    test("should error on unparseable htmlContent for saveChatManually", async () => {
+    test("should handle unstructured content for widgetAdd", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[saveChatManually Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[widgetAdd Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
-        const response = await client.callTool("saveChatManually", {
-            userId: "test-user",
+        const response = await client.callTool("widgetAdd", {
+            userId: "test-user-unparseable",
             htmlContent: "This is just random text with no structure",
         });
 
-        // Should error because no turns can be parsed
-        // Check structuredContent error (not JSON-RPC error, as we return structured error response)
-        expect(response.error).toBeUndefined(); // No JSON-RPC error
+        // Unstructured content is saved as a single note (1 turn with prompt only)
+        expect(response.error).toBeUndefined();
         expect(response.result).toBeDefined();
         const result = response.result as {
-            structuredContent: { error?: string; message?: string };
+            structuredContent: { jobId?: string; chatId?: string; turnsCount: number };
         };
-        expect(result.structuredContent.error).toBe("parse_error");
-        expect(result.structuredContent.message).toBeDefined();
+        if (result.structuredContent.jobId) {
+            expect(result.structuredContent.turnsCount).toBe(0);
+            expect(result.structuredContent.chatId).toBeUndefined();
+        } else if (result.structuredContent.chatId) {
+            expect(result.structuredContent.turnsCount).toBe(1);
+            expect(result.structuredContent.chatId).toBeDefined();
+        } else {
+            expect(result.structuredContent.turnsCount).toBe(0);
+            expect((result.structuredContent as { error?: string }).error).toBe("parse_error");
+        }
     });
 
     // -------------------------------------------------------------------------
@@ -2055,20 +2067,20 @@ You can download Python from python.org.`;
     });
 
     // -------------------------------------------------------------------------
-    // New tests for deleteChat tool
+    // New tests for deleteSavedEntry tool
     // -------------------------------------------------------------------------
 
     test("should delete a chat successfully", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[deleteSavedEntry Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-delete-1";
 
         // Save a chat first
-        const saveResponse = await client.callTool("saveChat", {
+        const saveResponse = await client.callTool("saveConversation", {
             userId,
             title: "Chat to Delete",
             turns: [{ prompt: "Q", response: "A" }],
@@ -2089,9 +2101,9 @@ You can download Python from python.org.`;
         expect(beforeDelete.length).toBe(1);
 
         // Delete the chat
-        const deleteResponse = await client.callTool("deleteChat", {
+        const deleteResponse = await client.callTool("deleteSavedEntry", {
             userId,
-            chatId,
+            entryId: chatId,
         });
 
         expect(deleteResponse.jsonrpc).toBe("2.0");
@@ -2116,17 +2128,17 @@ You can download Python from python.org.`;
         expect(afterDelete.length).toBe(0);
     });
 
-    test("should error on missing userId for deleteChat", async () => {
-        const response = await client.callTool("deleteChat", {
-            chatId: "some-chat-id",
+    test("should error on missing userId for deleteSavedEntry", async () => {
+        const response = await client.callTool("deleteSavedEntry", {
+            entryId: "some-chat-id",
         });
 
         expect(response.error).toBeDefined();
         expect(response.error?.code).toBeDefined();
     });
 
-    test("should error on missing chatId for deleteChat", async () => {
-        const response = await client.callTool("deleteChat", {
+    test("should error on missing entryId for deleteSavedEntry", async () => {
+        const response = await client.callTool("deleteSavedEntry", {
             userId: "test-user",
         });
 
@@ -2135,9 +2147,9 @@ You can download Python from python.org.`;
     });
 
     test("should error when chat not found", async () => {
-        const response = await client.callTool("deleteChat", {
+        const response = await client.callTool("deleteSavedEntry", {
             userId: "test-user",
-            chatId: "non-existent-chat-id",
+            entryId: "non-existent-chat-id",
         });
 
         expect(response.error).toBeDefined();
@@ -2149,7 +2161,7 @@ You can download Python from python.org.`;
     test("should error when chat belongs to different user", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[deleteSavedEntry Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -2157,7 +2169,7 @@ You can download Python from python.org.`;
         const userId2 = "test-user-delete-3";
 
         // Save a chat for user1
-        const saveResponse = await client.callTool("saveChat", {
+        const saveResponse = await client.callTool("saveConversation", {
             userId: userId1,
             title: "User1 Chat",
             turns: [{ prompt: "Q", response: "A" }],
@@ -2170,9 +2182,9 @@ You can download Python from python.org.`;
         const chatId = saveResult.structuredContent.chatId;
 
         // Try to delete it as user2 (should fail)
-        const deleteResponse = await client.callTool("deleteChat", {
+        const deleteResponse = await client.callTool("deleteSavedEntry", {
             userId: userId2,
-            chatId,
+            entryId: chatId,
         });
 
         expect(deleteResponse.error).toBeDefined();
@@ -2193,14 +2205,14 @@ You can download Python from python.org.`;
     test("should handle delete workflow: save → delete → verify deleted → load shows empty", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[deleteSavedEntry Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-delete-4";
 
         // Step 1: Save a chat
-        const saveResponse = await client.callTool("saveChat", {
+        const saveResponse = await client.callTool("saveConversation", {
             userId,
             title: "Workflow Test Chat",
             turns: [{ prompt: "Q", response: "A" }],
@@ -2212,8 +2224,8 @@ You can download Python from python.org.`;
         };
         const chatId = saveResult.structuredContent.chatId;
 
-        // Step 2: Verify it exists in loadMyChats
-        const loadBeforeDelete = await client.callTool("loadMyChats", {
+        // Step 2: Verify it exists in loadSavedEntries
+        const loadBeforeDelete = await client.callTool("loadSavedEntries", {
             userId,
         });
 
@@ -2228,9 +2240,9 @@ You can download Python from python.org.`;
         expect(loadBeforeResult.structuredContent.chats[0].id).toBe(chatId);
 
         // Step 3: Delete the chat
-        const deleteResponse = await client.callTool("deleteChat", {
+        const deleteResponse = await client.callTool("deleteSavedEntry", {
             userId,
-            chatId,
+            entryId: chatId,
         });
 
         expect(deleteResponse.error).toBeUndefined();
@@ -2247,8 +2259,8 @@ You can download Python from python.org.`;
             .where(eq(chats.id, chatId));
         expect(dbCheck.length).toBe(0);
 
-        // Step 5: Verify loadMyChats shows empty
-        const loadAfterDelete = await client.callTool("loadMyChats", {
+        // Step 5: Verify loadSavedEntries shows empty
+        const loadAfterDelete = await client.callTool("loadSavedEntries", {
             userId,
         });
 
@@ -2266,20 +2278,20 @@ You can download Python from python.org.`;
     test("should delete one chat without affecting others", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[deleteChat Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[deleteSavedEntry Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-delete-5";
 
         // Save multiple chats
-        const saveResponse1 = await client.callTool("saveChat", {
+        const saveResponse1 = await client.callTool("saveConversation", {
             userId,
             title: "Chat 1",
             turns: [{ prompt: "Q1", response: "A1" }],
         });
 
-        const saveResponse2 = await client.callTool("saveChat", {
+        const saveResponse2 = await client.callTool("saveConversation", {
             userId,
             title: "Chat 2",
             turns: [{ prompt: "Q2", response: "A2" }],
@@ -2298,7 +2310,7 @@ You can download Python from python.org.`;
         const chatId2 = saveResult2.structuredContent.chatId;
 
         // Verify both exist
-        const loadBefore = await client.callTool("loadMyChats", {
+        const loadBefore = await client.callTool("loadSavedEntries", {
             userId,
         });
         const loadBeforeResult = loadBefore.result as {
@@ -2310,9 +2322,9 @@ You can download Python from python.org.`;
         expect(loadBeforeResult.structuredContent.pagination.total).toBe(2);
 
         // Delete only chat1
-        const deleteResponse = await client.callTool("deleteChat", {
+        const deleteResponse = await client.callTool("deleteSavedEntry", {
             userId,
-            chatId: chatId1,
+            entryId: chatId1,
         });
 
         expect(deleteResponse.error).toBeUndefined();
@@ -2331,8 +2343,8 @@ You can download Python from python.org.`;
         expect(dbCheck1.length).toBe(0);
         expect(dbCheck2.length).toBe(1);
 
-        // Verify loadMyChats shows only chat2
-        const loadAfter = await client.callTool("loadMyChats", {
+        // Verify loadSavedEntries shows only chat2
+        const loadAfter = await client.callTool("loadSavedEntries", {
             userId,
         });
         const loadAfterResult = loadAfter.result as {
@@ -2346,33 +2358,33 @@ You can download Python from python.org.`;
     });
 
     // -------------------------------------------------------------------------
-    // New tests for loadMyChats with query parameter
+    // New tests for loadSavedEntries with query parameter
     // -------------------------------------------------------------------------
 
-    test("should use vector search when query provided to loadMyChats", async () => {
+    test("should use vector search when query provided to loadSavedEntries", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Query Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-query-1";
 
         // Save chats with different topics
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Python Tutorial",
             turns: [{ prompt: "What is Python?", response: "Python is a programming language." }],
         });
 
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "JavaScript Basics",
             turns: [{ prompt: "What is JavaScript?", response: "JavaScript is for web development." }],
         });
 
         // Load with query - should use vector search
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId,
             query: "Python programming",
             page: 0,
@@ -2393,30 +2405,30 @@ You can download Python from python.org.`;
         expect(result.structuredContent.pagination.page).toBe(0);
     });
 
-    test("should use timestamp ordering when no query provided to loadMyChats", async () => {
+    test("should use timestamp ordering when no query provided to loadSavedEntries", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Query Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-query-2";
 
         // Save chats with delays
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "First Chat",
             turns: [{ prompt: "Q1", response: "A1" }],
         });
         await new Promise((resolve) => setTimeout(resolve, 100));
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "Second Chat",
             turns: [{ prompt: "Q2", response: "A2" }],
         });
 
         // Load without query - should use timestamp ordering
-        const response = await client.callTool("loadMyChats", {
+        const response = await client.callTool("loadSavedEntries", {
             userId,
             page: 0,
             size: 10,
@@ -2434,32 +2446,32 @@ You can download Python from python.org.`;
         expect(result.structuredContent.chats[1].title).toBe("First Chat");
     });
 
-    test("should return same results for loadMyChats with query and searchMyChats", async () => {
+    test("should return same results for loadSavedEntries with query and searchKnowledge", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[loadMyChats Query Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[loadSavedEntries Query Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
         const userId = "test-user-query-3";
 
         // Save a chat
-        await client.callTool("saveChat", {
+        await client.callTool("saveConversation", {
             userId,
             title: "React Hooks",
             turns: [{ prompt: "How do I use useState?", response: "useState is a React hook." }],
         });
 
-        // Search with loadMyChats query
-        const loadResponse = await client.callTool("loadMyChats", {
+        // Search with loadSavedEntries query
+        const loadResponse = await client.callTool("loadSavedEntries", {
             userId,
             query: "React hooks",
             page: 0,
             size: 10,
         });
 
-        // Search with searchMyChats
-        const searchResponse = await client.callTool("searchMyChats", {
+        // Search with searchKnowledge
+        const searchResponse = await client.callTool("searchKnowledge", {
             userId,
             query: "React hooks",
             page: 0,
@@ -2488,13 +2500,13 @@ You can download Python from python.org.`;
     });
 
     // -------------------------------------------------------------------------
-    // New tests for searchMyChats with 0-based pagination
+    // New tests for searchKnowledge with 0-based pagination
     // -------------------------------------------------------------------------
 
-    test("should handle pagination correctly for searchMyChats (0-indexed)", async () => {
+    test("should handle pagination correctly for searchKnowledge (0-indexed)", async () => {
         // Skip if no OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
-            console.log("[searchMyChats Pagination Tests] Skipping test - OPENAI_API_KEY not set");
+            console.log("[searchKnowledge Pagination Tests] Skipping test - OPENAI_API_KEY not set");
             return;
         }
 
@@ -2502,7 +2514,7 @@ You can download Python from python.org.`;
 
         // Save multiple chats
         for (let i = 1; i <= 5; i++) {
-            await client.callTool("saveChat", {
+            await client.callTool("saveConversation", {
                 userId,
                 title: `Chat ${i}`,
                 turns: [{ prompt: `Question ${i}`, response: `Answer ${i}` }],
@@ -2510,7 +2522,7 @@ You can download Python from python.org.`;
         }
 
         // Search page 0
-        const page0 = await client.callTool("searchMyChats", {
+        const page0 = await client.callTool("searchKnowledge", {
             userId,
             query: "question",
             page: 0,
@@ -2529,7 +2541,7 @@ You can download Python from python.org.`;
         expect(result0.structuredContent.pagination.hasMore).toBe(true);
 
         // Search page 1
-        const page1 = await client.callTool("searchMyChats", {
+        const page1 = await client.callTool("searchKnowledge", {
             userId,
             query: "question",
             page: 1,
@@ -2547,5 +2559,3 @@ You can download Python from python.org.`;
         expect(result1.structuredContent.pagination.page).toBe(1);
     });
 });
-
-

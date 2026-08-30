@@ -15,17 +15,30 @@ import {
     type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as dotenv from "dotenv";
-import { testConnection, db } from "./db/index.js";
+import { testConnection, db, observeDatabaseOperation } from "./db/index.js";
 import { sql } from "drizzle-orm";
 import { saveChat } from "./tools/saveChat.js";
+import { saveChatTurnsBegin } from "./tools/saveChatTurnsBegin.js";
+import { saveChatTurn } from "./tools/saveChatTurn.js";
+import { saveChatTurnsFinalize } from "./tools/saveChatTurnsFinalize.js";
 import { widgetAdd } from "./tools/widgetAdd.js";
 import { loadMyChats } from "./tools/loadMyChats.js";
+import { loadFullTurn } from "./tools/loadFullTurn.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
 import { deleteChat } from "./tools/deleteChat.js";
 import { updateChat } from "./tools/updateChat.js";
+import { listTopics } from "./tools/listTopics.js";
+import { createExportToken, getJobStatus, isRedisConfigured } from "./utils/redis.js";
+import {
+    readTrustedCanonicalUserId,
+    resolveDeclaredUserIdWithMerge,
+} from "./user/userMerge.js";
 
 dotenv.config();
+
+const serverInstanceStartedAt = Date.now();
+let requestCountInInstance = 0;
 
 // Anonymous user limits (for tutorial purposes)
 export const ANON_CHAT_EXPIRY_DAYS = 30; // Chats older than 30 days are considered expired
@@ -75,56 +88,209 @@ function createMcpServer(): Server {
 }
 
 // Define available tools
-const chatVaultTools: Tool[] = [
-    {
-        name: "deleteChat",
-        description: "USED INSIDE THE WIDGET. Delete selected chat by the widget using chatId",
+const GENERIC_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    description: "Tool result payload (structuredContent).",
+    additionalProperties: true,
+};
+
+// More specific output schemas for LLM-facing tools (match structuredContent shapes).
+const SAVE_CONVERSATION_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: true,
+    properties: {
+        jobId: { type: "string" },
+        chatId: { type: "string" },
+        saved: { type: "boolean" },
+    },
+    anyOf: [
+        { required: ["jobId"] },
+        { required: ["chatId", "saved"] },
+    ],
+};
+
+const SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["jobId"],
+    properties: {
+        jobId: { type: "string" },
+    },
+};
+
+const SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["ok", "turnIndex"],
+    properties: {
+        ok: { type: "boolean" },
+        turnIndex: { type: "number" },
+    },
+};
+
+const SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: true,
+    properties: {
+        jobId: { type: "string" },
+        chatId: { type: "string" },
+    },
+    anyOf: [
+        { required: ["jobId"] },
+        { required: ["chatId"] },
+    ],
+};
+
+const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["chats", "search", "pagination"],
+    properties: {
+        chats: {
+            type: "array",
+            items: {
+                type: "object",
+                additionalProperties: true,
+                required: ["id", "userId", "title", "timestamp", "turns"],
+                properties: {
+                    id: { type: "string" },
+                    userId: { type: "string" },
+                    title: { type: "string" },
+                    timestamp: { type: "string", description: "ISO date-time string" },
+                    turns: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["prompt", "response"],
+                            properties: {
+                                prompt: { type: "string" },
+                                response: { type: "string" },
+                            },
+                        },
+                    },
+                    similarity: { type: "number" },
+                },
+            },
+        },
+        search: {
+            type: "object" as const,
+            additionalProperties: false,
+            required: ["query"],
+            properties: {
+                query: { type: "string" },
+            },
+        },
+        pagination: {
+            type: "object" as const,
+            additionalProperties: false,
+            required: ["page", "limit", "total", "totalPages", "hasMore"],
+            properties: {
+                page: { type: "number" },
+                limit: { type: "number" },
+                total: { type: "number" },
+                totalPages: { type: "number" },
+                hasMore: { type: "boolean" },
+            },
+        },
+    },
+};
+
+const GET_SAVE_JOB_STATUS_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["status"],
+    properties: {
+        status: {
+            type: "string",
+            enum: ["pending", "completed", "failed", "expired"],
+        },
+        chatId: { type: "string" },
+        chatIds: { type: "array", items: { type: "string" } },
+        error: { type: "string" },
+    },
+};
+
+const EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["helpText"],
+    properties: {
+        helpText: { type: "string" },
+    },
+};
+
+const EXPORT_SAVED_ENTRIES_OUTPUT_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["downloadUrl", "filename", "expiresAt"],
+    properties: {
+        downloadUrl: { type: "string" },
+        filename: { type: "string" },
+        expiresAt: { type: "string" },
+    },
+};
+
+type ToolMetadataProfile = "full" | "gpt";
+
+function getToolMetadataProfile(): ToolMetadataProfile {
+    const raw = (process.env.CHATVAULT_TOOL_METADATA_PROFILE ?? "full").toLowerCase();
+    if (raw === "gpt" || raw === "limited") return "gpt";
+    return "full";
+}
+
+/** Maps public MCP tool names to the existing implementation handler keys. */
+const TOOL_NAME_ALIASES: Record<string, string> = {
+    savePastedContent: "widgetAdd",
+};
+
+function normalizeToolName(toolName: string): string {
+    return TOOL_NAME_ALIASES[toolName] ?? toolName;
+}
+
+const deleteSavedEntryTool: Tool = {
+        name: "deleteSavedEntry",
+        title: "Delete saved entry",
+        description:
+            "Delete the selected saved entry from the user's private Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                chatId: {
-                    type: "string",
-                    description: "Chat ID to delete (required)",
-                },
+                userId: { type: "string", description: "User ID (required)" },
+                entryId: { type: "string", description: "Saved entry ID to delete (required)" },
             },
-            required: ["userId", "chatId"],
+            required: ["userId", "entryId"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
-            destructiveHint: true
+            openWorldHint: false,
+            destructiveHint: true,
         },
+        _meta: { ui: { visibility: ["app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
 
-    },
-    {
-        name: "updateChat",
-        description: "USED INSIDE THE WIDGET. Update a chat's properties (title and/or turns). When turns are updated, embeddings are regenerated.",
+const updateSavedEntryTool: Tool = {
+        name: "updateSavedEntry",
+        title: "Update saved entry",
+        description:
+            "Update the title and/or conversation turns of an entry already stored in the user's private Chat Vault.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                chatId: {
-                    type: "string",
-                    description: "Chat ID to update (required)",
-                },
-                chat: {
+                userId: { type: "string", description: "User ID (required)" },
+                entryId: { type: "string", description: "Saved entry ID to update (required)" },
+                entry: {
                     type: "object",
-                    description: "Chat properties to update (at least one of title or turns must be provided)",
+                    description: "Saved entry properties to update; provide title and/or turns.",
                     properties: {
                         title: {
                             type: "string",
-                            description: "New title for the chat (optional, max 2048 characters)",
+                            description: "New title for the saved entry (optional, max 2048 characters)",
                         },
                         turns: {
                             type: "array",
-                            description: "Updated turns array (optional, must be non-empty if provided)",
+                            description: "Updated conversation turns; must be non-empty if provided.",
                             items: {
                                 type: "object",
                                 properties: {
@@ -134,34 +300,39 @@ const chatVaultTools: Tool[] = [
                                 required: ["prompt", "response"],
                             },
                         },
+                        topics: {
+                            type: "array",
+                            description:
+                                "Full replacement topic list (max 5). Each item is a topic UUID or a display name to resolve/create.",
+                            items: { type: "string" },
+                        },
                     },
                 },
             },
-            required: ["userId", "chatId", "chat"],
+            required: ["userId", "entryId", "entry"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
-            destructiveHint: false,
+            openWorldHint: false,
+            destructiveHint: true,
         },
-    },
-    {
-        name: "saveChat",
-        description: "Save a chat. To be used by LLM to save chats turn-by-turn and verbatim into the vault. Not a summary but the original chat.",
+        _meta: { ui: { visibility: ["app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
+
+const llmSaveConversationTool: Tool = {
+        name: "saveConversation",
+        title: "Save conversation",
+        description:
+            "Save a short conversation selected in the Chat Vault app, or explicitly requested by the user through a supported model (up to about 3 turns). The conversation content is sent to Chat Vault and stored in the user's personal vault. Prefer this for short saves. For longer conversations, use saveConversationBegin, then saveConversationTurn for each turn in order, then saveConversationFinalize.",
         inputSchema: {
             type: "object",
             properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                title: {
-                    type: "string",
-                    description: "Chat title",
-                },
+                userId: { type: "string", description: "User ID (required)" },
+                title: { type: "string", description: "Title for the saved conversation" },
                 turns: {
                     type: "array",
-                    description: "Array of  verbatim chat turns (prompt and response pairs)",
+                    description: "Array of conversation turns, with prompt and response pairs.",
                     items: {
                         type: "object",
                         properties: {
@@ -176,117 +347,141 @@ const chatVaultTools: Tool[] = [
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
-        }
-    },
-    {
-        name: "loadMyChats",
-        description: "USED INSIDE THE WIDGET. Load paginated chat data for a user with optional text search filter",
-        inputSchema: {
-            type: "object",
-            properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                page: {
-                    type: "number",
-                    description: "Page number (0-indexed, default 0)",
-                },
-                size: {
-                    type: "number",
-                    description: "Number of chats per page (default 10)",
-                },
-                query: {
-                    type: "string",
-                    description: "Optional search query to filter chats by title or content",
-                },
-                widgetVersion: {
-                    type: "string",
-                    description: "Widget version (optional, for tracking which widget version is calling)",
-                },
-            },
-            required: ["userId"],
         },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: SAVE_CONVERSATION_OUTPUT_SCHEMA,
+};
 
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
-        name: "searchMyChats",
-        description: "LLM: Search chats using vector similarity search. Access user's knowledge base and long-term memory and include with your context.",
+const llmSaveConversationBeginTool: Tool = {
+        name: "saveConversationBegin",
+        title: "Start multi-turn save",
+        description:
+            "Begin a multi-turn save session for a longer conversation. Used by the Chat Vault app, and by supported models when the user explicitly asks to save a conversation longer than about 3 turns. Call this first, then call saveConversationTurn for each turn in order, then call saveConversationFinalize. After finalize, the conversation content is sent to Chat Vault and stored in the user's personal vault. Pass the returned jobId into each subsequent call. Do not poll job status yourself.",
         inputSchema: {
             type: "object",
             properties: {
                 userId: {
                     type: "string",
-                    description: "User ID (required)",
+                    description: "User ID (required, injected by connector)",
                 },
-                query: {
-                    type: "string",
-                    description: "Search query text (required)",
-                },
-                page: {
-                    type: "number",
-                    description: "Page number (0-indexed, default 0)",
-                },
-                size: {
-                    type: "number",
-                    description: "Number of results per page (default 10)",
-                },
+                title: { type: "string", description: "Title for the saved conversation" },
             },
-            required: ["userId", "query"],
-        },
-        annotations: {
-            readOnlyHint: true,
-            openWorldHint: true,
-            destructiveHint: false,
-        }
-    },
-    {
-        name: "widgetAdd",
-        description: "NOT TO BE USED OUTSIDE OF THE WIDGET!!! In-widget save a manually pasted Claude, Gemini, ChatGPT, etc. conversation by parsing HTML/text content",
-        inputSchema: {
-            type: "object",
-            properties: {
-                userId: {
-                    type: "string",
-                    description: "User ID (required)",
-                },
-                htmlContent: {
-                    type: "string",
-                    description: "The pasted HTML/text content from ChatGPT conversation",
-                },
-                title: {
-                    type: "string",
-                    description: "Optional title for the chat (defaults to 'manual save [timestamp]')",
-                },
-                widgetVersion: {
-                    type: "string",
-                    description: "Widget version (optional, for tracking which widget version is calling)",
-                },
-            },
-            required: ["userId", "htmlContent"],
+            required: ["userId", "title"],
         },
         annotations: {
             readOnlyHint: false,
-            openWorldHint: true,
+            openWorldHint: false,
             destructiveHint: false,
-        }
-    },
-    {
-        name: "explainHowToUse",
-        description: "Get help text explaining how to use ChatVault",
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: SAVE_CONVERSATION_BEGIN_OUTPUT_SCHEMA,
+};
+
+const llmSaveConversationTurnTool: Tool = {
+        name: "saveConversationTurn",
+        title: "Add save turn",
+        description:
+            "Add one turn (prompt and response) to an open multi-turn save session started by the Chat Vault app or saveConversationBegin. Call once per turn in order, with turnIndex 0, 1, 2, and so on without skipping. Content is accumulated and will be sent to Chat Vault and stored when saveConversationFinalize is called.",
         inputSchema: {
             type: "object",
             properties: {
                 userId: {
                     type: "string",
-                    description: "User ID (required)",
+                    description: "User ID (required, injected by connector)",
+                },
+                jobId: {
+                    type: "string",
+                    description: "Job ID from saveConversationBegin (required)",
+                },
+                turnIndex: {
+                    type: "number",
+                    description: "0-based turn index",
+                },
+                turn: {
+                    type: "object",
+                    description: "Conversation turn with prompt and response",
+                    properties: {
+                        prompt: { type: "string" },
+                        response: { type: "string" },
+                    },
+                    required: ["prompt", "response"],
+                },
+            },
+            required: ["userId", "jobId", "turnIndex", "turn"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: SAVE_CONVERSATION_TURN_OUTPUT_SCHEMA,
+};
+
+const llmSaveConversationFinalizeTool: Tool = {
+        name: "saveConversationFinalize",
+        title: "Finalize multi-turn save",
+        description:
+            "Finalize a multi-turn save session started by the Chat Vault app or saveConversationBegin after all turns have been added. Pass the session jobId. The full conversation content is sent to Chat Vault and stored in the user's personal vault. On success, tell the user their conversation was saved (or is being saved). Do not poll job status yourself.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: {
+                    type: "string",
+                    description: "User ID (required, injected by connector)",
+                },
+                jobId: {
+                    type: "string",
+                    description: "Job ID from saveConversationBegin (required)",
+                },
+            },
+            required: ["userId", "jobId"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA,
+};
+
+const loadSavedEntriesTool: Tool = {
+        name: "loadSavedEntries",
+        title: "Load saved entries",
+        description:
+            "Load a paginated list of the user's saved Chat Vault entries, with optional text filtering. Used to browse or inspect what is already stored.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+                page: {
+                    type: "number",
+                    description: "Page number, 0-indexed. Default is 0.",
+                },
+                size: {
+                    type: "number",
+                    description: "Number of saved entries per page. Default is 10.",
+                },
+                query: {
+                    type: "string",
+                    description: "Optional text query to filter saved entries by title or content.",
+                },
+                topicIds: {
+                    type: "array",
+                    description: "Optional topic ids — return entries matching ANY selected topic.",
+                    items: { type: "string" },
+                },
+                aboveTheFoldOnly: {
+                    type: "boolean",
+                    description:
+                        "When true, return saved entries with truncated content. Use loadFullTurn when the user expands a turn.",
+                },
+                widgetVersion: {
+                    type: "string",
+                    description: "Widget version, optional.",
                 },
             },
             required: ["userId"],
@@ -295,15 +490,239 @@ const chatVaultTools: Tool[] = [
             readOnlyHint: true,
             openWorldHint: false,
             destructiveHint: false,
-        }
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
+
+const listTopicsTool: Tool = {
+        name: "listTopics",
+        title: "List topics",
+        description:
+            "List the user's topics for filtering and organizing saved Chat Vault entries in the widget.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+            },
+            required: ["userId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
+
+const loadFullTurnTool: Tool = {
+        name: "loadFullTurn",
+        title: "Load full turn",
+        description:
+            "Load the full content of one saved turn when a listed entry was returned truncated. Requires entryId and turnIndex.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                entryId: { type: "string", description: "Saved entry ID (required)" },
+                userId: { type: "string", description: "User ID (required)" },
+                turnIndex: {
+                    type: "number",
+                    description: "0-based turn index (required)",
+                },
+            },
+            required: ["entryId", "userId", "turnIndex"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
+
+const searchKnowledgeTool: Tool = {
+        name: "searchKnowledge",
+        title: "Search saved knowledge",
+        description:
+            "Search the user's Chat Vault with semantic search. Use matching saved conversations as context when answering. Only searches content the user has previously stored in Chat Vault.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+                query: {
+                    type: "string",
+                    description: "Natural-language search query (required)",
+                },
+                page: {
+                    type: "number",
+                    description: "Page number, 0-indexed. Default is 0.",
+                },
+                size: {
+                    type: "number",
+                    description: "Number of results per page. Default is 10.",
+                },
+            },
+            required: ["userId", "query"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: SEARCH_KNOWLEDGE_OUTPUT_SCHEMA,
+};
+
+const getSaveJobStatusTool: Tool = {
+        name: "getSaveJobStatus",
+        title: "Get save job status",
+        description:
+            "Get the current status of an app-initiated asynchronous save job.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                jobId: {
+                    type: "string",
+                    description: "Job ID returned by savePastedContent (required)",
+                },
+            },
+            required: ["jobId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["app"] } },
+        outputSchema: GET_SAVE_JOB_STATUS_OUTPUT_SCHEMA,
+};
+
+const savePastedContentTool: Tool = {
+        name: "savePastedContent",
+        title: "Save pasted content",
+        description:
+            "Parse and save HTML or text that the user explicitly pasted into the Chat Vault app.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+                htmlContent: {
+                    type: "string",
+                    description: "User-provided HTML or text content to save",
+                },
+                title: {
+                    type: "string",
+                    description: "Optional title for the saved entry",
+                },
+                widgetVersion: {
+                    type: "string",
+                    description: "Widget version, optional.",
+                },
+            },
+            required: ["userId", "htmlContent"],
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["app"] } },
+        outputSchema: GENERIC_OUTPUT_SCHEMA,
+};
+
+const explainHowToUseTool: Tool = {
+        name: "explainHowToUse",
+        title: "How to use Chat Vault",
+        description:
+            "Return help text explaining how to save conversations to Chat Vault, search stored knowledge, and open the Chat Vault browser.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                userId: { type: "string", description: "User ID (required)" },
+            },
+            required: ["userId"],
+        },
+        annotations: {
+            readOnlyHint: true,
+            openWorldHint: false,
+            destructiveHint: false,
+        },
+        _meta: { ui: { visibility: ["model", "app"] } },
+        outputSchema: EXPLAIN_HOW_TO_USE_OUTPUT_SCHEMA,
+};
+
+const exportSavedEntriesTool: Tool = {
+    name: "exportSavedEntries",
+    title: "Export saved entries",
+    description:
+        "Prepare a short-lived JSON download containing all entries stored in the user's Chat Vault. This does not modify saved entries.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            userId: {
+                type: "string",
+                description: "User ID (required, injected by connector)",
+            },
+        },
+        required: ["userId"],
     },
+    annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+    },
+    _meta: { ui: { visibility: ["app"] } },
+    outputSchema: EXPORT_SAVED_ENTRIES_OUTPUT_SCHEMA,
+};
+
+const internalWidgetTools: Tool[] = [
+    savePastedContentTool,
+    updateSavedEntryTool,
+    deleteSavedEntryTool,
+    getSaveJobStatusTool,
+    listTopicsTool,
 ];
+
+const conversationSaveTools: Tool[] = [
+    llmSaveConversationTool,
+    llmSaveConversationBeginTool,
+    llmSaveConversationTurnTool,
+    llmSaveConversationFinalizeTool,
+];
+
+const readSearchTools: Tool[] = [
+    loadSavedEntriesTool,
+    loadFullTurnTool,
+    searchKnowledgeTool,
+    explainHowToUseTool,
+];
+
+function getListedTools(): Tool[] {
+    const profile = getToolMetadataProfile();
+    const profileConversationSaveTools = conversationSaveTools.map((tool) => ({
+        ...tool,
+        _meta: {
+            ...tool._meta,
+            ui: {
+                ...(tool._meta?.ui ?? {}),
+                visibility: profile === "gpt" ? ["app"] : ["model", "app"],
+            },
+        },
+    }));
+    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools, exportSavedEntriesTool];
+}
+
+export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
 
 // Handler for tools/list
 async function handleListTools(request: ListToolsRequest) {
     const requestId = (request as unknown as { id?: string | number }).id;
-    console.log("[MCP Handler] handleListTools - request id:", requestId);
-    const result = { tools: chatVaultTools };
+    const profile = getToolMetadataProfile();
+    const tools = getListedTools();
+    console.log("[MCP Handler] handleListTools - request id:", requestId, "profile:", profile);
+    const result = { tools };
     console.log("[MCP Handler] handleListTools - returning", result.tools.length, "tools");
     return result;
 }
@@ -311,21 +730,26 @@ async function handleListTools(request: ListToolsRequest) {
 // Handler for tools/call
 async function handleCallTool(request: CallToolRequest, userContext?: UserContext, headers?: Record<string, string | string[] | undefined>) {
     const requestId = (request as unknown as { id?: string | number }).id;
-    const toolName = request.params.name;
-    const args = request.params.arguments ?? {};
+    const requestedToolName = request.params.name;
+    const toolName = normalizeToolName(requestedToolName);
+    let args: Record<string, unknown> = {
+        ...((request.params.arguments ?? {}) as Record<string, unknown>),
+    };
+    args = await resolveDeclaredUserIdWithMerge(args, headers);
 
     console.log(
         "[MCP Handler] handleCallTool - request id:",
         requestId,
         "tool:",
-        toolName,
+        requestedToolName,
+        toolName !== requestedToolName ? `(normalized: ${toolName})` : "",
         "arguments:",
         JSON.stringify(args),
         "userContext:",
         JSON.stringify(userContext)
     );
     // Debug: Check if portalLink is in arguments (maybe nested or with different casing)
-    if (toolName === "loadMyChats") {
+    if (toolName === "loadSavedEntries") {
         console.log("[MCP Handler] Debug - checking for portalLink in args:", {
             hasPortalLink: !!(args as any).portalLink,
             hasPortal_link: !!(args as any).portal_link,
@@ -336,19 +760,51 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
     }
 
     try {
-        if (toolName === "saveChat") {
+        if (toolName === "saveConversation") {
             const result = await saveChat(args as { userId: string; title: string; turns: Array<{ prompt: string; response: string }> });
-            console.log("[MCP Handler] handleCallTool - saveChat result:", JSON.stringify(result));
+            console.log("[MCP Handler] handleCallTool - saveConversation result:", JSON.stringify(result));
+            const text = "jobId" in result
+                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}.`
+                : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
+            return {
+                content: [{ type: "text", text }],
+                structuredContent: result,
+            };
+        } else if (toolName === "saveConversationBegin") {
+            const result = await saveChatTurnsBegin(args as { userId: string; title: string });
+            console.log("[MCP Handler] handleCallTool - saveConversationBegin result:", result.jobId);
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Chat saved successfully with ID: ${result.chatId}`,
+                        text: `Save session started. Job ID: ${result.jobId}. Call saveConversationTurn for each turn, then saveConversationFinalize when done.`,
                     },
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "loadMyChats") {
+        } else if (toolName === "saveConversationTurn") {
+            const result = await saveChatTurn(args as { userId: string; jobId: string; turnIndex: number; turn: { prompt: string; response: string } });
+            console.log("[MCP Handler] handleCallTool - saveConversationTurn result:", result.turnIndex);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Turn ${result.turnIndex} saved.`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "saveConversationFinalize") {
+            const result = await saveChatTurnsFinalize(args as { userId: string; jobId: string });
+            console.log("[MCP Handler] handleCallTool - saveConversationFinalize result:", JSON.stringify(result));
+            const text = "jobId" in result
+                ? `Conversation save queued. Job ID: ${(result as { jobId: string }).jobId}.`
+                : `Chat saved. ID: ${(result as { chatId: string }).chatId}`;
+            return {
+                content: [{ type: "text", text }],
+                structuredContent: result,
+            };
+        } else if (toolName === "loadSavedEntries") {
             // Findexar may inject portalLink and isAnon into arguments as well
             // Use arguments as fallback if not in headers
             const finalUserContext: UserContext = {
@@ -357,32 +813,57 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 portalLink: userContext?.portalLink ?? (args as any).portalLink ?? null,
                 loginLink: userContext?.loginLink ?? (args as any).loginLink ?? null,
             };
-            console.log("[MCP Handler] Final userContext (headers + args fallback):", finalUserContext);
+            console.log("[MCP Handler] Final user context:", {
+                isAnon: finalUserContext.isAnon,
+                isAnonymousPlan: finalUserContext.isAnonymousPlan,
+                hasPortalLink: Boolean(finalUserContext.portalLink),
+                hasLoginLink: Boolean(finalUserContext.loginLink),
+            });
             const result = await loadMyChats({
-                ...(args as { userId: string; page?: number; size?: number; query?: string }),
+                ...(args as { userId: string; page?: number; size?: number; query?: string; topicIds?: string[]; aboveTheFoldOnly?: boolean }),
                 userContext: finalUserContext,
                 headers: headers, // Pass all headers for logging
             });
-            console.log("[MCP Handler] handleCallTool - loadMyChats result:", result.chats.length, "chats", "userInfo:", result.userInfo);
+            console.log("[MCP Handler] handleCallTool - loadSavedEntries result:", {
+                entries: result.chats.length,
+                hasUserInfo: Boolean(result.userInfo),
+            });
             // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Loaded ${result.chats.length} chats`,
+                        text: `Loaded ${result.chats.length} saved entries`,
                     },
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "searchMyChats") {
+        } else if (toolName === "loadFullTurn") {
+            const result = await loadFullTurn({
+                ...(args as { userId: string; turnIndex: number }),
+                chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
+            });
+            if (!result) {
+                throw new Error("Turn not found or does not belong to user");
+            }
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Loaded turn`,
+                    },
+                ],
+                structuredContent: result,
+            };
+        } else if (toolName === "searchKnowledge") {
             const result = await searchMyChats(args as { userId: string; query: string; page?: number; size?: number });
-            console.log("[MCP Handler] handleCallTool - searchMyChats result:", result.chats.length, "chats");
+            console.log("[MCP Handler] handleCallTool - searchKnowledge result:", result.chats.length, "entries");
             // Return in Part 1 compatible format: structuredContent with chats, search, and pagination
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Found ${result.chats.length} chats matching "${result.search.query}"`,
+                        text: `Found ${result.chats.length} saved entries matching "${result.search.query}"`,
                     },
                 ],
                 structuredContent: {
@@ -415,25 +896,67 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 userContext,
             });
             console.log("[MCP Handler] 📤 widgetAdd result:", {
-                chatId: result.chatId || "(empty)",
-                saved: result.saved,
+                jobId: result.jobId || "(empty)",
                 turnsCount: result.turnsCount,
                 error: result.error || "(none)",
                 message: result.message || "(none)",
+            });
+            const text = result.error
+                ? `Error: ${result.message}`
+                : result.jobId
+                    ? `Content save queued. Job ID: ${result.jobId} (${result.turnsCount} turns). Poll getSaveJobStatus for completion.`
+                    : `Chat saved. ID: ${result.chatId} (${result.turnsCount} turns).`;
+            return {
+                content: [{ type: "text", text }],
+                structuredContent: result,
+            };
+        } else if (toolName === "getSaveJobStatus") {
+            const receivedJobId = (args as { jobId?: string }).jobId;
+            const statusKey = receivedJobId ? `chatvault:job:${receivedJobId}` : "(no jobId)";
+            console.log("[MCP Handler] getSaveJobStatus ENTRY:", {
+                requestId,
+                receivedJobId: receivedJobId ?? "(missing)",
+                receivedJobIdLength: receivedJobId?.length ?? 0,
+                statusKeyToLookup: statusKey,
+                allArgKeys: Object.keys(args),
+            });
+            if (!receivedJobId || typeof receivedJobId !== "string") {
+                console.log("[MCP Handler] getSaveJobStatus ERROR: jobId missing or invalid");
+            }
+            const result = await getJobStatus(receivedJobId ?? "");
+            console.log("[MCP Handler] getSaveJobStatus EXIT:", {
+                requestId,
+                receivedJobId: receivedJobId ?? "(missing)",
+                lookupResult: result ? { status: result.status, chatId: result.chatId } : "null (not found or expired)",
             });
             return {
                 content: [
                     {
                         type: "text",
-                        text: result.error
-                            ? `Error: ${result.message}`
-                            : `Chat saved successfully with ID: ${result.chatId} (${result.turnsCount} turns)`,
+                        text: result
+                            ? `Status: ${result.status}${result.chatId ? `, chatId: ${result.chatId}` : ""}${result.error ? `, error: ${result.error}` : ""}`
+                            : "Job not found or expired",
+                    },
+                ],
+                structuredContent: result ?? { status: "expired" as const },
+            };
+        } else if (toolName === "listTopics") {
+            const result = await listTopics(args as { userId: string });
+            console.log("[MCP Handler] handleCallTool - listTopics result:", result.topics.length, "topics");
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Listed ${result.topics.length} topics`,
                     },
                 ],
                 structuredContent: result,
             };
         } else if (toolName === "explainHowToUse") {
-            const result = explainHowToUse(args as { userId: string });
+            const result = explainHowToUse(
+                args as { userId: string },
+                getToolMetadataProfile(),
+            );
             console.log("[MCP Handler] handleCallTool - explainHowToUse result");
             return {
                 content: [
@@ -444,26 +967,58 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "deleteChat") {
-            const result = await deleteChat(args as { userId: string; chatId: string });
-            console.log("[MCP Handler] handleCallTool - deleteChat result:", JSON.stringify(result));
+        } else if (toolName === "exportSavedEntries") {
+            const canonicalUserId = readTrustedCanonicalUserId(headers);
+            if (!canonicalUserId) {
+                throw new Error("A trusted canonical user identity is required to export saved entries");
+            }
+            if (!isRedisConfigured()) {
+                throw new Error("Export service is temporarily unavailable");
+            }
+            const baseUrlRaw = process.env.CHATVAULT_EXPORT_BASE_URL?.trim();
+            if (!baseUrlRaw) {
+                throw new Error("Export service is temporarily unavailable");
+            }
+            const baseUrl = new URL(baseUrlRaw);
+            if (baseUrl.protocol !== "https:" && baseUrl.hostname !== "localhost") {
+                throw new Error("Export service is temporarily unavailable");
+            }
+            const { token, expiresAt } = await createExportToken(canonicalUserId);
+            const downloadUrl = new URL("/api/export", baseUrl);
+            downloadUrl.searchParams.set("token", token);
+            const filename = `chat-vault-export-${new Date().toISOString().slice(0, 10)}.json`;
+            const result = { downloadUrl: downloadUrl.toString(), filename, expiresAt };
+            return {
+                content: [{ type: "text", text: "Your Chat Vault JSON export is ready to download." }],
+                structuredContent: result,
+            };
+        } else if (toolName === "deleteSavedEntry") {
+            const result = await deleteChat({
+                userId: String((args as { userId?: unknown }).userId ?? ""),
+                chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
+            });
+            console.log("[MCP Handler] handleCallTool - deleteSavedEntry result:", JSON.stringify(result));
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Chat deleted successfully with ID: ${result.chatId}`,
+                        text: `Saved entry deleted successfully with ID: ${result.chatId}`,
                     },
                 ],
                 structuredContent: result,
             };
-        } else if (toolName === "updateChat") {
-            const result = await updateChat(args as { userId: string; chatId: string; chat: { title?: string; turns?: Array<{ prompt: string; response: string }> } });
-            console.log("[MCP Handler] handleCallTool - updateChat result:", JSON.stringify(result));
+        } else if (toolName === "updateSavedEntry") {
+            const result = await updateChat({
+                userId: String((args as { userId?: unknown }).userId ?? ""),
+                chatId: String((args as { entryId?: unknown; chatId?: unknown }).entryId ?? (args as { chatId?: unknown }).chatId ?? ""),
+                chat: (args as { entry?: { title?: string; turns?: Array<{ prompt: string; response: string }>; topics?: string[] }; chat?: { title?: string; turns?: Array<{ prompt: string; response: string }>; topics?: string[] } }).entry ?? (args as { chat?: { title?: string; turns?: Array<{ prompt: string; response: string }>; topics?: string[] } }).chat ?? {},
+            });
+            console.log("[MCP Handler] handleCallTool - updateSavedEntry result:", JSON.stringify(result));
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Chat updated successfully with ID: ${result.chatId}`,
+                        text: `Saved entry updated successfully with ID: ${result.chatId}`,
                     },
                 ],
                 structuredContent: result,
@@ -573,11 +1128,14 @@ export async function handleMcpRequest(
     req: IncomingMessage,
     res: ServerResponse
 ): Promise<void> {
+    const requestStartedAt = Date.now();
+    requestCountInInstance += 1;
+    const requestNumberInInstance = requestCountInInstance;
     // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "content-type, mcp-session-id, authorization"
+        "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
     );
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
@@ -588,8 +1146,10 @@ export async function handleMcpRequest(
             hasAuthHeader: Boolean(req.headers.authorization),
             hasSessionHeader: Boolean(req.headers["mcp-session-id"]),
         });
+        const authStartedAt = Date.now();
         const auth = isAuthorized(req);
-        if (!auth.ok) {
+        const authMs = Date.now() - authStartedAt;
+        if (auth.ok === false) {
             console.log("[MCP] Auth failed:", { status: auth.status, message: auth.message });
             res.setHeader("WWW-Authenticate", "Bearer");
             res.writeHead(auth.status, { "Content-Type": "application/json" });
@@ -602,25 +1162,28 @@ export async function handleMcpRequest(
         const isAnonymousPlanHeader = req.headers["x-a6-anonymous-subscription"];
         const portalLinkHeader = req.headers["x-a6-portal-link"];
         const loginLinkHeader = req.headers["x-a6-login-link"];
-        // Log all A6 headers for debugging
-        const a6Headers = Object.keys(req.headers)
-            .filter(key => key.toLowerCase().startsWith("x-a6"))
-            .reduce((acc, key) => {
-                acc[key] = req.headers[key];
-                return acc;
-            }, {} as Record<string, string | string[] | undefined>);
-        console.log("[MCP] All A6 headers:", JSON.stringify(a6Headers));
+        const a6HeaderKeys = Object.keys(req.headers)
+            .filter(key => key.toLowerCase().startsWith("x-a6"));
+        console.log("[MCP] A6 header summary:", { keys: a6HeaderKeys });
         const userContext: UserContext = {
             isAnon: isAnonHeader === "true" || isAnonHeader === "True",
             isAnonymousPlan: isAnonymousPlanHeader === "true" || isAnonymousPlanHeader === "True",
             portalLink: portalLinkHeader ? String(portalLinkHeader) : null,
             loginLink: loginLinkHeader ? String(loginLinkHeader) : null,
         };
-        console.log("[MCP] User context extracted from headers:", userContext);
+        console.log("[MCP] User context extracted from headers:", {
+            isAnon: userContext.isAnon,
+            isAnonymousPlan: userContext.isAnonymousPlan,
+            hasPortalLink: Boolean(userContext.portalLink),
+            hasLoginLink: Boolean(userContext.loginLink),
+        });
 
+        const bodyStartedAt = Date.now();
         const body = await readRequestBody(req);
-        console.log("[MCP] Incoming request body:", body);
+        const bodyReadMs = Date.now() - bodyStartedAt;
+        const parseStartedAt = Date.now();
         const requestData = JSON.parse(body);
+        const parseMs = Date.now() - parseStartedAt;
 
         const { jsonrpc, id, method, params } = requestData;
         console.log(
@@ -628,8 +1191,8 @@ export async function handleMcpRequest(
             id,
             "method:",
             method,
-            "params:",
-            JSON.stringify(params)
+            "paramKeys:",
+            Object.keys(params ?? {})
         );
 
         // Validate JSON-RPC version
@@ -677,6 +1240,7 @@ export async function handleMcpRequest(
 
         // Handle initialize request
         if (method === "initialize") {
+            const initializeStartedAt = Date.now();
             console.log(
                 "[MCP] initialize - id:",
                 id,
@@ -710,6 +1274,19 @@ export async function handleMcpRequest(
             }
             writeJsonRpcResponse(res, id, response);
             res.end();
+            console.log(JSON.stringify({
+                level: "info",
+                event: "chatvault.performance.mcp_request",
+                method,
+                totalMs: Date.now() - requestStartedAt,
+                phasesMs: { auth: authMs, bodyRead: bodyReadMs, jsonParse: parseMs, initialize: Date.now() - initializeStartedAt },
+                instance: {
+                    requestNumber: requestNumberInInstance,
+                    ageMs: Date.now() - serverInstanceStartedAt,
+                    firstRequest: requestNumberInInstance === 1,
+                },
+                requestBytes: Buffer.byteLength(body),
+            }));
             return;
         }
 
@@ -725,6 +1302,7 @@ export async function handleMcpRequest(
         // Dispatch to handler functions
         try {
             let result: unknown;
+            let toolCallMs: number | undefined;
 
             if (method === "tools/list") {
                 const request = {
@@ -734,8 +1312,8 @@ export async function handleMcpRequest(
                 console.log(
                     "[MCP] tools/list - id:",
                     id,
-                    "params:",
-                    JSON.stringify(params)
+                    "paramKeys:",
+                    Object.keys(params ?? {})
                 );
                 result = await handleListTools(request);
                 console.log("[MCP] tools/list response:", JSON.stringify(result));
@@ -749,16 +1327,27 @@ export async function handleMcpRequest(
                 console.log(
                     "[MCP] tools/call - id:",
                     id,
-                    "params:",
-                    JSON.stringify(params)
+                    "paramKeys:",
+                    Object.keys(params ?? {})
                 );
+                const toolCallStartedAt = Date.now();
                 result = await handleCallTool(request, userContext, req.headers);
-                console.log("[MCP] tools/call response:", JSON.stringify(result));
+                toolCallMs = Date.now() - toolCallStartedAt;
+                console.log("[MCP] tools/call response summary:", {
+                    hasResult: result != null,
+                    contentItems: Array.isArray((result as any)?.content) ? (result as any).content.length : 0,
+                    hasStructuredContent: Boolean((result as any)?.structuredContent),
+                });
             } else if (method === "resources/list") {
                 // MCP protocol: resources/list - return empty list since we don't provide resources
                 console.log("[MCP] resources/list - id:", id);
                 result = { resources: [] };
                 console.log("[MCP] resources/list response: empty list");
+            } else if (method === "prompts/list") {
+                // MCP protocol: prompts/list - return empty list since we don't provide prompts
+                console.log("[MCP] prompts/list - id:", id);
+                result = { prompts: [] };
+                console.log("[MCP] prompts/list response: empty list");
             } else {
                 console.error("[MCP] Method not found:", method);
                 writeJsonRpcResponse(res, id, undefined, {
@@ -774,6 +1363,25 @@ export async function handleMcpRequest(
             }
             writeJsonRpcResponse(res, id, result);
             res.end();
+            console.log(JSON.stringify({
+                level: "info",
+                event: "chatvault.performance.mcp_request",
+                method,
+                tool: method === "tools/call" ? String(params?.name ?? "unknown") : undefined,
+                totalMs: Date.now() - requestStartedAt,
+                phasesMs: {
+                    auth: authMs,
+                    bodyRead: bodyReadMs,
+                    jsonParse: parseMs,
+                    ...(toolCallMs !== undefined ? { toolCall: toolCallMs } : {}),
+                },
+                instance: {
+                    requestNumber: requestNumberInInstance,
+                    ageMs: Date.now() - serverInstanceStartedAt,
+                    firstRequest: requestNumberInInstance === 1,
+                },
+                requestBytes: Buffer.byteLength(body),
+            }));
         } catch (error) {
             const errorMessage =
                 error instanceof Error ? error.message : String(error);
@@ -824,7 +1432,7 @@ const server = createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader(
             "Access-Control-Allow-Headers",
-            "content-type, mcp-session-id, authorization"
+            "content-type, mcp-session-id, authorization, x-a6-canonical-user-id, x-a6-user-uuid"
         );
         res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.writeHead(204);
@@ -851,24 +1459,40 @@ const server = createServer((req, res) => {
 
 // Test database connection and verify pgvector on startup
 export async function initializeDatabase() {
+    const initializeStartedAt = Date.now();
+    const databaseContext = observeDatabaseOperation();
     try {
         console.log("[DB] Testing database connection...");
+        const connectionTestStartedAt = Date.now();
         const isConnected = await testConnection();
+        const connectionTestMs = Date.now() - connectionTestStartedAt;
         if (!isConnected) {
             throw new Error("Database connection test failed");
         }
         console.log("[DB] Database connection successful");
 
         // Verify pgvector extension is available
+        const extensionCheckStartedAt = Date.now();
         const result = await db.execute(
             sql`SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') as vector_available`
         );
+        const extensionCheckMs = Date.now() - extensionCheckStartedAt;
         const vectorAvailable = (result[0] as { vector_available: boolean })?.vector_available;
         if (!vectorAvailable) {
             console.warn("[DB] Warning: pgvector extension not found. Run migrations to enable it.");
         } else {
             console.log("[DB] pgvector extension is available");
         }
+        console.log(JSON.stringify({
+            level: "info",
+            event: "chatvault.performance.database_initialize",
+            totalMs: Date.now() - initializeStartedAt,
+            phasesMs: {
+                connectionTest: connectionTestMs,
+                extensionCheck: extensionCheckMs,
+            },
+            database: databaseContext,
+        }));
     } catch (error) {
         console.error("[DB] Database initialization failed:", error);
         throw error;
@@ -884,6 +1508,7 @@ async function startServer() {
             console.log(`ChatVault Part 2 MCP server listening on http://localhost:${PORT}`);
             console.log(`  MCP endpoint: POST http://localhost:${PORT}/mcp`);
             console.log(`  CORS preflight: OPTIONS http://localhost:${PORT}/mcp`);
+            console.log(`  Tool metadata profile: ${getToolMetadataProfile()} (${getListedTools().length} tools listed)`);
         });
     } catch (error) {
         console.error("[Server] Failed to start server:", error);

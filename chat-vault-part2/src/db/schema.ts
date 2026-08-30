@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index, integer, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
 // Define vector type for pgvector
@@ -39,3 +39,88 @@ export const chats = pgTable("chats", {
 
 export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
+
+// Iterative save: temporary storage for turn-by-turn chat saves
+export const chatSaveJobs = pgTable("chat_save_jobs", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const chatSaveJobTurns = pgTable(
+    "chat_save_job_turns",
+    {
+        jobId: uuid("job_id")
+            .notNull()
+            .references(() => chatSaveJobs.id, { onDelete: "cascade" }),
+        turnIndex: integer("turn_index").notNull(),
+        prompt: text("prompt").notNull(),
+        response: text("response").notNull(),
+    },
+    (table) => [primaryKey({ columns: [table.jobId, table.turnIndex] })]
+);
+
+export type ChatSaveJob = typeof chatSaveJobs.$inferSelect;
+export type NewChatSaveJob = typeof chatSaveJobs.$inferInsert;
+export type ChatSaveJobTurn = typeof chatSaveJobTurns.$inferSelect;
+export type NewChatSaveJobTurn = typeof chatSaveJobTurns.$inferInsert;
+
+/** Idempotent map: declared/tool user id → trusted canonical user id (Findexar/A6). */
+export const userIdMerges = pgTable(
+    "user_id_merges",
+    {
+        fromUserId: text("from_user_id").primaryKey(),
+        toUserId: text("to_user_id").notNull(),
+        mergedAt: timestamp("merged_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        toUserIdIdx: index("user_id_merges_to_user_id_idx").on(table.toUserId),
+    })
+);
+
+export type UserIdMerge = typeof userIdMerges.$inferSelect;
+export type NewUserIdMerge = typeof userIdMerges.$inferInsert;
+
+/** User-scoped topic label for organizing saved chats. */
+export const topics = pgTable(
+    "topics",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id").notNull(),
+        name: text("name").notNull(),
+        nameNorm: text("name_norm").notNull(),
+        embedding: vector("embedding"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdIdx: index("topics_user_id_idx").on(table.userId),
+        userNameNormIdx: uniqueIndex("topics_user_name_norm_idx").on(table.userId, table.nameNorm),
+    })
+);
+
+export type Topic = typeof topics.$inferSelect;
+export type NewTopic = typeof topics.$inferInsert;
+
+/** Many-to-many link between chats and topics. */
+export const chatTopics = pgTable(
+    "chat_topics",
+    {
+        chatId: uuid("chat_id")
+            .notNull()
+            .references(() => chats.id, { onDelete: "cascade" }),
+        topicId: uuid("topic_id")
+            .notNull()
+            .references(() => topics.id, { onDelete: "cascade" }),
+        source: text("source").notNull().default("auto"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => [
+        primaryKey({ columns: [table.chatId, table.topicId] }),
+        index("chat_topics_topic_id_idx").on(table.topicId),
+        index("chat_topics_chat_id_idx").on(table.chatId),
+    ]
+);
+
+export type ChatTopic = typeof chatTopics.$inferSelect;
+export type NewChatTopic = typeof chatTopics.$inferInsert;
