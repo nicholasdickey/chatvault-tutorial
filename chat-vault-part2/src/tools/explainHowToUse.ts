@@ -49,6 +49,18 @@ Use the '+' button in the Chat Vault widget to manually save conversations or no
 4. Optionally add a title
 5. Click "Save"
 
+## Downloading Your Data
+
+You can download everything saved in your Chat Vault and use it with another AI assistant or service.
+
+1. Click the download icon beside the '+' button
+2. Click "Prepare export"
+3. When it is ready, click "Download JSON"
+
+The download link is available for a limited time. If it expires, simply prepare a new one.
+
+Downloading your data does not change or remove anything from Chat Vault.
+
 ## Searching Your Knowledge
 
 Ask the assistant to search Chat Vault using natural language.
@@ -89,6 +101,18 @@ Use the '+' button in the Chat Vault widget to manually save conversations or no
 ## Browsing Your Knowledge
 
 Open the Chat Vault widget to browse the conversations and notes already saved in your vault.
+
+## Downloading Your Data
+
+You can download everything saved in your Chat Vault and use it with another AI assistant or service.
+
+1. Click the download icon beside the '+' button
+2. Click "Prepare export"
+3. When it is ready, click "Download JSON"
+
+The download link is available for a limited time. If it expires, simply prepare a new one.
+
+Downloading your data does not change or remove anything from Chat Vault.
 
 ## Searching Your Knowledge
 

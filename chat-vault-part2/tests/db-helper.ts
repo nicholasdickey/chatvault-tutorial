@@ -209,5 +209,11 @@ export async function cleanupTestDatabase(): Promise<void> {
         dbClient = null;
         console.log("[DB Helper] Database connection closed");
     }
-}
 
+    // Tool modules use the application's postgres.js client, which is distinct
+    // from this helper's client. Close it explicitly so Jest can exit when CI
+    // provides an external PostgreSQL instance instead of stopping Docker.
+    const { closeDatabaseConnection } = await import("../src/db/index.js");
+    await closeDatabaseConnection();
+    console.log("[DB Helper] Application database connection closed");
+}
