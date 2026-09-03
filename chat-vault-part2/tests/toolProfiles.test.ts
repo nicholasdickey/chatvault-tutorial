@@ -65,6 +65,8 @@ describe("tool metadata profiles", () => {
 
         expect(result.helpText).toContain("Manual Save Using the Widget");
         expect(result.helpText).toContain("Browsing Your Knowledge");
+        expect(result.helpText).toContain("Use the topic filter above your saved entries");
+        expect(result.helpText).toContain("combine it with search");
         expect(result.helpText).toContain("Downloading Your Data");
         expect(result.helpText).toContain("use it with another AI assistant or service");
         expect(result.helpText).toContain("Searching Your Knowledge");
@@ -79,6 +81,9 @@ describe("tool metadata profiles", () => {
         expect(result.helpText).toContain("Ask the AI Assistant to Save");
         expect(result.helpText).toContain("Paste Content Into the Chat");
         expect(result.helpText).toContain("Save this conversation to Chat Vault");
+        expect(result.helpText).toContain("Browsing Your Knowledge");
+        expect(result.helpText).toContain("Use the topic filter above your saved entries");
+        expect(result.helpText).toContain("combine it with search");
         expect(result.helpText).toContain("Downloading Your Data");
         expect(result.helpText).toContain("use it with another AI assistant or service");
     });
