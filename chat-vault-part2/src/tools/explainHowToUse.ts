@@ -61,6 +61,12 @@ The download link is available for a limited time. If it expires, simply prepare
 
 Downloading your data does not change or remove anything from Chat Vault.
 
+## Browsing Your Knowledge
+
+Open the Chat Vault widget to browse the conversations and notes already saved in your vault.
+
+Use the topic filter above your saved entries to focus on a category. You can combine it with search to narrow the results further.
+
 ## Searching Your Knowledge
 
 Ask the assistant to search Chat Vault using natural language.
@@ -101,6 +107,8 @@ Use the '+' button in the Chat Vault widget to manually save conversations or no
 ## Browsing Your Knowledge
 
 Open the Chat Vault widget to browse the conversations and notes already saved in your vault.
+
+Use the topic filter above your saved entries to focus on a category. You can combine it with search to narrow the results further.
 
 ## Downloading Your Data
 
