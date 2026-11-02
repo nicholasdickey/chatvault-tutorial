@@ -3,14 +3,18 @@
  * Applied when CHATVAULT_TOOL_METADATA_PROFILE is gpt (or limited).
  */
 
-import type { LoadChatsResult } from "./tools/loadMyChats.js";
+import type { FullChat, LoadChatsResult } from "./tools/loadMyChats.js";
+import type { SearchChatsResult } from "./tools/searchMyChats.js";
 
-type ChatLike = {
-    userId?: string;
-    [key: string]: unknown;
+export type GptPublicFullChat = Omit<FullChat, "userId">;
+export type GptLoadSavedEntriesResult = Omit<LoadChatsResult, "chats"> & {
+    chats: GptPublicFullChat[];
 };
+export type GptSearchChat = Omit<SearchChatsResult["chats"][number], "userId">;
 
-export function stripUserIdFromChat<T extends ChatLike>(chat: T): Omit<T, "userId"> {
+export function stripUserIdFromChat<T extends { userId: string }>(
+    chat: T,
+): Omit<T, "userId"> {
     const { userId: _removed, ...rest } = chat;
     return rest;
 }
@@ -22,26 +26,28 @@ export function sanitizeUserInfoForGpt(
     return rest;
 }
 
-export function sanitizeLoadSavedEntriesForGpt(result: LoadChatsResult): LoadChatsResult {
+export function sanitizeLoadSavedEntriesForGpt(
+    result: LoadChatsResult,
+): GptLoadSavedEntriesResult {
     return {
         ...result,
-        chats: result.chats.map((chat) => stripUserIdFromChat(chat)),
+        chats: result.chats.map(stripUserIdFromChat),
         userInfo: sanitizeUserInfoForGpt(result.userInfo),
     };
 }
 
 export function sanitizeSearchKnowledgePayloadForGpt(payload: {
-    chats: ChatLike[];
-    search: { query: string };
-    pagination: LoadChatsResult["pagination"];
+    chats: SearchChatsResult["chats"];
+    search: SearchChatsResult["search"];
+    pagination: SearchChatsResult["pagination"];
 }): {
-    chats: Omit<ChatLike, "userId">[];
-    search: { query: string };
-    pagination: LoadChatsResult["pagination"];
+    chats: GptSearchChat[];
+    search: SearchChatsResult["search"];
+    pagination: SearchChatsResult["pagination"];
 } {
     return {
         ...payload,
-        chats: payload.chats.map((chat) => stripUserIdFromChat(chat)),
+        chats: payload.chats.map(stripUserIdFromChat),
     };
 }
 
