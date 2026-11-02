@@ -1,10 +1,14 @@
 {
   "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
   "schema_version": 1,
+  "demo_account": {
+    "email": "support@genisent.com",
+    "note": "Reviewer signs in as this account. The saved entries used by these test cases are already in this account."
+  },
   "app_info": {
     "display_name": "Chat Vault",
     "subtitle": "Access your knowledge",
-    "description": "Chat Vault gives users access to conversations and notes saved in their private knowledge base. Users can browse and search their saved content from ChatGPT and use it as context. Saving, pasting, editing, deleting, and downloading a JSON export are available through the embedded app.",
+    "description": "Chat Vault gives users access to conversations and notes saved in their private knowledge base. Users can browse, filter by topic, and search their saved content from ChatGPT and use it as context. Saving, pasting, editing, deleting, and downloading a JSON export are available through the embedded app.",
     "category": "PRODUCTIVITY"
   },
   "tools": {
@@ -191,11 +195,11 @@
   },
   "test_cases": [
     {
-      "description": "Open the signed-in user's Chat Vault browser.",
+      "description": "Open the demo account's Chat Vault.",
       "user_prompt": "Open my Chat Vault.",
       "file_attachment_urls": null,
       "tools_triggered": "browseMyChatVault",
-      "expected_output": "Opens the Chat Vault widget for the signed-in reviewer, displays the existing saved entries, and provides the embedded Download Data control without an error.",
+      "expected_output": "Opens the Chat Vault widget for the signed-in reviewer and displays the entries already saved in the support@genisent.com account.",
       "expected_output_url": null
     },
     {
@@ -215,19 +219,19 @@
       "expected_output_url": null
     },
     {
-      "description": "Find a seeded note using its distinctive cooking technique.",
-      "user_prompt": "What did I save in Chat Vault about using cast iron to imitate a stone oven?",
+      "description": "Download the entries already saved in the demo account as JSON.",
+      "user_prompt": "Open my Chat Vault so I can download all my saved data as JSON.",
       "file_attachment_urls": null,
-      "tools_triggered": "searchKnowledge",
-      "expected_output": "Finds the saved note 'Adding stone effect to the stove' and reports its cast-iron griddle and high-shelf guidance.",
+      "tools_triggered": "browseMyChatVault",
+      "expected_output": "Opens the Chat Vault widget. Click the download icon, then Prepare export, then Download JSON. A JSON file of the entries already saved in the support@genisent.com account is downloaded, including Chicken Korma, Baking ciabatta at home (google), Same-day ciabatta bread, and Adding stone effect to the stove. The download does not change or remove those entries.",
       "expected_output_url": null
     },
     {
       "description": "Explain the supported Chat Vault workflows using the app's help tool.",
-      "user_prompt": "Use the Chat Vault app to explain how I can save and find information.",
+      "user_prompt": "Use the Chat Vault app to explain how I can browse and search information in my Chat Vault.",
       "file_attachment_urls": null,
       "tools_triggered": "explainHowToUse",
-      "expected_output": "Briefly explains how to save conversations or notes, browse saved entries, and search stored knowledge.",
+      "expected_output": "Briefly explains how to browse and search saved entries, and download all saved data as JSON for use with another AI assistant or service.",
       "expected_output_url": null
     }
   ],

@@ -222,14 +222,26 @@ describe("tool metadata profiles", () => {
         expect(Object.keys(TOOL_NAME_ALIASES)).toHaveLength(1);
     });
 
-    it("marks shared read tools for both model and app visibility", () => {
+    it("limits gpt-profile model visibility to search and help tools", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
-        const sharedReadTools = getListedTools().filter((tool) =>
-            GPT_SAFE_TOOL_NAMES.includes(tool.name),
-        );
+        const tools = getListedTools();
+        const visibility = (name: string) =>
+            tools.find((tool) => tool.name === name)?._meta?.ui as
+                | { visibility?: string[] }
+                | undefined;
 
-        for (const tool of sharedReadTools) {
-            expect((tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility).toEqual(["model", "app"]);
-        }
+        expect(visibility("searchKnowledge")?.visibility).toEqual(["model", "app"]);
+        expect(visibility("explainHowToUse")?.visibility).toEqual(["model", "app"]);
+        expect(visibility("loadSavedEntries")?.visibility).toEqual(["app"]);
+        expect(visibility("loadFullTurn")?.visibility).toEqual(["app"]);
+    });
+
+    it("uses gpt search output schema without required userId", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
+        const searchTool = getListedTools().find((tool) => tool.name === "searchKnowledge");
+        const chatItems = (searchTool?.outputSchema as { properties?: { chats?: { items?: { required?: string[] } } } })
+            ?.properties?.chats?.items?.required;
+        expect(chatItems).toEqual(["id", "title", "timestamp", "turns"]);
+        expect(chatItems).not.toContain("userId");
     });
 });
