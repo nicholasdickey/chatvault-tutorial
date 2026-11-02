@@ -36,6 +36,7 @@ import type {
 } from "./types.js";
 import { TopicCombobox } from "./TopicCombobox.js";
 import { ChatTopicEditor } from "./ChatTopicEditor.js";
+import { isGptProfile } from "./profile.js";
 import {
   buildLoadSavedEntriesArgs,
   mergeAvailableTopics,
@@ -87,13 +88,16 @@ function getRemainingSlotsMessage(
     .replace(/{chatLabel}/g, remainingSlots === 1 ? "chat" : "chats");
 }
 
-// Debug logging
+// Debug logging (disabled entirely for ChatGPT / gpt profile builds)
 const debugLogs: Array<{
   timestamp: string;
   message: string;
   data: string | null;
 }> = [];
 const addLog = (message: string, data: unknown = null) => {
+  if (isGptProfile) {
+    return;
+  }
   const log = {
     timestamp: new Date().toISOString(),
     message,
@@ -101,7 +105,6 @@ const addLog = (message: string, data: unknown = null) => {
   };
   debugLogs.push(log);
   console.log(`[ChatVault] ${message}`, data || "");
-  // Keep only last 100 logs
   if (debugLogs.length > 100) {
     debugLogs.shift();
   }
@@ -125,8 +128,10 @@ function App() {
     new Set(),
   );
   const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({});
-  // Debug panel hidden by default, can be toggled with Ctrl+Alt+D (avoids browser Ctrl+Shift+D = Bookmark all tabs)
   const [showDebug, setShowDebug] = useState(() => {
+    if (isGptProfile) {
+      return false;
+    }
     return localStorage.getItem("chatvault-debug-enabled") === "true";
   });
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -196,8 +201,10 @@ function App() {
     filterTopics,
   ]);
 
-  // Keyboard shortcut to toggle debug panel (Ctrl+Alt+D - avoids browser shortcut conflicts)
   useEffect(() => {
+    if (isGptProfile) {
+      return;
+    }
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Alt+D (or Cmd+Alt+D on Mac) - case-insensitive, capture phase
       if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d") {
@@ -1646,7 +1653,9 @@ function App() {
 
       // Show a user-friendly message
       setAlertMessage(
-        "Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.",
+        isGptProfile
+          ? "Unable to copy to clipboard automatically. Please copy the text manually."
+          : "Unable to copy to clipboard automatically. The text has been logged to the debug panel. Please copy it manually.",
       );
       setAlertPortalLink(null);
     }
@@ -2063,7 +2072,9 @@ function App() {
       closeModalAndResetForm();
       setAlertMessage(
         errorMessage ||
-          "Failed to save chat. Please check the debug panel for details.",
+          isGptProfile
+            ? "Failed to save chat. Please try again."
+            : "Failed to save chat. Please check the debug panel for details.",
       );
       setAlertPortalLink(null);
     }
@@ -4005,77 +4016,77 @@ function App() {
           </div>
         )}
 
-        {/* Debug Panel - Toggle with Ctrl+Alt+D or on-screen button */}
-        <div
-          className={`mt-4 pt-4 border-t ${
-            isDarkMode ? "border-gray-700" : "border-black/5"
-          }`}
-        >
-          <button
-            onClick={() => {
-              const newState = !showDebug;
-              setShowDebug(newState);
-              // Persist in localStorage
-              if (newState) {
-                localStorage.setItem("chatvault-debug-enabled", "true");
-              } else {
-                localStorage.removeItem("chatvault-debug-enabled");
-              }
-            }}
-            className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
-              isDarkMode
-                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+        {!isGptProfile && (
+          <div
+            className={`mt-4 pt-4 border-t ${
+              isDarkMode ? "border-gray-700" : "border-black/5"
             }`}
           >
-            {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
-            <span className="ml-2 text-xs opacity-60">
-              (Ctrl+Alt+D to toggle)
-            </span>
-          </button>
-          {showDebug && (
-            <div
-              className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
+            <button
+              onClick={() => {
+                const newState = !showDebug;
+                setShowDebug(newState);
+                if (newState) {
+                  localStorage.setItem("chatvault-debug-enabled", "true");
+                } else {
+                  localStorage.removeItem("chatvault-debug-enabled");
+                }
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-xs font-medium ${
                 isDarkMode
-                  ? "bg-gray-950 text-gray-300"
-                  : "bg-gray-50 text-gray-800"
+                  ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
+              {showDebug ? "▼" : "▶"} Debug Panel ({debugLogs.length} logs)
+              <span className="ml-2 text-xs opacity-60">
+                (Ctrl+Alt+D to toggle)
+              </span>
+            </button>
+            {showDebug && (
               <div
-                className={`mb-3 pb-3 border-b ${
-                  isDarkMode ? "border-gray-700" : "border-gray-300"
+                className={`mt-2 p-3 rounded text-xs font-mono max-h-64 overflow-y-auto ${
+                  isDarkMode
+                    ? "bg-gray-950 text-gray-300"
+                    : "bg-gray-50 text-gray-800"
                 }`}
               >
-                <div className="font-semibold mb-1">
-                  Widget Version: v{WIDGET_VERSION}
-                </div>
                 <div
-                  className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                  className={`mb-3 pb-3 border-b ${
+                    isDarkMode ? "border-gray-700" : "border-gray-300"
+                  }`}
                 >
-                  Mode: MCP App
-                </div>
-              </div>
-              {debugLogs.length === 0 ? (
-                <div className="opacity-60">No logs yet</div>
-              ) : (
-                debugLogs.map((log, idx) => (
-                  <div
-                    key={idx}
-                    className="mb-2 border-b border-gray-700 pb-2"
-                  >
-                    <div className="opacity-60 text-xs">{log.timestamp}</div>
-                    <div className="mt-1">{log.message}</div>
-                    {log.data && (
-                      <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
-                        {log.data}
-                      </pre>
-                    )}
+                  <div className="font-semibold mb-1">
+                    Widget Version: v{WIDGET_VERSION}
                   </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+                  <div
+                    className={`text-xs mt-1 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}
+                  >
+                    Mode: MCP App
+                  </div>
+                </div>
+                {debugLogs.length === 0 ? (
+                  <div className="opacity-60">No logs yet</div>
+                ) : (
+                  debugLogs.map((log, idx) => (
+                    <div
+                      key={idx}
+                      className="mb-2 border-b border-gray-700 pb-2"
+                    >
+                      <div className="opacity-60 text-xs">{log.timestamp}</div>
+                      <div className="mt-1">{log.message}</div>
+                      {log.data && (
+                        <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words">
+                          {log.data}
+                        </pre>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {showExportModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

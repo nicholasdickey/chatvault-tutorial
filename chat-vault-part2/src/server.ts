@@ -26,6 +26,11 @@ import { loadMyChats } from "./tools/loadMyChats.js";
 import { loadFullTurn } from "./tools/loadFullTurn.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
+import {
+    omitToolMetaForGpt,
+    sanitizeLoadSavedEntriesForGpt,
+    sanitizeSearchKnowledgePayloadForGpt,
+} from "./gptResponseSanitize.js";
 import { deleteChat } from "./tools/deleteChat.js";
 import { updateChat } from "./tools/updateChat.js";
 import { listTopics } from "./tools/listTopics.js";
@@ -141,6 +146,30 @@ const SAVE_CONVERSATION_FINALIZE_OUTPUT_SCHEMA = {
     ],
 };
 
+const SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA = {
+    type: "object" as const,
+    additionalProperties: true,
+    properties: {
+        id: { type: "string" },
+        userId: { type: "string" },
+        title: { type: "string" },
+        timestamp: { type: "string", description: "ISO date-time string" },
+        turns: {
+            type: "array",
+            items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["prompt", "response"],
+                properties: {
+                    prompt: { type: "string" },
+                    response: { type: "string" },
+                },
+            },
+        },
+        similarity: { type: "number" },
+    },
+};
+
 const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA = {
     type: "object" as const,
     additionalProperties: false,
@@ -149,28 +178,43 @@ const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA = {
         chats: {
             type: "array",
             items: {
-                type: "object",
-                additionalProperties: true,
+                ...SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA,
                 required: ["id", "userId", "title", "timestamp", "turns"],
-                properties: {
-                    id: { type: "string" },
-                    userId: { type: "string" },
-                    title: { type: "string" },
-                    timestamp: { type: "string", description: "ISO date-time string" },
-                    turns: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            additionalProperties: false,
-                            required: ["prompt", "response"],
-                            properties: {
-                                prompt: { type: "string" },
-                                response: { type: "string" },
-                            },
-                        },
-                    },
-                    similarity: { type: "number" },
-                },
+            },
+        },
+        search: {
+            type: "object" as const,
+            additionalProperties: false,
+            required: ["query"],
+            properties: {
+                query: { type: "string" },
+            },
+        },
+        pagination: {
+            type: "object" as const,
+            additionalProperties: false,
+            required: ["page", "limit", "total", "totalPages", "hasMore"],
+            properties: {
+                page: { type: "number" },
+                limit: { type: "number" },
+                total: { type: "number" },
+                totalPages: { type: "number" },
+                hasMore: { type: "boolean" },
+            },
+        },
+    },
+};
+
+const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA_GPT = {
+    type: "object" as const,
+    additionalProperties: false,
+    required: ["chats", "search", "pagination"],
+    properties: {
+        chats: {
+            type: "array",
+            items: {
+                ...SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA,
+                required: ["id", "title", "timestamp", "turns"],
             },
         },
         search: {
@@ -711,7 +755,28 @@ function getListedTools(): Tool[] {
             },
         },
     }));
-    return [...internalWidgetTools, ...profileConversationSaveTools, ...readSearchTools, exportSavedEntriesTool];
+    const profileReadSearchTools = readSearchTools.map((tool) => {
+        if (profile !== "gpt") {
+            return tool;
+        }
+        const modelVisible =
+            tool.name === "searchKnowledge" || tool.name === "explainHowToUse";
+        const next: Tool = {
+            ...tool,
+            _meta: {
+                ...tool._meta,
+                ui: {
+                    ...(tool._meta?.ui ?? {}),
+                    visibility: modelVisible ? ["model", "app"] : ["app"],
+                },
+            },
+        };
+        if (tool.name === "searchKnowledge") {
+            next.outputSchema = SEARCH_KNOWLEDGE_OUTPUT_SCHEMA_GPT;
+        }
+        return next;
+    });
+    return [...internalWidgetTools, ...profileConversationSaveTools, ...profileReadSearchTools, exportSavedEntriesTool];
 }
 
 export { getListedTools, getToolMetadataProfile, normalizeToolName, TOOL_NAME_ALIASES };
@@ -828,7 +893,9 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                 entries: result.chats.length,
                 hasUserInfo: Boolean(result.userInfo),
             });
-            // Return in Part 1 compatible format: structuredContent with chats, pagination, and userInfo
+            const profile = getToolMetadataProfile();
+            const structuredContent =
+                profile === "gpt" ? sanitizeLoadSavedEntriesForGpt(result) : result;
             return {
                 content: [
                     {
@@ -836,7 +903,7 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
                         text: `Loaded ${result.chats.length} saved entries`,
                     },
                 ],
-                structuredContent: result,
+                structuredContent,
             };
         } else if (toolName === "loadFullTurn") {
             const result = await loadFullTurn({
@@ -858,25 +925,35 @@ async function handleCallTool(request: CallToolRequest, userContext?: UserContex
         } else if (toolName === "searchKnowledge") {
             const result = await searchMyChats(args as { userId: string; query: string; page?: number; size?: number });
             console.log("[MCP Handler] handleCallTool - searchKnowledge result:", result.chats.length, "entries");
-            // Return in Part 1 compatible format: structuredContent with chats, search, and pagination
-            return {
+            const profile = getToolMetadataProfile();
+            const payload = {
+                chats: result.chats,
+                search: result.search,
+                pagination: result.pagination,
+            };
+            const structuredContent =
+                profile === "gpt"
+                    ? sanitizeSearchKnowledgePayloadForGpt(payload)
+                    : payload;
+            const response = {
                 content: [
                     {
                         type: "text",
                         text: `Found ${result.chats.length} saved entries matching "${result.search.query}"`,
                     },
                 ],
-                structuredContent: {
-                    chats: result.chats,
-                    search: result.search,
-                    pagination: result.pagination,
-                },
-                _meta: {
-                    chats: result.chats,
-                    search: result.search,
-                    pagination: result.pagination,
-                },
+                structuredContent,
+                ...(profile === "full"
+                    ? {
+                          _meta: {
+                              chats: result.chats,
+                              search: result.search,
+                              pagination: result.pagination,
+                          },
+                      }
+                    : {}),
             };
+            return profile === "gpt" ? omitToolMetaForGpt(response) : response;
         } else if (toolName === "widgetAdd") {
             console.log("[MCP Handler] 📥 widgetAdd request received:", {
                 requestId: requestId,
