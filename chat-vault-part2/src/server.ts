@@ -26,6 +26,7 @@ import { loadMyChats } from "./tools/loadMyChats.js";
 import { loadFullTurn } from "./tools/loadFullTurn.js";
 import { searchMyChats } from "./tools/searchMyChats.js";
 import { explainHowToUse } from "./tools/explainHowToUse.js";
+import { getToolMetadataProfile } from "./utils/toolMetadataProfile.js";
 import {
     omitToolMetaForGpt,
     sanitizeLoadSavedEntriesForGpt,
@@ -274,14 +275,6 @@ const EXPORT_SAVED_ENTRIES_OUTPUT_SCHEMA = {
         expiresAt: { type: "string" },
     },
 };
-
-type ToolMetadataProfile = "full" | "gpt";
-
-function getToolMetadataProfile(): ToolMetadataProfile {
-    const raw = (process.env.CHATVAULT_TOOL_METADATA_PROFILE ?? "full").toLowerCase();
-    if (raw === "gpt" || raw === "limited") return "gpt";
-    return "full";
-}
 
 /** Maps public MCP tool names to the existing implementation handler keys. */
 const TOOL_NAME_ALIASES: Record<string, string> = {
