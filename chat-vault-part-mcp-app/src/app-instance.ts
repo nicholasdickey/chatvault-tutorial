@@ -8,7 +8,7 @@ import { App } from "@modelcontextprotocol/ext-apps";
 
 const _app = new App({
   name: "ChatVault Part MCP App UI",
-  version: "0.1.0",
+  version: "0.1.1",
 });
 
 async function withReconnect<T>(fn: () => Promise<T>): Promise<T> {

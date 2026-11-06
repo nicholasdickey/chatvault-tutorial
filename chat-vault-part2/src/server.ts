@@ -74,7 +74,7 @@ function createMcpServer(): Server {
     const server = new Server(
         {
             name: "chat-vault-part2",
-            version: "0.1.0",
+            version: "0.1.1",
         },
         {
             capabilities: {
@@ -1341,7 +1341,7 @@ export async function handleMcpRequest(
                 },
                 serverInfo: {
                     name: "chat-vault-part2",
-                    version: "0.1.0",
+                    version: "0.1.1",
                 },
             };
 

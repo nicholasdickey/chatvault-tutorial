@@ -17,7 +17,7 @@ const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 const WIDGET_VERSION =
   process.env.WIDGET_VERSION?.trim() ||
   process.env.ACTIVE_WIDGET_VERSION?.trim() ||
-  "1.0.11";
+  "1.0.14";
 
 /**
  * Create and configure the MCP Apps server for ChatVault Part MCP App.
@@ -29,7 +29,7 @@ const WIDGET_VERSION =
 export function createMcpAppsServer(): McpServer {
   const server = new McpServer({
     name: "ChatVault Part MCP App Server",
-    version: "0.1.0",
+    version: "0.1.1",
   });
 
   const resourceUri = "ui://chat-vault/mcp-app.html";

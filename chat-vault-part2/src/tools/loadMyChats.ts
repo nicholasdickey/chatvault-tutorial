@@ -218,7 +218,7 @@ export async function loadMyChats(params: LoadChatsParams): Promise<LoadChatsRes
     });
   }
   if (!widgetVersion) {
-    widgetVersion = "1.0.0";
+    widgetVersion = "1.0.14";
   }
   console.log("[loadMyChats] Widget version:", widgetVersion);
   console.log(

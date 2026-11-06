@@ -1,6 +1,6 @@
 {
   "name": "chat-vault-part-mcp-app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ChatVault MCP App – native MCP App implementation (no skybridge)",
   "type": "module",
   "engines": { "node": ">=24.0.0" },
