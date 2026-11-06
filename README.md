@@ -142,6 +142,16 @@ SOFTWARE.
 
 ---
 
+## Change trail & publishing
+
+The project uses **GitHub pull requests** as the documented trail of what shipped and why: title, description, linked issues, review comments, and CI results. Commits on `main` should normally land **through a merged PR**, not only as direct pushes.
+
+- **This repo (`chatvault-tutorial`):** branch → push → **PR into `main`** → merge when CI (if any) is green.
+- **Agentsyx monorepo** (where `www.agentsyx.com` / saas-starter and related apps live): **not** straight to `main`. Use **PR to `dev` first**, wait for **CI green on `dev`**, then **PR `dev` → `main`** and merge after that CI passes. Same idea as in the monorepo publish protocol (branch from `dev`, promote to `main` only after `dev` is verified).
+- **Finding history:** GitHub **Pull requests** (merged) for the narrative; `git log` for the exact patch order.
+
+---
+
 ## Feedback & contributions
 
 Suggestions, issues, and PRs are welcome.
