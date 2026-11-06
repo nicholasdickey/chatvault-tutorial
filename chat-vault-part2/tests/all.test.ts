@@ -100,7 +100,7 @@ describe("chat-vault-part2 (all)", () => {
 
         expect(result.protocolVersion).toBe("2024-11-05");
         expect(result.serverInfo.name).toBe("chat-vault-part2");
-        expect(result.serverInfo.version).toBe("0.1.0");
+        expect(result.serverInfo.version).toBe("0.1.1");
         expect(client.getSessionId()).not.toBeNull();
     });
 

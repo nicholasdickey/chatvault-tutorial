@@ -18,7 +18,7 @@ if (rawProfile !== "gpt" && rawProfile !== "full") {
 const widgetVersion =
   process.env.WIDGET_VERSION?.trim() ||
   process.env.ACTIVE_WIDGET_VERSION?.trim() ||
-  "1.0.13";
+  "1.0.14";
 
 if (!fs.existsSync(mcpAppHtmlPath)) {
   console.error("mcp-app.html not found");
