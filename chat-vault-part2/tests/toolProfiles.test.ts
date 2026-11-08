@@ -236,12 +236,37 @@ describe("tool metadata profiles", () => {
         expect(visibility("loadFullTurn")?.visibility).toEqual(["app"]);
     });
 
-    it("uses gpt search output schema without required userId", () => {
+    it("excludes account identifiers from the gpt search output schema", () => {
         process.env.CHATVAULT_TOOL_METADATA_PROFILE = "gpt";
         const searchTool = getListedTools().find((tool) => tool.name === "searchKnowledge");
-        const chatItems = (searchTool?.outputSchema as { properties?: { chats?: { items?: { required?: string[] } } } })
-            ?.properties?.chats?.items?.required;
-        expect(chatItems).toEqual(["id", "title", "timestamp", "turns"]);
-        expect(chatItems).not.toContain("userId");
+        const chatItems = (searchTool?.outputSchema as {
+            properties?: {
+                chats?: {
+                    items?: {
+                        required?: string[];
+                        properties?: Record<string, unknown>;
+                        additionalProperties?: boolean;
+                    };
+                };
+            };
+        })?.properties?.chats?.items;
+        expect(chatItems?.required).toEqual(["id", "title", "timestamp", "turns"]);
+        expect(chatItems?.properties).not.toHaveProperty("userId");
+        expect(Object.keys(chatItems?.properties ?? {}).sort()).toEqual([
+            "id", "similarity", "timestamp", "title", "turns",
+        ]);
+        expect(chatItems?.additionalProperties).toBe(false);
+    });
+
+    it("retains the account identifier in the full-profile search schema", () => {
+        process.env.CHATVAULT_TOOL_METADATA_PROFILE = "full";
+        const searchTool = getListedTools().find((tool) => tool.name === "searchKnowledge");
+        const chatItems = (searchTool?.outputSchema as {
+            properties?: {
+                chats?: { items?: { required?: string[]; properties?: Record<string, unknown> } };
+            };
+        })?.properties?.chats?.items;
+        expect(chatItems?.required).toContain("userId");
+        expect(chatItems?.properties).toHaveProperty("userId", { type: "string" });
     });
 });
