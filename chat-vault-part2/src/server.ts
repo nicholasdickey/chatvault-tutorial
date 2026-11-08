@@ -1338,7 +1338,7 @@ export async function handleMcpRequest(
                 },
                 serverInfo: {
                     name: "chat-vault-part2",
-                    version: "0.1.1",
+                    version: "0.1.2",
                 },
             };
 
