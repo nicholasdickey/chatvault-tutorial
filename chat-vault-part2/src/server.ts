@@ -75,7 +75,7 @@ function createMcpServer(): Server {
     const server = new Server(
         {
             name: "chat-vault-part2",
-            version: "0.1.1",
+            version: "0.1.2",
         },
         {
             capabilities: {
@@ -152,7 +152,6 @@ const SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA = {
     additionalProperties: true,
     properties: {
         id: { type: "string" },
-        userId: { type: "string" },
         title: { type: "string" },
         timestamp: { type: "string", description: "ISO date-time string" },
         turns: {
@@ -180,6 +179,10 @@ const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA = {
             type: "array",
             items: {
                 ...SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA,
+                properties: {
+                    ...SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA.properties,
+                    userId: { type: "string" },
+                },
                 required: ["id", "userId", "title", "timestamp", "turns"],
             },
         },
@@ -215,6 +218,7 @@ const SEARCH_KNOWLEDGE_OUTPUT_SCHEMA_GPT = {
             type: "array",
             items: {
                 ...SEARCH_KNOWLEDGE_CHAT_ITEM_SCHEMA,
+                additionalProperties: false,
                 required: ["id", "title", "timestamp", "turns"],
             },
         },
@@ -1334,7 +1338,7 @@ export async function handleMcpRequest(
                 },
                 serverInfo: {
                     name: "chat-vault-part2",
-                    version: "0.1.1",
+                    version: "0.1.2",
                 },
             };
 
