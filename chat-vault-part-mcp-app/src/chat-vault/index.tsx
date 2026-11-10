@@ -3643,7 +3643,9 @@ function App() {
                   >
                     {isSearching
                       ? `No chats found matching "${searchQuery}"`
-                      : "No chats yet. Use the + button to save a chat manually or instruct your AI host or agent connected to the app to save the chat or a fragment."}
+                      : isGptProfile
+                        ? "No chats yet. Use the + button to paste and save content manually."
+                        : "No chats yet. Use the + button to save a chat manually or instruct your AI host or agent connected to the app to save the chat or a fragment."}
                   </div>
                 ) : (
                   <>
